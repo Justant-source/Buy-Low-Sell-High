@@ -1,0 +1,21 @@
+{
+  "name": "soxl-mania-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "dev": "node --enable-source-maps src/server.ts",
+    "test": "node -e \"console.log('dashboard tests are not implemented in Phase 0')\""
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.0"
+  }
+}
+

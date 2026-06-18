@@ -1,0 +1,62 @@
+name: soxlmania
+
+services:
+  postgres:
+    container_name: soxlmania-postgres
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-soxl_mania}
+      POSTGRES_USER: ${POSTGRES_USER:-soxl_mania}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  engine-worker:
+    container_name: soxlmania-engine-worker
+    build:
+      context: .
+      dockerfile: engine/Dockerfile
+    working_dir: /app
+    command: ["python", "-m", "soxl_mania.cli", "worker", "smoke"]
+    environment:
+      PYTHONPATH: /app/engine/src
+    volumes:
+      - ./:/app
+    depends_on:
+      - postgres
+
+  engine-cli:
+    container_name: soxlmania-engine-cli
+    build:
+      context: .
+      dockerfile: engine/Dockerfile
+    working_dir: /app
+    command: ["python", "-m", "soxl_mania.cli", "bootstrap-check"]
+    environment:
+      PYTHONPATH: /app/engine/src
+    volumes:
+      - ./:/app
+    depends_on:
+      - postgres
+
+  dashboard:
+    container_name: soxlmania-dashboard
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    working_dir: /app/dashboard
+    command: ["node", "--experimental-strip-types", "src/server.ts"]
+    environment:
+      PORT: ${DASHBOARD_PORT:-3000}
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+    volumes:
+      - ./:/app
+    depends_on:
+      - postgres
+
+volumes:
+  postgres-data:
+    name: soxlmania-postgres-data

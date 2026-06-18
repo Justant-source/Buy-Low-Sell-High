@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "soxl-mania"
+version = "0.1.0"
+description = "SOXL research and manual decision-support stack"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+soxl-mania = "soxl_mania.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "engine/src"}
+
+[tool.setuptools.packages.find]
+where = ["engine/src"]
+

@@ -1,0 +1,100 @@
+{
+  "source_image_sha256": "d26f8c4c954f18f7f59eb721410d2224a58bf4be778f0941222d4c22f113c928",
+  "annual_soxl_boundaries": [
+    {"year": 2011, "start": "0.85", "end": "0.43"},
+    {"year": 2012, "start": "0.45", "end": "0.45"},
+    {"year": 2013, "start": "0.51", "end": "1.15"},
+    {"year": 2014, "start": "1.10", "end": "2.25"},
+    {"year": 2015, "start": "2.25", "end": "1.78"},
+    {"year": 2016, "start": "1.72", "end": "3.81"},
+    {"year": 2017, "start": "3.81", "end": "9.19"},
+    {"year": 2018, "start": "9.95", "end": "5.55"},
+    {"year": 2019, "start": "5.70", "end": "18.32"},
+    {"year": 2020, "start": "19.46", "end": "31.10"},
+    {"year": 2021, "start": "30.67", "end": "68.01"},
+    {"year": 2022, "start": "72.10", "end": "9.36"},
+    {"year": 2023, "start": "9.36", "end": "28.04"},
+    {"year": 2024, "start": "28.04", "end": "27.31"}
+  ],
+  "annual_returns": {
+    "5x30": {
+      "2011": 29.0, "2012": 12.7, "2013": 53.1, "2014": 48.4, "2015": 15.2, "2016": 54.9, "2017": 39.2, "2018": -9.8, "2019": 67.7, "2020": 66.8, "2021": 88.0, "2022": 23.9, "2023": 71.2, "2024": 79.1
+    },
+    "6x10": {
+      "2011": 32.9, "2012": 16.3, "2013": 40.7, "2014": 22.3, "2015": 17.3, "2016": 33.5, "2017": 24.2, "2018": -11.9, "2019": 26.1, "2020": 28.4, "2021": 45.7, "2022": 25.7, "2023": 38.6, "2024": 56.5
+    },
+    "6x30": {
+      "2011": 24.1, "2012": 10.6, "2013": 44.2, "2014": 40.4, "2015": 12.7, "2016": 45.8, "2017": 32.7, "2018": -8.2, "2019": 56.5, "2020": 55.6, "2021": 73.2, "2022": 19.9, "2023": 59.2, "2024": 65.6
+    },
+    "7x30": {
+      "2011": 20.7, "2012": 9.1, "2013": 37.9, "2014": 34.6, "2015": 10.9, "2016": 39.2, "2017": 28.0, "2018": -7.0, "2019": 48.4, "2020": 47.8, "2021": 62.6, "2022": 17.1, "2023": 50.7, "2024": 56.4
+    }
+  },
+  "event_counts": {
+    "5x30": {
+      "2011": {"take_profit": 127, "time_stop": 16},
+      "2012": {"take_profit": 127, "time_stop": 24},
+      "2013": {"take_profit": 121, "time_stop": 4},
+      "2014": {"take_profit": 108, "time_stop": 4},
+      "2015": {"take_profit": 109, "time_stop": 16},
+      "2016": {"take_profit": 113, "time_stop": 6},
+      "2017": {"take_profit": 99, "time_stop": 5},
+      "2018": {"take_profit": 99, "time_stop": 19},
+      "2019": {"take_profit": 105, "time_stop": 5},
+      "2020": {"take_profit": 112, "time_stop": 6},
+      "2021": {"take_profit": 114, "time_stop": 5},
+      "2022": {"take_profit": 114, "time_stop": 20},
+      "2023": {"take_profit": 110, "time_stop": 8},
+      "2024": {"take_profit": 116, "time_stop": 8}
+    },
+    "6x10": {
+      "2011": {"take_profit": 119, "time_stop": 24},
+      "2012": {"take_profit": 115, "time_stop": 36},
+      "2013": {"take_profit": 114, "time_stop": 11},
+      "2014": {"take_profit": 102, "time_stop": 10},
+      "2015": {"take_profit": 99, "time_stop": 26},
+      "2016": {"take_profit": 105, "time_stop": 14},
+      "2017": {"take_profit": 93, "time_stop": 11},
+      "2018": {"take_profit": 90, "time_stop": 28},
+      "2019": {"take_profit": 96, "time_stop": 14},
+      "2020": {"take_profit": 103, "time_stop": 15},
+      "2021": {"take_profit": 101, "time_stop": 18},
+      "2022": {"take_profit": 106, "time_stop": 28},
+      "2023": {"take_profit": 99, "time_stop": 19},
+      "2024": {"take_profit": 111, "time_stop": 13}
+    },
+    "6x30": {
+      "2011": {"take_profit": 127, "time_stop": 16},
+      "2012": {"take_profit": 127, "time_stop": 24},
+      "2013": {"take_profit": 121, "time_stop": 4},
+      "2014": {"take_profit": 108, "time_stop": 4},
+      "2015": {"take_profit": 109, "time_stop": 16},
+      "2016": {"take_profit": 113, "time_stop": 6},
+      "2017": {"take_profit": 99, "time_stop": 5},
+      "2018": {"take_profit": 99, "time_stop": 19},
+      "2019": {"take_profit": 105, "time_stop": 5},
+      "2020": {"take_profit": 112, "time_stop": 6},
+      "2021": {"take_profit": 114, "time_stop": 5},
+      "2022": {"take_profit": 114, "time_stop": 20},
+      "2023": {"take_profit": 110, "time_stop": 8},
+      "2024": {"take_profit": 116, "time_stop": 8}
+    },
+    "7x30": {
+      "2011": {"take_profit": 127, "time_stop": 16},
+      "2012": {"take_profit": 127, "time_stop": 24},
+      "2013": {"take_profit": 121, "time_stop": 4},
+      "2014": {"take_profit": 108, "time_stop": 4},
+      "2015": {"take_profit": 109, "time_stop": 16},
+      "2016": {"take_profit": 113, "time_stop": 6},
+      "2017": {"take_profit": 99, "time_stop": 5},
+      "2018": {"take_profit": 99, "time_stop": 19},
+      "2019": {"take_profit": 105, "time_stop": 5},
+      "2020": {"take_profit": 112, "time_stop": 6},
+      "2021": {"take_profit": 114, "time_stop": 5},
+      "2022": {"take_profit": 116, "time_stop": 18},
+      "2023": {"take_profit": 110, "time_stop": 8},
+      "2024": {"take_profit": 116, "time_stop": 8}
+    }
+  }
+}
+
