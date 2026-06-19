@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .providers.investing_provider import InvestingMarketDataProvider
 from .normalize import normalize_bars
 from .providers.stooq_provider import StooqMarketDataProvider
 from .providers.yahoo_provider import YahooMarketDataProvider, write_bars_to_csv
@@ -17,7 +18,8 @@ def sync_soxl_history(
     errors: list[str] = []
     providers = [
         ("yahoo_chart", lambda: YahooMarketDataProvider().load_bars(symbol, start_date=start_date)),
-        ("stooq", lambda: StooqMarketDataProvider().load_bars(symbol)),
+        ("investing", lambda: InvestingMarketDataProvider().load_bars(symbol, start_date=start_date)),
+        ("stooq", lambda: StooqMarketDataProvider().load_bars(symbol, start_date=start_date)),
     ]
     bars = None
     source = None

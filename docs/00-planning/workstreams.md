@@ -19,4 +19,5 @@ This repository is organized for eight parallel workstreams derived from the imp
 ## Current Status
 - Workstreams `1-5` have executable Python scaffolding and tests in this repository.
 - Workstream `6` has schema SQL plus an in-memory worker/repository used for smoke and deterministic tests.
-- Workstreams `7-8` are skeletonized at the dashboard/API layer; full Node-based execution is blocked in the current environment because `node` is not installed.
+- Workstreams `7-8` now include an implemented Express dashboard, Bit-Mania-style multi-page UI, CLI-backed APIs, and file-backed dashboard job artifacts.
+- Full runtime verification for the TypeScript build and Dockerized dashboard is still blocked in this environment because `node`, `npm`, and `docker` are unavailable locally.

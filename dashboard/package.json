@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc --noEmit",
-    "dev": "node --enable-source-maps src/server.ts",
-    "test": "node -e \"console.log('dashboard tests are not implemented in Phase 0')\""
+    "build": "tsc",
+    "dev": "npm run build && node dist/server.js",
+    "start": "node dist/server.js",
+    "test": "npm run build"
   },
   "dependencies": {
     "express": "^4.19.2",
@@ -18,4 +19,3 @@
     "typescript": "^5.8.0"
   }
 }
-

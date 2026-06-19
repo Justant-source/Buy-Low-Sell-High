@@ -21,28 +21,44 @@ class YahooMarketDataProvider:
         start_date: str = "2011-01-01",
         end_date: str | None = None,
     ) -> list[MarketBar]:
-        start_ts = int(datetime.fromisoformat(start_date).replace(tzinfo=UTC).timestamp())
-        end_value = end_date or datetime.now(UTC).date().isoformat()
-        end_ts = int(datetime.fromisoformat(end_value).replace(tzinfo=UTC).timestamp())
-        query = urllib.parse.urlencode(
-            {
+        if end_date is None:
+            query_params = {
+                "range": "max",
+                "interval": "1d",
+                "includePrePost": "false",
+                "events": "div,splits",
+            }
+        else:
+            start_ts = int(datetime.fromisoformat(start_date).replace(tzinfo=UTC).timestamp())
+            end_ts = int(datetime.fromisoformat(end_date).replace(tzinfo=UTC).timestamp())
+            query_params = {
                 "period1": start_ts,
                 "period2": end_ts,
                 "interval": "1d",
                 "includePrePost": "false",
                 "events": "div,splits",
             }
-        )
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?{query}"
-        request = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
-            },
-        )
-        with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-        return self._parse_chart_payload(symbol, payload)
+        query = urllib.parse.urlencode(query_params)
+        errors: list[str] = []
+        for host in ("query1.finance.yahoo.com", "query2.finance.yahoo.com"):
+            url = f"https://{host}/v8/finance/chart/{symbol}?{query}"
+            request = urllib.request.Request(
+                url,
+                headers={
+                    "Accept": "application/json",
+                    "User-Agent": (
+                        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+                    ),
+                },
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                return self._parse_chart_payload(symbol, payload)
+            except Exception as exc:
+                errors.append(f"{host}: {exc}")
+        raise RuntimeError("Yahoo chart download failed: " + " | ".join(errors))
 
     def _parse_chart_payload(self, symbol: str, payload: dict) -> list[MarketBar]:
         result = payload["chart"]["result"][0]

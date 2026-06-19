@@ -9,6 +9,7 @@ env/
 node_modules/
 dashboard/node_modules/
 data/raw/
+data/runtime/
 data/normalized/
 results/
 *.pyc

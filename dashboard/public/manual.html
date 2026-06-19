@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>수동 장부 - SOXL-Mania</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/tokens.css">
+<link rel="stylesheet" href="/css/components.css">
+<link rel="stylesheet" href="/css/dashboard.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="mark-glyph">S</span>
+      <div>
+        <div class="b-name">SOXL-Mania</div>
+        <div class="b-sub">SOXL 리서치 & 수동 운용</div>
+      </div>
+    </div>
+    <div class="strategy-card">
+      <div class="sc-label">장부 원칙</div>
+      <div class="sc-code">append_only + reversal_first</div>
+      <div class="sc-tags">
+        <span class="badge info">Recommendation != Fill</span>
+      </div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section">운영</div>
+      <a class="nav-item" href="/monitor">시스템 모니터</a>
+      <a class="nav-item" href="/backtests">백테스트</a>
+      <a class="nav-item active" href="/manual">수동 장부</a>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="status-dot green live"></span>
+      <span id="last-updated">갱신 중…</span>
+    </div>
+  </aside>
+
+  <div class="theme-toggle" role="group" aria-label="테마">
+    <button data-set-theme="light">☀︎</button>
+    <button data-set-theme="dark">☾</button>
+  </div>
+
+  <main class="page">
+    <div class="page-head">
+      <div>
+        <div class="page-title">수동 장부 & 오늘의 권고</div>
+        <div class="page-sub">권고와 실제 체결을 분리해 보여주며, reversal은 기존 fill을 덮어쓰지 않고 새 fill을 추가합니다.</div>
+      </div>
+    </div>
+
+    <div class="row row-6">
+      <div class="kpi"><span class="kpi-label">오픈 Thread</span><span class="kpi-value" id="kpi-open-threads">-</span><div class="kpi-meta">Current manual state</div></div>
+      <div class="kpi"><span class="kpi-label">Fill 수</span><span class="kpi-value" id="kpi-fill-count">-</span><div class="kpi-meta">Append-only count</div></div>
+      <div class="kpi"><span class="kpi-label">Total Cash</span><span class="kpi-value mono" id="kpi-cash">-</span><div class="kpi-meta">Across threads</div></div>
+      <div class="kpi"><span class="kpi-label">Total Qty</span><span class="kpi-value mono" id="kpi-qty">-</span><div class="kpi-meta">Across threads</div></div>
+      <div class="kpi"><span class="kpi-label">BUY 권고</span><span class="kpi-value" id="kpi-buy-recs">-</span><div class="kpi-meta">Today only</div></div>
+      <div class="kpi"><span class="kpi-label">EXIT 권고</span><span class="kpi-value" id="kpi-exit-recs">-</span><div class="kpi-meta">TP + Time Stop</div></div>
+    </div>
+
+    <div class="split-panel">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Fill 입력</div>
+            <div class="card-sub">실제 체결만 입력합니다. 시뮬레이션 거래를 이 장부에 복사하지 않습니다.</div>
+          </div>
+        </div>
+        <form id="fill-form">
+          <div class="field-grid">
+            <div class="field">
+              <label for="profile-select">프로필</label>
+              <select class="select" id="profile-select"></select>
+            </div>
+            <div class="field">
+              <label for="thread-select">Thread</label>
+              <select class="select" id="thread-select"></select>
+            </div>
+            <div class="field">
+              <label for="side-select">Side</label>
+              <select class="select" id="side-select">
+                <option value="BUY">BUY</option>
+                <option value="SELL">SELL</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="fee-input">Fee</label>
+              <input class="input mono" id="fee-input" type="text" value="0">
+            </div>
+            <div class="field">
+              <label for="qty-input">Quantity</label>
+              <input class="input mono" id="qty-input" type="text" placeholder="10">
+            </div>
+            <div class="field">
+              <label for="price-input">Price</label>
+              <input class="input mono" id="price-input" type="text" placeholder="25.10">
+            </div>
+            <div class="field full">
+              <label for="filled-at-input">Filled At (optional ISO)</label>
+              <input class="input mono" id="filled-at-input" type="text" placeholder="2026-06-19T00:00:00+09:00">
+            </div>
+          </div>
+          <div class="action-row">
+            <button class="btn primary" type="submit">Fill 추가</button>
+            <button class="btn" type="button" id="refresh-button">새로고침</button>
+          </div>
+        </form>
+        <div class="alert-box" id="manual-error"></div>
+      </div>
+
+      <div class="card wide-table">
+        <div class="card-head">
+          <div>
+            <div class="card-title">오늘의 권고</div>
+            <div class="card-sub">Recommendation stream</div>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead>
+              <tr><th>Thread</th><th>Action</th><th>Reason</th><th class="num">Basis</th><th>Session</th></tr>
+            </thead>
+            <tbody id="manual-recs-tbody">
+              <tr><td colspan="5" class="muted" style="text-align:center">권고 없음</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="row row-2">
+      <div class="card wide-table">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Thread 상태</div>
+            <div class="card-sub">현재 현금 / 수량 / 진입가 / 진입일</div>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead>
+              <tr><th>Thread</th><th class="num">Cash</th><th class="num">Quantity</th><th class="num">Entry</th><th>Entry Date</th></tr>
+            </thead>
+            <tbody id="manual-threads-tbody">
+              <tr><td colspan="5" class="muted" style="text-align:center">장부 없음</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">장부 이슈</div>
+            <div class="card-sub">Reconciliation 결과</div>
+          </div>
+        </div>
+        <div class="stack-list" id="ledger-issues-list">
+          <div class="stack-row"><span class="title">이슈 없음</span><span class="badge success">clean</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card wide-table">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Fill 이력</div>
+          <div class="card-sub">가장 최근 fill부터 표시합니다. Reverse는 새 fill을 append합니다.</div>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>Fill ID</th>
+              <th>Thread</th>
+              <th>Side</th>
+              <th class="num">Qty</th>
+              <th class="num">Price</th>
+              <th class="num">Fee</th>
+              <th>Filled At</th>
+              <th>Reverse</th>
+            </tr>
+          </thead>
+          <tbody id="fills-tbody">
+            <tr><td colspan="8" class="muted" style="text-align:center">fill 이력이 없습니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="/js/common.js"></script>
+<script src="/js/manual-dashboard.js"></script>
+</body>
+</html>

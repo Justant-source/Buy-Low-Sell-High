@@ -7,4 +7,4 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 docker compose build
-docker compose up -d postgres dashboard engine-worker
+docker compose up -d postgres dashboard

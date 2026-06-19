@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import UTC, datetime
 import json
+from pathlib import Path
 
 from ..domain.models import ManualFill, ManualLedger, ManualThreadState, new_fill_id
 from ..domain.money import D, ZERO
@@ -105,3 +106,57 @@ def export_ledger(ledger: ManualLedger) -> str:
         ],
     }
     return json.dumps(payload, sort_keys=True)
+
+
+def import_ledger(payload: str) -> ManualLedger:
+    raw = json.loads(payload)
+    return ManualLedger(
+        account_id=raw["account_id"],
+        threads={
+            int(thread_id): ManualThreadState(
+                thread_id=int(thread_id),
+                cash=D(thread["cash"]),
+                quantity=D(thread["quantity"]),
+                entry_price=D(thread["entry_price"]),
+                entry_date=datetime.fromisoformat(thread["entry_date"]).date() if thread["entry_date"] else None,
+            )
+            for thread_id, thread in raw["threads"].items()
+        },
+        fills=[
+            ManualFill(
+                fill_id=fill["fill_id"],
+                thread_id=int(fill["thread_id"]),
+                side=fill["side"],
+                quantity=D(fill["quantity"]),
+                price=D(fill["price"]),
+                fee=D(fill["fee"]),
+                filled_at=datetime.fromisoformat(fill["filled_at"]),
+                reversed_by_fill_id=fill["reversed_by_fill_id"],
+            )
+            for fill in raw["fills"]
+        ],
+    )
+
+
+def save_ledger(path: str | Path, ledger: ManualLedger) -> None:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(export_ledger(ledger), encoding="utf-8")
+
+
+def load_ledger(path: str | Path) -> ManualLedger:
+    return import_ledger(Path(path).read_text(encoding="utf-8"))
+
+
+def summarize_ledger(ledger: ManualLedger) -> dict[str, object]:
+    total_cash = sum((thread.cash for thread in ledger.threads.values()), start=ZERO)
+    total_quantity = sum((thread.quantity for thread in ledger.threads.values()), start=ZERO)
+    open_threads = sum(1 for thread in ledger.threads.values() if thread.quantity > ZERO)
+    return {
+        "account_id": ledger.account_id,
+        "thread_count": len(ledger.threads),
+        "fill_count": len(ledger.fills),
+        "open_threads": open_threads,
+        "total_cash": str(total_cash),
+        "total_quantity": str(total_quantity),
+    }
