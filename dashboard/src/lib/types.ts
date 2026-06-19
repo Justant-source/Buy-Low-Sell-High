@@ -26,11 +26,28 @@ export interface ProfilePayload extends ProfileDefinition {
   initialCapital: string;
 }
 
+export interface BacktestOverrides {
+  threadCount?: number;
+  stopSessions?: number;
+  takeProfitPct?: number;
+  takeProfitOperator?: "gt" | "gte";
+  entryDropPct?: number;
+  stopLossPct?: number;
+  maxEntriesPerSession?: number;
+  sizingMode?: string;
+  priceBasis?: string;
+}
+
 export interface ProfileShowPayload {
   profile_id: string;
   symbol: string;
   thread_count: number;
   stop_sessions: number;
+  max_entries_per_session: number;
+  take_profit_pct: string;
+  take_profit_operator: string;
+  entry_drop_pct: string;
+  stop_loss_pct: string;
   price_basis: string;
   execution_model: string;
   sizing_mode: string;
@@ -92,6 +109,87 @@ export interface GridCellPayload {
   max_drawdown_pct: string;
   volatility_pct: string;
   trade_count: number;
+}
+
+export interface MentorMatrixCountPayload {
+  take_profit: number;
+  time_stop: number;
+}
+
+export interface MentorMatrixActualComboPayload {
+  thread_count: number;
+  stop_sessions: number;
+  yearly_returns_pct: Record<string, number>;
+  yearly_counts: Record<string, MentorMatrixCountPayload>;
+  stats_pct: Record<string, number>;
+  simple_returns_pct: Record<string, number>;
+  compound_returns_pct: Record<string, number>;
+  aggregate_count_rows: Record<string, MentorMatrixCountPayload>;
+}
+
+export interface MentorMatrixReferenceComboPayload {
+  yearly_returns_pct: Record<string, number>;
+  stats_pct: Record<string, number>;
+  simple_returns_pct: Record<string, number>;
+  compound_returns_pct: Record<string, number>;
+}
+
+export interface MentorMatrixReferenceCountComboPayload {
+  yearly_counts: Record<string, MentorMatrixCountPayload>;
+  aggregate_rows: Record<string, MentorMatrixCountPayload>;
+}
+
+export interface MentorMatrixReferencePayload {
+  meta: {
+    source_image_sha256: string;
+    base_capital_usd?: string;
+    period_start?: string;
+    period_end?: string;
+    assumed_price_basis?: string;
+    assumed_execution_model?: string;
+    authoritative?: boolean;
+    notes?: string[];
+  };
+  benchmark: {
+    yearly: Array<{ year: number; price_change: string; return_pct: number }>;
+    aggregate_rows: Record<string, number>;
+    aggregate_notes?: string[];
+  };
+  combos: Record<string, MentorMatrixReferenceComboPayload>;
+  selected_count_combos: Record<string, MentorMatrixReferenceCountComboPayload>;
+}
+
+export interface MentorMatrixPayload {
+  meta: {
+    symbol: string;
+    period_start: string;
+    period_end: string;
+    initial_capital: string;
+    price_basis: string;
+    execution_model: string;
+    config_hash: string;
+    data_hash: string;
+    code_commit: string;
+    windows: Record<string, { start_year: number; end_year: number }>;
+    reference_fixture_path: string;
+    reference_image_sha256: string;
+  };
+  reference: MentorMatrixReferencePayload;
+  actual: {
+    benchmark: {
+      yearly: Array<{ year: number; price_change: string; return_pct: number }>;
+      aggregate_rows: Record<string, number>;
+    };
+    combos: Record<string, MentorMatrixActualComboPayload>;
+    selected_count_combos: Record<string, MentorMatrixReferenceCountComboPayload>;
+  };
+  parity: {
+    status: string;
+    data_status: string;
+    value_status: string;
+    first_mismatch: Record<string, string> | null;
+    mismatches: Array<Record<string, string>>;
+  };
 }
 
 export interface RiskScenarioRowPayload {
@@ -209,6 +307,7 @@ export interface DashboardJobRecord {
   progress: number;
   runId: string | null;
   error: string | null;
+  overrides?: BacktestOverrides;
 }
 
 export interface PersistedRunArtifact {

@@ -5,18 +5,22 @@ import { getProfileDefinition } from "./profiles.js";
 import { runCliJson } from "./python.js";
 import {
   listJobs,
+  loadMentorMatrixArtifact,
   listRunArtifacts,
   loadJob,
   loadRunArtifact,
   newJobId,
+  saveMentorMatrixArtifact,
   saveJob,
   saveRunArtifact,
 } from "./runtime-store.js";
 import type {
+  BacktestOverrides,
   BacktestRiskPayload,
   BacktestDetailPayload,
   DashboardJobRecord,
   GridCellPayload,
+  MentorMatrixPayload,
   PersistedRunArtifact,
   ProfilePayload,
   ProfileShowPayload,
@@ -26,6 +30,7 @@ export interface BacktestJobInput {
   profileId: string;
   csvPath?: string;
   initialCapital?: number;
+  overrides?: BacktestOverrides;
 }
 
 export interface CompareInput {
@@ -34,9 +39,59 @@ export interface CompareInput {
   initialCapital?: number;
   threads: number[];
   stops: number[];
+  overrides?: BacktestOverrides;
 }
 
-function resolveProfilePayload(staticProfileId: string, initialCapital: number): Promise<ProfilePayload> {
+export interface MentorMatrixInput {
+  profileId: string;
+  csvPath?: string;
+  initialCapital?: number;
+  threads: number[];
+  stops: number[];
+  overrides?: BacktestOverrides;
+}
+
+function buildOverrideArgs(
+  overrides?: BacktestOverrides,
+  options: { includeThreadCount?: boolean; includeStopSessions?: boolean } = {},
+): string[] {
+  if (!overrides) {
+    return [];
+  }
+  const args: string[] = [];
+  const includeThreadCount = options.includeThreadCount ?? true;
+  const includeStopSessions = options.includeStopSessions ?? true;
+  if (includeThreadCount && overrides.threadCount != null) {
+    args.push("--thread-count", String(overrides.threadCount));
+  }
+  if (includeStopSessions && overrides.stopSessions != null) {
+    args.push("--stop-sessions", String(overrides.stopSessions));
+  }
+  if (overrides.takeProfitPct != null) {
+    args.push("--take-profit-pct", String(overrides.takeProfitPct));
+  }
+  if (overrides.takeProfitOperator) {
+    args.push("--take-profit-operator", overrides.takeProfitOperator);
+  }
+  if (overrides.entryDropPct != null) {
+    args.push("--entry-drop-pct", String(overrides.entryDropPct));
+  }
+  if (overrides.stopLossPct != null) {
+    args.push("--stop-loss-pct", String(overrides.stopLossPct));
+  }
+  if (overrides.maxEntriesPerSession != null) {
+    args.push("--max-entries-per-session", String(overrides.maxEntriesPerSession));
+  }
+  if (overrides.sizingMode) {
+    args.push("--sizing-mode", overrides.sizingMode);
+  }
+  if (overrides.priceBasis) {
+    args.push("--price-basis", overrides.priceBasis);
+  }
+  return args;
+}
+
+function resolveProfilePayload(staticProfileId: string, initialCapital: number, overrides?: BacktestOverrides): Promise<ProfilePayload> {
   const profile = getProfileDefinition(staticProfileId);
   if (!profile) {
     throw new HttpError(404, `Unknown profileId: ${staticProfileId}`);
@@ -48,6 +103,7 @@ function resolveProfilePayload(staticProfileId: string, initialCapital: number):
     profile.profilePath,
     "--initial-capital",
     String(initialCapital),
+    ...buildOverrideArgs(overrides),
   ]).then((payload) => ({
     ...profile,
     configHash: payload.config_hash as string,
@@ -122,7 +178,7 @@ export class BacktestService {
     }
     const csvPath = input.csvPath ?? defaultCsvPath;
     const [profilePayload, dataStatus] = await Promise.all([
-      resolveProfilePayload(input.profileId, initialCapital),
+      resolveProfilePayload(input.profileId, initialCapital, input.overrides),
       getDataStatus(csvPath, profile.symbol),
     ]);
     const job: DashboardJobRecord = {
@@ -141,6 +197,7 @@ export class BacktestService {
       progress: 0,
       runId: null,
       error: null,
+      overrides: input.overrides,
     };
     await saveJob(job);
     this.queuedJobIds.add(job.jobId);
@@ -199,7 +256,7 @@ export class BacktestService {
     }
     const csvPath = input.csvPath ?? defaultCsvPath;
     const [profilePayload, dataStatus, cells] = await Promise.all([
-      resolveProfilePayload(input.profileId, initialCapital),
+      resolveProfilePayload(input.profileId, initialCapital, input.overrides),
       getDataStatus(csvPath, profile.symbol),
       runCliJson<GridCellPayload[]>([
         "backtest",
@@ -216,6 +273,7 @@ export class BacktestService {
         input.stops.join(","),
         "--initial-capital",
         String(initialCapital),
+        ...buildOverrideArgs(input.overrides, { includeThreadCount: false, includeStopSessions: false }),
       ]),
     ]);
     return {
@@ -230,10 +288,55 @@ export class BacktestService {
     };
   }
 
+  async mentorMatrix(input: MentorMatrixInput): Promise<MentorMatrixPayload> {
+    const initialCapital = input.initialCapital ?? 10000;
+    const profile = getProfileDefinition(input.profileId);
+    if (!profile) {
+      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
+    }
+    const csvPath = input.csvPath ?? defaultCsvPath;
+    const [profilePayload, dataStatus] = await Promise.all([
+      resolveProfilePayload(input.profileId, initialCapital, input.overrides),
+      getDataStatus(csvPath, profile.symbol),
+    ]);
+    const cacheKey = [
+      "mentor-matrix",
+      input.profileId,
+      profilePayload.configHash,
+      dataStatus.data_hash,
+      input.threads.join(","),
+      input.stops.join(","),
+    ].join(":");
+    const cached = await loadMentorMatrixArtifact<MentorMatrixPayload>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+    const payload = await runCliJson<MentorMatrixPayload>([
+      "backtest",
+      "mentor-matrix",
+      "--profile",
+      profile.profilePath,
+      "--csv",
+      csvPath,
+      "--symbol",
+      profile.symbol,
+      "--threads",
+      input.threads.join(","),
+      "--stops",
+      input.stops.join(","),
+      "--initial-capital",
+      String(initialCapital),
+      ...buildOverrideArgs(input.overrides, { includeThreadCount: false, includeStopSessions: false }),
+    ]);
+    await saveMentorMatrixArtifact(cacheKey, payload);
+    return payload;
+  }
+
   async riskReport(input: {
     profileId: string;
     csvPath?: string;
     initialCapital?: number;
+    overrides?: BacktestOverrides;
   }): Promise<BacktestRiskPayload> {
     const initialCapital = input.initialCapital ?? 10000;
     const profile = getProfileDefinition(input.profileId);
@@ -252,6 +355,7 @@ export class BacktestService {
       profile.symbol,
       "--initial-capital",
       String(initialCapital),
+      ...buildOverrideArgs(input.overrides),
     ]);
   }
 
@@ -305,6 +409,7 @@ export class BacktestService {
         job.symbol,
         "--initial-capital",
         String(job.initialCapital),
+        ...buildOverrideArgs(job.overrides),
       ]);
       const artifact: PersistedRunArtifact = {
         runId: payload.run_id,

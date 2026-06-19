@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-import { jobsRoot, runsRoot, runtimeRoot } from "./paths.js";
+import { jobsRoot, mentorMatrixRoot, runsRoot, runtimeRoot } from "./paths.js";
 import type { DashboardJobRecord, PersistedRunArtifact } from "./types.js";
 
 async function ensureDir(target: string): Promise<void> {
@@ -13,6 +13,7 @@ async function ensureLayout(): Promise<void> {
   await ensureDir(runtimeRoot);
   await ensureDir(jobsRoot);
   await ensureDir(runsRoot);
+  await ensureDir(mentorMatrixRoot);
 }
 
 async function writeJson(filePath: string, payload: unknown): Promise<void> {
@@ -59,6 +60,11 @@ function runPath(runId: string): string {
   return path.join(runsRoot, `${runId}.json`);
 }
 
+function mentorMatrixPath(cacheKey: string): string {
+  const digest = createHash("sha256").update(cacheKey).digest("hex");
+  return path.join(mentorMatrixRoot, `${digest}.json`);
+}
+
 export function newJobId(): string {
   return randomUUID();
 }
@@ -91,4 +97,12 @@ export async function listRunArtifacts(limit = 10): Promise<PersistedRunArtifact
   return runs
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     .slice(0, limit);
+}
+
+export async function saveMentorMatrixArtifact<T>(cacheKey: string, payload: T): Promise<void> {
+  await writeJson(mentorMatrixPath(cacheKey), payload);
+}
+
+export async function loadMentorMatrixArtifact<T>(cacheKey: string): Promise<T | null> {
+  return readJson<T>(mentorMatrixPath(cacheKey));
 }

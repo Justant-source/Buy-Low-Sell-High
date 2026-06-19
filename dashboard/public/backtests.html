@@ -24,13 +24,13 @@
     </div>
     <div class="strategy-card">
       <div class="sc-label">운영 전략</div>
-      <div class="sc-code">ddeolsao_pal</div>
+      <div class="sc-code">ddeolsao_pal · 7x30</div>
       <div class="sc-tags">
         <span class="badge info">SOXL Daily</span>
         <span class="badge info">Manual-Only</span>
       </div>
       <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);display:flex;flex-direction:column;gap:4px;font:var(--t-small);color:var(--text-muted)">
-        <div style="display:flex;justify-content:space-between"><span>기본 프로필</span><span class="mono" id="sb-profile">mentor_default_5x30</span></div>
+        <div style="display:flex;justify-content:space-between"><span>기본 프로필</span><span class="mono" id="sb-profile">mentor_default_7x30</span></div>
         <div style="display:flex;justify-content:space-between"><span>데이터셋</span><span class="mono" id="sb-range">2011-01-03 - 2026-06-18</span></div>
         <div style="display:flex;justify-content:space-between"><span>실행 모델</span><span class="mono" id="sb-model">ideal_same_close</span></div>
       </div>
@@ -108,14 +108,68 @@
               <label for="initial-capital">초기 자본</label>
               <input class="input mono" id="initial-capital" type="number" min="1000" step="1000" value="10000">
             </div>
+            <div class="field">
+              <label for="thread-count">계좌 수</label>
+              <input class="input mono" id="thread-count" type="number" min="1" step="1" value="7">
+            </div>
+            <div class="field">
+              <label for="stop-sessions">손절 거래일</label>
+              <input class="input mono" id="stop-sessions" type="number" min="1" step="1" value="30">
+            </div>
+            <div class="field">
+              <label for="take-profit-pct">매도 상승률(%)</label>
+              <input class="input mono" id="take-profit-pct" type="number" min="0" step="0.5" value="0">
+            </div>
+            <div class="field">
+              <label for="take-profit-operator">매도 비교</label>
+              <select class="select" id="take-profit-operator">
+                <option value="gt" selected>&gt; entry × threshold</option>
+                <option value="gte">&gt;= entry × threshold</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="stop-loss-pct">가격 손절(%)</label>
+              <input class="input mono" id="stop-loss-pct" type="number" min="0" step="0.5" value="0">
+            </div>
+            <div class="field">
+              <label for="entry-drop-pct">진입 하락(%)</label>
+              <input class="input mono" id="entry-drop-pct" type="number" min="0" step="0.5" value="0">
+            </div>
+            <div class="field">
+              <label for="max-entries-per-session">하루 최대 진입</label>
+              <input class="input mono" id="max-entries-per-session" type="number" min="1" step="1" value="1">
+            </div>
+            <div class="field">
+              <label for="sizing-mode">투자금 보전</label>
+              <select class="select" id="sizing-mode">
+                <option value="fixed_principal" selected>기본원금 보전</option>
+                <option value="thread_compound">계좌별 복리</option>
+                <option value="portfolio_rebalance_compound">전체 재배분</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="price-basis">기준 종가</label>
+              <select class="select" id="price-basis">
+                <option value="adjusted_close" selected>조정종가</option>
+                <option value="raw_close_with_actions">원시종가</option>
+              </select>
+            </div>
             <div class="field full">
               <label for="csv-path">CSV 경로</label>
               <input class="input mono" id="csv-path" type="text">
             </div>
+            <div class="field">
+              <label for="compare-threads">비교 축 계좌 수</label>
+              <input class="input mono" id="compare-threads" type="text" value="5,6,7">
+            </div>
+            <div class="field">
+              <label for="compare-stops">비교 축 손절일</label>
+              <input class="input mono" id="compare-stops" type="text" value="10,30,40">
+            </div>
           </div>
           <div class="action-row">
             <button class="btn primary" type="submit">백테스트 실행</button>
-            <button class="btn" type="button" id="compare-button">9조합 비교</button>
+            <button class="btn" type="button" id="compare-button">비교 실행</button>
           </div>
         </form>
         <div class="notice" style="margin-top:14px">Job 기반 실행이므로 버튼 클릭 후 상태를 polling합니다. 자동매매, 주문 제출, 브로커 연동은 포함되지 않습니다.</div>
@@ -192,10 +246,10 @@
     <div class="card wide-table">
       <div class="card-head">
         <div>
-          <div class="card-title">9조합 비교 매트릭스</div>
-          <div class="card-sub">Thread x Stop sensitivity grid. 각 셀은 수익률 / MDD / 거래 수를 표시합니다.</div>
+            <div class="card-title">비교 매트릭스</div>
+            <div class="card-sub">사용자 지정 Thread x Stop 비교. 각 셀은 수익률 / MDD / 거래 수를 표시합니다.</div>
+          </div>
         </div>
-      </div>
       <div class="tbl-wrap">
         <table class="tbl matrix-table" id="compare-table">
           <thead id="compare-head">
@@ -203,6 +257,43 @@
           </thead>
           <tbody id="compare-body">
             <tr><td colspan="4" class="muted" style="text-align:center">비교 데이터를 불러오지 않았습니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card wide-table">
+      <div class="card-head">
+        <div>
+          <div class="card-title">멘토 레퍼런스 매트릭스</div>
+          <div class="card-sub">현재 데이터셋으로 실제 백테스트를 실행한 값을 기본으로 렌더링하고, 멘토 이미지 전사값과의 차이는 진단 정보로만 표시합니다.</div>
+        </div>
+        <div class="sc-tags">
+          <span class="badge warning" id="mentor-matrix-status">loading</span>
+          <span class="badge info mono" id="mentor-matrix-hash">-</span>
+        </div>
+      </div>
+      <div class="notice" id="mentor-matrix-note">실제 백테스트 결과를 계산하는 중입니다.</div>
+      <div class="tbl-wrap mentor-matrix-wrap">
+        <table class="tbl mentor-matrix-table" id="mentor-matrix-table">
+          <tbody id="mentor-matrix-body">
+            <tr><td class="muted" style="text-align:center">멘토 레퍼런스 매트릭스를 불러오지 않았습니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card wide-table">
+      <div class="card-head">
+        <div>
+          <div class="card-title">익절 / 손절 수</div>
+          <div class="card-sub">현재 엔진이 계산한 선택 조합 4개의 연도행과 집계행을 표시합니다.</div>
+        </div>
+      </div>
+      <div class="tbl-wrap mentor-matrix-wrap">
+        <table class="tbl mentor-counts-table" id="mentor-counts-table">
+          <tbody id="mentor-counts-body">
+            <tr><td class="muted" style="text-align:center">카운트 표를 불러오지 않았습니다.</td></tr>
           </tbody>
         </table>
       </div>

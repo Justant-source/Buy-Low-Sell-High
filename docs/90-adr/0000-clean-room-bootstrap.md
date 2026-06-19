@@ -1,15 +1,14 @@
-# ADR 0000: Clean-Room Bootstrap
+# ADR 0000: 클린룸 부트스트랩
 
-## Status
-Accepted
+## 상태
+승인됨
 
-## Context
-The source implementation plan requires a new repository that excludes live trading code, secrets, Redis, and broker connectors.
+## 배경
+원본 구현 계획은 실거래 코드, 비밀 정보, Redis, 브로커 커넥터를 제외한 새 저장소를 요구한다.
 
-## Decision
-Bootstrap SOXL-Mania as a PostgreSQL-only clean-room project with Python engine and TypeScript dashboard skeletons. Add static verification that fails when prohibited trading or Redis patterns appear in the source tree.
+## 결정
+SOXL-Mania를 PostgreSQL 전용 클린룸 프로젝트로 부트스트랩하고, Python 엔진과 TypeScript 대시보드 스켈레톤을 둔다. 소스 트리에 금지된 매매 코드나 Redis 패턴이 나타나면 실패하는 정적 검증을 추가한다.
 
-## Consequences
-- Phase 0 can be validated without market data or external services.
-- Later phases can build on a clear boundary without inheriting Bit-Mania runtime risk.
-
+## 결과
+- Phase 0는 시장 데이터나 외부 서비스 없이 검증할 수 있다.
+- 이후 Phase는 Bit-Mania 런타임 리스크를 상속하지 않고 명확한 경계 위에서 진행할 수 있다.

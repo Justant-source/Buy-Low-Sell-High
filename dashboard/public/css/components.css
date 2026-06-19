@@ -250,6 +250,115 @@
   text-align: right;
 }
 
+.mentor-matrix-wrap {
+  overflow: auto;
+}
+
+.mentor-matrix-table,
+.mentor-counts-table {
+  min-width: 1480px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.mentor-matrix-table th,
+.mentor-matrix-table td,
+.mentor-counts-table th,
+.mentor-counts-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.mentor-matrix-table th,
+.mentor-counts-table th {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font: var(--t-overline);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.mentor-matrix-table td.num,
+.mentor-counts-table td.num {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+.mentor-matrix-table .sticky-1,
+.mentor-counts-table .sticky-1 {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: var(--surface);
+}
+
+.mentor-matrix-table th.sticky-1,
+.mentor-counts-table th.sticky-1,
+.mentor-matrix-table .sticky-2,
+.mentor-counts-table .sticky-2,
+.mentor-matrix-table .sticky-3 {
+  background: var(--surface-2);
+}
+
+.mentor-matrix-table .sticky-2,
+.mentor-counts-table .sticky-2 {
+  position: sticky;
+  left: 88px;
+  z-index: 3;
+  background: var(--surface);
+}
+
+.mentor-matrix-table .sticky-3 {
+  position: sticky;
+  left: 220px;
+  z-index: 3;
+  background: var(--surface);
+}
+
+.mentor-matrix-table .section-row td,
+.mentor-counts-table .section-row td {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font: var(--t-overline);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mentor-matrix-table .aggregate-label,
+.mentor-counts-table .aggregate-label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mentor-matrix-table .max-cell {
+  background: color-mix(in srgb, var(--c-warning) 18%, var(--surface));
+  color: #8a5800;
+  font-weight: 700;
+}
+
+.mentor-matrix-table .representative-col,
+.mentor-matrix-table th.representative-col {
+  background: color-mix(in srgb, var(--primary-soft) 78%, var(--surface));
+}
+
+.mentor-counts-table .representative-col,
+.mentor-counts-table th.representative-col {
+  background: color-mix(in srgb, var(--primary-soft) 72%, var(--surface));
+}
+
+.mentor-matrix-table .benchmark-col,
+.mentor-matrix-table th.benchmark-col {
+  background: color-mix(in srgb, var(--surface-3) 68%, var(--surface));
+}
+
+.mentor-counts-table .pair-cell {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
 .input,
 .select,
 .textarea {

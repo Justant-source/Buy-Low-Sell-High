@@ -1,0 +1,220 @@
+{
+  "meta": {
+    "source_image_sha256": "d26f8c4c954f18f7f59eb721410d2224a58bf4be778f0941222d4c22f113c928",
+    "base_capital_usd": "10000",
+    "period_start": "2011-01-01",
+    "period_end": "2024-12-31",
+    "assumed_price_basis": "adjusted_close",
+    "assumed_execution_model": "ideal_same_close",
+    "authoritative": true,
+    "notes": [
+      "Block B and Block C were transcribed from the work order text.",
+      "Block D yearly counts were completed from the legacy mentor_reference_2011_2024.json fixture where the image transcript was incomplete.",
+      "Do not treat this fixture as a parity PASS unless the runtime data_hash matches the authoritative source snapshot."
+    ]
+  },
+  "benchmark": {
+    "yearly": [
+      {"year": 2011, "price_change": "0.85->0.43", "return_pct": -49.4},
+      {"year": 2012, "price_change": "0.45->0.45", "return_pct": 0.0},
+      {"year": 2013, "price_change": "0.51->1.15", "return_pct": 125.5},
+      {"year": 2014, "price_change": "1.10->2.25", "return_pct": 104.5},
+      {"year": 2015, "price_change": "2.25->1.78", "return_pct": -20.9},
+      {"year": 2016, "price_change": "1.72->3.81", "return_pct": 121.5},
+      {"year": 2017, "price_change": "3.81->9.19", "return_pct": 141.2},
+      {"year": 2018, "price_change": "9.95->5.55", "return_pct": -44.2},
+      {"year": 2019, "price_change": "5.70->18.32", "return_pct": 221.4},
+      {"year": 2020, "price_change": "19.46->31.10", "return_pct": 59.8},
+      {"year": 2021, "price_change": "30.67->68.01", "return_pct": 121.7},
+      {"year": 2022, "price_change": "72.10->9.36", "return_pct": -87.0},
+      {"year": 2023, "price_change": "9.36->28.04", "return_pct": 199.6},
+      {"year": 2024, "price_change": "28.04->27.31", "return_pct": -2.6}
+    ],
+    "aggregate_rows": {
+      "compound_total": 3112.9,
+      "average_5y": 40.3,
+      "simple_5y": 379.1,
+      "compound_5y": 379.1,
+      "compound_3y": -11.0,
+      "compound_1y": -2.6
+    },
+    "aggregate_notes": [
+      "The work order notes that benchmark sheet start prices differ across some aggregate rows.",
+      "These values are transcribed as authoritative display values and should not be recomputed for parity claims."
+    ]
+  },
+  "combos": {
+    "5x10": {
+      "yearly_returns_pct": {"2011": 39.5, "2012": 19.5, "2013": 48.8, "2014": 26.8, "2015": 20.8, "2016": 40.2, "2017": 29.0, "2018": -14.3, "2019": 31.3, "2020": 34.1, "2021": 55.0, "2022": 30.9, "2023": 46.5, "2024": 68.1},
+      "stats_pct": {"stddev": 19.3, "avg_all": 34.0, "avg_5y": 46.9},
+      "simple_returns_pct": {"total": 479.6, "y5": 235.7, "y3": 151.2},
+      "compound_returns_pct": {"total": 3850.2, "y5": 673.4, "y3": 301.7, "y1": 106.2}
+    },
+    "5x30": {
+      "yearly_returns_pct": {"2011": 29.0, "2012": 12.7, "2013": 53.1, "2014": 48.4, "2015": 15.2, "2016": 54.9, "2017": 39.2, "2018": -9.8, "2019": 67.7, "2020": 66.8, "2021": 88.0, "2022": 23.9, "2023": 71.2, "2024": 79.1},
+      "stats_pct": {"stddev": 28.5, "avg_all": 45.7, "avg_5y": 65.8},
+      "simple_returns_pct": {"total": 671.2, "y5": 345.5, "y3": 195.0},
+      "compound_returns_pct": {"total": 5140.0, "y5": 903.4, "y3": 293.7, "y1": 133.1}
+    },
+    "5x40": {
+      "yearly_returns_pct": {"2011": 31.4, "2012": -5.3, "2013": 66.6, "2014": 48.8, "2015": 2.5, "2016": 64.0, "2017": 39.2, "2018": 4.5, "2019": 72.1, "2020": 70.7, "2021": 91.8, "2022": 27.8, "2023": 71.6, "2024": 76.9},
+      "stats_pct": {"stddev": 31.1, "avg_all": 47.3, "avg_5y": 67.8},
+      "simple_returns_pct": {"total": 706.0, "y5": 355.4, "y3": 196.6},
+      "compound_returns_pct": {"total": 7474.2, "y5": 810.5, "y3": 262.0, "y1": 128.5}
+    },
+    "6x10": {
+      "yearly_returns_pct": {"2011": 32.9, "2012": 16.3, "2013": 40.7, "2014": 22.3, "2015": 17.3, "2016": 33.5, "2017": 24.2, "2018": -11.9, "2019": 26.1, "2020": 28.4, "2021": 45.7, "2022": 25.7, "2023": 38.6, "2024": 56.5},
+      "stats_pct": {"stddev": 16.1, "avg_all": 28.3, "avg_5y": 39.0},
+      "simple_returns_pct": {"total": 399.5, "y5": 195.9, "y3": 125.6},
+      "compound_returns_pct": {"total": 2907.5, "y5": 468.9, "y3": 234.8, "y1": 86.9}
+    },
+    "6x30": {
+      "yearly_returns_pct": {"2011": 24.1, "2012": 10.6, "2013": 44.2, "2014": 40.4, "2015": 12.7, "2016": 45.8, "2017": 32.7, "2018": -8.2, "2019": 56.5, "2020": 55.6, "2021": 73.2, "2022": 19.9, "2023": 59.2, "2024": 65.6},
+      "stats_pct": {"stddev": 23.7, "avg_all": 38.0, "avg_5y": 54.7},
+      "simple_returns_pct": {"total": 558.8, "y5": 287.4, "y3": 162.0},
+      "compound_returns_pct": {"total": 4687.2, "y5": 755.6, "y3": 266.3, "y1": 107.9}
+    },
+    "6x40": {
+      "yearly_returns_pct": {"2011": 26.2, "2012": -4.4, "2013": 55.5, "2014": 40.7, "2015": 2.1, "2016": 53.3, "2017": 32.7, "2018": 3.8, "2019": 60.1, "2020": 58.9, "2021": 76.4, "2022": 23.2, "2023": 59.6, "2024": 63.8},
+      "stats_pct": {"stddev": 25.9, "avg_all": 39.4, "avg_5y": 56.4},
+      "simple_returns_pct": {"total": 587.7, "y5": 295.6, "y3": 163.5},
+      "compound_returns_pct": {"total": 5525.6, "y5": 690.9, "y3": 233.6, "y1": 104.3}
+    },
+    "7x10": {
+      "yearly_returns_pct": {"2011": 28.2, "2012": 13.9, "2013": 34.9, "2014": 19.1, "2015": 14.9, "2016": 28.7, "2017": 20.7, "2018": -10.2, "2019": 22.4, "2020": 24.3, "2021": 39.2, "2022": 21.9, "2023": 33.1, "2024": 48.5},
+      "stats_pct": {"stddev": 13.8, "avg_all": 24.3, "avg_5y": 33.4},
+      "simple_returns_pct": {"total": 342.1, "y5": 167.8, "y3": 107.6},
+      "compound_returns_pct": {"total": 2290.5, "y5": 377.9, "y3": 187.2, "y1": 70.7}
+    },
+    "7x30": {
+      "yearly_returns_pct": {"2011": 20.7, "2012": 9.1, "2013": 37.9, "2014": 34.6, "2015": 10.9, "2016": 39.2, "2017": 28.0, "2018": -7.0, "2019": 48.4, "2020": 47.8, "2021": 62.6, "2022": 17.1, "2023": 50.7, "2024": 56.4},
+      "stats_pct": {"stddev": 20.3, "avg_all": 32.6, "avg_5y": 46.9},
+      "simple_returns_pct": {"total": 479.1, "y5": 246.4, "y3": 139.0},
+      "compound_returns_pct": {"total": 5096.3, "y5": 932.6, "y3": 242.0, "y1": 87.4}
+    },
+    "7x40": {
+      "yearly_returns_pct": {"2011": 22.4, "2012": -3.8, "2013": 47.6, "2014": 34.9, "2015": 1.8, "2016": 45.7, "2017": 28.0, "2018": 3.3, "2019": 51.5, "2020": 50.5, "2021": 65.3, "2022": 19.9, "2023": 51.1, "2024": 54.8},
+      "stats_pct": {"stddev": 22.2, "avg_all": 33.8, "avg_5y": 48.3},
+      "simple_returns_pct": {"total": 503.8, "y5": 253.4, "y3": 140.2},
+      "compound_returns_pct": {"total": 5965.5, "y5": 1003.9, "y3": 223.7, "y1": 84.5}
+    }
+  },
+  "selected_count_combos": {
+    "5x30": {
+      "yearly_counts": {
+        "2011": {"take_profit": 127, "time_stop": 16},
+        "2012": {"take_profit": 127, "time_stop": 24},
+        "2013": {"take_profit": 121, "time_stop": 4},
+        "2014": {"take_profit": 108, "time_stop": 4},
+        "2015": {"take_profit": 109, "time_stop": 16},
+        "2016": {"take_profit": 113, "time_stop": 6},
+        "2017": {"take_profit": 99, "time_stop": 5},
+        "2018": {"take_profit": 99, "time_stop": 19},
+        "2019": {"take_profit": 105, "time_stop": 5},
+        "2020": {"take_profit": 112, "time_stop": 6},
+        "2021": {"take_profit": 114, "time_stop": 5},
+        "2022": {"take_profit": 114, "time_stop": 20},
+        "2023": {"take_profit": 110, "time_stop": 8},
+        "2024": {"take_profit": 116, "time_stop": 8}
+      },
+      "aggregate_rows": {
+        "avg_all": {"take_profit": 112.0, "time_stop": 10.0},
+        "avg_5y": {"take_profit": 113.0, "time_stop": 9.4},
+        "simple_total": {"take_profit": 1603, "time_stop": 117},
+        "simple_y5": {"take_profit": 575, "time_stop": 38},
+        "simple_y3": {"take_profit": 348, "time_stop": 28},
+        "compound_total": {"take_profit": 1345, "time_stop": 101},
+        "compound_y5": {"take_profit": 503, "time_stop": 36},
+        "compound_y3": {"take_profit": 301, "time_stop": 27},
+        "compound_y1": {"take_profit": 112, "time_stop": 7}
+      }
+    },
+    "6x10": {
+      "yearly_counts": {
+        "2011": {"take_profit": 119, "time_stop": 24},
+        "2012": {"take_profit": 115, "time_stop": 36},
+        "2013": {"take_profit": 114, "time_stop": 11},
+        "2014": {"take_profit": 102, "time_stop": 10},
+        "2015": {"take_profit": 99, "time_stop": 26},
+        "2016": {"take_profit": 105, "time_stop": 14},
+        "2017": {"take_profit": 93, "time_stop": 11},
+        "2018": {"take_profit": 90, "time_stop": 28},
+        "2019": {"take_profit": 96, "time_stop": 14},
+        "2020": {"take_profit": 103, "time_stop": 15},
+        "2021": {"take_profit": 101, "time_stop": 18},
+        "2022": {"take_profit": 106, "time_stop": 28},
+        "2023": {"take_profit": 99, "time_stop": 19},
+        "2024": {"take_profit": 111, "time_stop": 13}
+      },
+      "aggregate_rows": {
+        "avg_all": {"take_profit": 104.0, "time_stop": 19.0},
+        "avg_5y": {"take_profit": 104.0, "time_stop": 19.0},
+        "simple_total": {"take_profit": 1471, "time_stop": 249},
+        "simple_y5": {"take_profit": 525, "time_stop": 88},
+        "simple_y3": {"take_profit": 320, "time_stop": 56},
+        "compound_total": {"take_profit": 1435, "time_stop": 248},
+        "compound_y5": {"take_profit": 513, "time_stop": 88},
+        "compound_y3": {"take_profit": 317, "time_stop": 56},
+        "compound_y1": {"take_profit": 112, "time_stop": 12}
+      }
+    },
+    "6x30": {
+      "yearly_counts": {
+        "2011": {"take_profit": 127, "time_stop": 16},
+        "2012": {"take_profit": 127, "time_stop": 24},
+        "2013": {"take_profit": 121, "time_stop": 4},
+        "2014": {"take_profit": 108, "time_stop": 4},
+        "2015": {"take_profit": 109, "time_stop": 16},
+        "2016": {"take_profit": 113, "time_stop": 6},
+        "2017": {"take_profit": 99, "time_stop": 5},
+        "2018": {"take_profit": 99, "time_stop": 19},
+        "2019": {"take_profit": 105, "time_stop": 5},
+        "2020": {"take_profit": 112, "time_stop": 6},
+        "2021": {"take_profit": 114, "time_stop": 5},
+        "2022": {"take_profit": 114, "time_stop": 20},
+        "2023": {"take_profit": 110, "time_stop": 8},
+        "2024": {"take_profit": 116, "time_stop": 8}
+      },
+      "aggregate_rows": {
+        "avg_all": {"take_profit": 112.0, "time_stop": 10.0},
+        "avg_5y": {"take_profit": 113.0, "time_stop": 9.0},
+        "simple_total": {"take_profit": 1603, "time_stop": 117},
+        "simple_y5": {"take_profit": 575, "time_stop": 38},
+        "simple_y3": {"take_profit": 348, "time_stop": 28},
+        "compound_total": {"take_profit": 1435, "time_stop": 109},
+        "compound_y5": {"take_profit": 527, "time_stop": 38},
+        "compound_y3": {"take_profit": 319, "time_stop": 28},
+        "compound_y1": {"take_profit": 116, "time_stop": 8}
+      }
+    },
+    "7x30": {
+      "yearly_counts": {
+        "2011": {"take_profit": 127, "time_stop": 16},
+        "2012": {"take_profit": 127, "time_stop": 24},
+        "2013": {"take_profit": 121, "time_stop": 4},
+        "2014": {"take_profit": 108, "time_stop": 4},
+        "2015": {"take_profit": 109, "time_stop": 16},
+        "2016": {"take_profit": 113, "time_stop": 6},
+        "2017": {"take_profit": 99, "time_stop": 5},
+        "2018": {"take_profit": 99, "time_stop": 19},
+        "2019": {"take_profit": 105, "time_stop": 5},
+        "2020": {"take_profit": 112, "time_stop": 6},
+        "2021": {"take_profit": 114, "time_stop": 5},
+        "2022": {"take_profit": 116, "time_stop": 18},
+        "2023": {"take_profit": 110, "time_stop": 8},
+        "2024": {"take_profit": 116, "time_stop": 8}
+      },
+      "aggregate_rows": {
+        "avg_all": {"take_profit": 113.0, "time_stop": 10.0},
+        "avg_5y": {"take_profit": 114.0, "time_stop": 9.0},
+        "simple_total": {"take_profit": 1603, "time_stop": 117},
+        "simple_y5": {"take_profit": 575, "time_stop": 38},
+        "simple_y3": {"take_profit": 348, "time_stop": 28},
+        "compound_total": {"take_profit": 1497, "time_stop": 113},
+        "compound_y5": {"take_profit": 534, "time_stop": 38},
+        "compound_y3": {"take_profit": 333, "time_stop": 28},
+        "compound_y1": {"take_profit": 117, "time_stop": 7}
+      }
+    }
+  }
+}

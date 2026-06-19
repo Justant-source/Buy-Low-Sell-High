@@ -1,4 +1,3 @@
-# System Context
+# 시스템 컨텍스트
 
-SOXL-Mania serves one operator who researches the SOXL strategy, reviews recommendation-only outputs, and records manual fills. The system consumes end-of-day market data and never submits broker orders.
-
+SOXL-Mania는 SOXL 전략을 연구하고, 권고 전용 출력을 검토하며, 수동 체결을 기록하는 단일 운영자를 위한 시스템이다. 이 시스템은 종가 기준 일별 시장 데이터를 사용하며, 브로커 주문을 제출하지 않는다.

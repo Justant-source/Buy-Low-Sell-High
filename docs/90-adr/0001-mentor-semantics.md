@@ -1,23 +1,31 @@
-# ADR 0001: Mentor Semantics Baseline
+# ADR 0001: 멘토 의미론 기준선
 
-## Status
-Provisional
+## 상태
+기준선으로 승인되었으며, 멘토 화면 세부 사항은 ADR 0002에서 보정한다.
 
-## Context
-The mentor sheet reference is transcribed, but the exact historical data source and every edge-condition switch are not yet proven by parity.
+## 배경
+멘토 시트 레퍼런스는 전사되어 있지만, 정확한 과거 데이터 소스와 모든 엣지 케이스 스위치는 아직 parity로 입증되지 않았다.
 
-## Decision
-Use `mentor_v1` semantics as the executable baseline:
+## 결정
+실행 가능한 기준 의미론으로 `mentor_v1`을 사용한다.
 
-- Entry on `close < previous_close`
-- Maximum one new thread per session
-- Default order: exits then entry
-- Take profit when `current_close > entry_price`
-- Time stop when `holding_sessions >= stop_sessions` and price has not recovered
-- Same-session thread reuse allowed by default
-- Adjusted close is the default research basis
-- `ideal_same_close` is allowed only as a research parity model, not a live expectation model
+- `close < previous_close`일 때 진입
+- 세션당 신규 스레드 최대 1개
+- 기본 순서는 청산 후 진입
+- `current_close > entry_price`이면 익절
+- `holding_sessions >= stop_sessions`이고 가격이 회복되지 않았으면 시간 손절
+- 동일 세션 내 스레드 재사용은 기본 허용
+- 기본 연구용 가격 기준은 adjusted close
+- `ideal_same_close`는 실전 기대값이 아니라 연구용 parity 모델로만 허용
 
-## Consequences
-- The engine is deterministic and testable now.
-- A future parity pass may still revise ambiguity switches, but any change must be recorded here instead of being applied silently.
+2026-06-19 기준 구현 검증 결과:
+
+- `sizing_mode=fixed_principal`는 신규 진입 때마다 초기 스레드 원금을 사용한다.
+- `sizing_mode=thread_compound`는 다음 진입에 각 스레드의 현재 free equity를 사용한다.
+- `sizing_mode=portfolio_rebalance_compound`는 `total_equity / thread_count`를 사용한다.
+- `year_boundary`는 설정에는 존재하지만 현재 엔진은 아직 이를 소비하지 않는다. 따라서 상위 리포트가 데이터를 직접 분할하지 않는 한 런타임 동작은 carry-only다.
+
+## 결과
+- 엔진은 현재 시점에서 결정적이며 테스트 가능하다.
+- 연도 리셋 의미론에 의존하는 멘토 레퍼런스 화면 동작은 코어 런타임 지원이 들어오기 전까지 ADR 0002에서 별도로 문서화한다.
+- 향후 parity 보정 과정에서 모호한 스위치가 바뀔 수는 있지만, 그런 변경은 침묵 속에 적용하지 말고 반드시 이 ADR에 기록해야 한다.

@@ -8,7 +8,7 @@ from pathlib import Path
 from .backtest.engine import run_backtest
 from .backtest.parity import check_data_parity, check_event_parity, check_performance_parity, load_reference_fixture
 from .backtest.sweep import run_grid
-from .config import load_strategy_config
+from .config import load_strategy_config, load_strategy_mapping
 from .data.normalize import normalize_bars
 from .data.providers.csv_provider import CsvMarketDataProvider
 from .data.quality import compute_data_hash, summarize_import
@@ -20,7 +20,9 @@ from .manual.recommendation import build_recommendations
 from .manual.reconciliation import reconcile_ledger
 from .persistence.repositories import InMemoryJobRepository
 from .persistence.worker import run_once
+from .reporting.mentor_matrix import build_mentor_matrix, load_reference_fixture as load_mentor_matrix_reference
 from .reporting.risk_report import build_risk_report
+from .backtest.parity import ParityResult
 
 
 def _repo_root() -> Path:
@@ -64,6 +66,10 @@ def _print_json(payload: object) -> int:
     return 0
 
 
+def _parity_exit_code(*results: ParityResult) -> int:
+    return 0 if all(result.status == "PASS" for result in results) else 1
+
+
 def _add_csv_argument(parser: argparse.ArgumentParser, *, required: bool = False) -> None:
     parser.add_argument("--csv", required=required, default=default_market_data_csv())
 
@@ -72,12 +78,57 @@ def _add_ledger_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--ledger-path", default=default_manual_ledger_path())
 
 
+def _add_strategy_override_arguments(
+    parser: argparse.ArgumentParser,
+    *,
+    include_thread_count: bool = True,
+    include_stop_sessions: bool = True,
+) -> None:
+    if include_thread_count:
+        parser.add_argument("--thread-count", type=int)
+    if include_stop_sessions:
+        parser.add_argument("--stop-sessions", type=int)
+    parser.add_argument("--take-profit-pct")
+    parser.add_argument("--take-profit-operator", choices=["gt", "gte"])
+    parser.add_argument("--entry-drop-pct")
+    parser.add_argument("--stop-loss-pct")
+    parser.add_argument("--max-entries-per-session", type=int)
+    parser.add_argument("--sizing-mode")
+    parser.add_argument("--price-basis")
+
+
+def _strategy_overrides_from_args(args: argparse.Namespace) -> dict[str, object]:
+    mapping = {
+        "thread_count": getattr(args, "thread_count", None),
+        "stop_sessions": getattr(args, "stop_sessions", None),
+        "take_profit_pct": getattr(args, "take_profit_pct", None),
+        "take_profit_operator": getattr(args, "take_profit_operator", None),
+        "entry_drop_pct": getattr(args, "entry_drop_pct", None),
+        "stop_loss_pct": getattr(args, "stop_loss_pct", None),
+        "max_entries_per_session": getattr(args, "max_entries_per_session", None),
+        "sizing_mode": getattr(args, "sizing_mode", None),
+        "price_basis": getattr(args, "price_basis", None),
+    }
+    return {key: value for key, value in mapping.items() if value is not None}
+
+
+def _load_strategy_config_with_overrides(args: argparse.Namespace) -> StrategyConfig:
+    payload = load_strategy_mapping(args.profile, initial_capital=args.initial_capital)
+    payload.update(_strategy_overrides_from_args(args))
+    return StrategyConfig.from_mapping(payload)
+
+
 def _serialize_config(config: StrategyConfig) -> dict[str, object]:
     return {
         "profile_id": config.profile_id,
         "symbol": config.symbol,
         "thread_count": config.thread_count,
         "stop_sessions": config.stop_sessions,
+        "max_entries_per_session": config.max_entries_per_session,
+        "take_profit_pct": str(config.take_profit_pct),
+        "take_profit_operator": config.take_profit_operator,
+        "entry_drop_pct": str(config.entry_drop_pct),
+        "stop_loss_pct": str(config.stop_loss_pct),
         "price_basis": config.price_basis.value,
         "execution_model": config.execution_model.value,
         "sizing_mode": config.sizing_mode.value,
@@ -228,7 +279,7 @@ def _data_sync(args: argparse.Namespace) -> int:
 
 
 def _backtest_run(args: argparse.Namespace) -> int:
-    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    config = _load_strategy_config_with_overrides(args)
     bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
     run = run_backtest(bars, config, data_hash=data_hash)
     payload = _serialize_run(run, config)
@@ -238,14 +289,14 @@ def _backtest_run(args: argparse.Namespace) -> int:
 
 
 def _backtest_detail(args: argparse.Namespace) -> int:
-    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    config = _load_strategy_config_with_overrides(args)
     bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
     run = run_backtest(bars, config, data_hash=data_hash)
     return _print_json(_serialize_run(run, config))
 
 
 def _backtest_grid(args: argparse.Namespace) -> int:
-    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    config = _load_strategy_config_with_overrides(args)
     bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
     thread_counts = [int(item) for item in args.threads.split(",")]
     stop_sessions = [int(item) for item in args.stops.split(",")]
@@ -269,9 +320,48 @@ def _backtest_grid(args: argparse.Namespace) -> int:
 
 
 def _backtest_risk_report(args: argparse.Namespace) -> int:
-    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    config = _load_strategy_config_with_overrides(args)
     bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
     return _print_json(build_risk_report(bars, config, data_hash=data_hash))
+
+
+def _parse_windows(raw: str | None) -> dict[str, tuple[int, int]]:
+    if not raw:
+        return {
+            "total": (2011, 2024),
+            "y5": (2020, 2024),
+            "y3": (2022, 2024),
+            "y1": (2024, 2024),
+        }
+    windows: dict[str, tuple[int, int]] = {}
+    for item in raw.split(","):
+        label, span = item.split("=", 1)
+        start_year, end_year = span.split(":", 1)
+        windows[label] = (int(start_year), int(end_year))
+    return windows
+
+
+def _parse_combo_csv(raw: str) -> tuple[int, ...]:
+    return tuple(int(item.strip()) for item in raw.split(",") if item.strip())
+
+
+def _backtest_mentor_matrix(args: argparse.Namespace) -> int:
+    config = _load_strategy_config_with_overrides(args)
+    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    combos = tuple(
+        (thread_count, stop_sessions)
+        for thread_count in _parse_combo_csv(args.threads)
+        for stop_sessions in _parse_combo_csv(args.stops)
+    )
+    payload = build_mentor_matrix(
+        bars,
+        config,
+        data_hash=data_hash,
+        reference=load_mentor_matrix_reference(args.reference) if args.reference else None,
+        combos=combos,
+        windows=_parse_windows(args.windows),
+    )
+    return _print_json(payload)
 
 
 def _parity_report(args: argparse.Namespace) -> int:
@@ -283,16 +373,16 @@ def _parity_report(args: argparse.Namespace) -> int:
     profile_key = args.profile_key or f"{config.thread_count}x{config.stop_sessions}"
     event_result = check_event_parity(run, reference, profile_key)
     performance_result = check_performance_parity(run, reference, profile_key)
-    return _print_json(
-        {
-            "run_id": run.run_id,
-            "data_hash": data_hash,
-            "profile_key": profile_key,
-            "data_parity": {"status": data_result.status, "details": data_result.details},
-            "event_parity": {"status": event_result.status, "details": event_result.details},
-            "performance_parity": {"status": performance_result.status, "details": performance_result.details},
-        }
-    )
+    payload = {
+        "run_id": run.run_id,
+        "data_hash": data_hash,
+        "profile_key": profile_key,
+        "data_parity": {"status": data_result.status, "details": data_result.details},
+        "event_parity": {"status": event_result.status, "details": event_result.details},
+        "performance_parity": {"status": performance_result.status, "details": performance_result.details},
+    }
+    _print_json(payload)
+    return _parity_exit_code(data_result, event_result, performance_result)
 
 
 def _manual_today(args: argparse.Namespace) -> int:
@@ -318,7 +408,7 @@ def _manual_today(args: argparse.Namespace) -> int:
 
 
 def _profile_show(args: argparse.Namespace) -> int:
-    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    config = _load_strategy_config_with_overrides(args)
     return _print_json(_serialize_config(config))
 
 
@@ -432,12 +522,14 @@ def main() -> int:
     _add_csv_argument(backtest_run_parser)
     backtest_run_parser.add_argument("--symbol")
     backtest_run_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    _add_strategy_override_arguments(backtest_run_parser)
     backtest_run_parser.set_defaults(handler=_backtest_run)
     backtest_detail_parser = backtest_subparsers.add_parser("detail")
     backtest_detail_parser.add_argument("--profile", required=True)
     _add_csv_argument(backtest_detail_parser)
     backtest_detail_parser.add_argument("--symbol")
     backtest_detail_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    _add_strategy_override_arguments(backtest_detail_parser)
     backtest_detail_parser.set_defaults(handler=_backtest_detail)
     backtest_grid_parser = backtest_subparsers.add_parser("grid")
     backtest_grid_parser.add_argument("--profile", required=True)
@@ -446,13 +538,26 @@ def main() -> int:
     backtest_grid_parser.add_argument("--threads", required=True)
     backtest_grid_parser.add_argument("--stops", required=True)
     backtest_grid_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    _add_strategy_override_arguments(backtest_grid_parser, include_thread_count=False, include_stop_sessions=False)
     backtest_grid_parser.set_defaults(handler=_backtest_grid)
     backtest_risk_parser = backtest_subparsers.add_parser("risk-report")
     backtest_risk_parser.add_argument("--profile", required=True)
     _add_csv_argument(backtest_risk_parser)
     backtest_risk_parser.add_argument("--symbol")
     backtest_risk_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    _add_strategy_override_arguments(backtest_risk_parser)
     backtest_risk_parser.set_defaults(handler=_backtest_risk_report)
+    backtest_mentor_matrix_parser = backtest_subparsers.add_parser("mentor-matrix")
+    backtest_mentor_matrix_parser.add_argument("--profile", required=True)
+    _add_csv_argument(backtest_mentor_matrix_parser)
+    backtest_mentor_matrix_parser.add_argument("--symbol")
+    backtest_mentor_matrix_parser.add_argument("--threads", default="5,6,7")
+    backtest_mentor_matrix_parser.add_argument("--stops", default="10,30,40")
+    backtest_mentor_matrix_parser.add_argument("--windows")
+    backtest_mentor_matrix_parser.add_argument("--reference")
+    backtest_mentor_matrix_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    _add_strategy_override_arguments(backtest_mentor_matrix_parser, include_thread_count=False, include_stop_sessions=False)
+    backtest_mentor_matrix_parser.set_defaults(handler=_backtest_mentor_matrix)
 
     parity_parser = subparsers.add_parser("parity")
     parity_subparsers = parity_parser.add_subparsers(dest="parity_command", required=True)
@@ -470,6 +575,7 @@ def main() -> int:
     profile_show_parser = profile_subparsers.add_parser("show")
     profile_show_parser.add_argument("--profile", required=True)
     profile_show_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    _add_strategy_override_arguments(profile_show_parser)
     profile_show_parser.set_defaults(handler=_profile_show)
 
     manual_parser = subparsers.add_parser("manual")

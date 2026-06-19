@@ -1,7 +1,7 @@
-# Manual Operations
+# 수동 운용
 
-Recommendations are advisory outputs only. Actual manual fills will be stored append-only and must be reversible through explicit reversal events rather than destructive edits.
+권고는 참고용 출력일 뿐이다. 실제 수동 체결은 append-only 방식으로 저장되어야 하며, 파괴적 수정이 아니라 명시적인 되돌리기 이벤트를 통해서만 취소 가능해야 한다.
 
-Manual ledger backup and restore must preserve the append-only audit trail. Any restore action requires an explicit confirmation token, must import a full exported ledger snapshot rather than patching individual fills in place, and must match the selected profile account and thread count.
+수동 장부의 백업과 복원은 append-only 감사 추적을 보존해야 한다. 모든 복원 작업은 명시적인 확인 토큰이 필요하며, 개별 체결을 덮어쓰는 방식이 아니라 전체 내보내기 장부 스냅샷을 가져와야 하고, 선택한 프로필 계정과 스레드 수와도 일치해야 한다.
 
-Manual dashboards should show recommendation-to-fill drift explicitly. A recommendation remains advisory until a matching manual fill is recorded, and price differences between the recommendation basis and the actual fill must be visible rather than overwritten.
+수동 대시보드는 권고와 실제 체결 사이의 차이를 명시적으로 보여줘야 한다. 일치하는 수동 체결이 기록되기 전까지 권고는 계속 참고용 상태로 남아야 하며, 권고 기준가와 실제 체결가 차이는 덮어쓰지 말고 그대로 표시해야 한다.

@@ -1,10 +1,10 @@
-# State Machines
+# 상태 머신
 
-The Python engine implements a deterministic `FREE -> OPEN -> FREE` capital-thread lifecycle.
+Python 엔진은 결정적인 `FREE -> OPEN -> FREE` 자본 스레드 생명주기를 구현한다.
 
-Current runtime state machine:
+현재 런타임 상태 머신:
 
 - `FREE`
 - `OPEN`
 
-Recommendation states must remain separate from actual manual ledger state.
+권고 상태는 실제 수동 장부 상태와 분리되어야 한다.

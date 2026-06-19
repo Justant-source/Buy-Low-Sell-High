@@ -4,10 +4,49 @@
     latestRun: null,
     profiles: [],
     dataStatus: null,
+    mentorMatrix: null,
   };
 
   function profilePathToLabel(profile) {
     return `${profile.profileId} · ${profile.threadCount}T/${profile.stopSessions}S`;
+  }
+
+  function selectedProfile() {
+    return state.profiles.find((profile) => profile.profileId === document.getElementById("profile-select").value) || null;
+  }
+
+  function syncControlsFromProfile(profile) {
+    if (!profile) {
+      return;
+    }
+    document.getElementById("thread-count").value = String(profile.threadCount);
+    document.getElementById("stop-sessions").value = String(profile.stopSessions);
+    document.getElementById("price-basis").value = profile.priceBasis || "adjusted_close";
+    document.getElementById("sizing-mode").value = "fixed_principal";
+    document.getElementById("take-profit-pct").value = "0";
+    document.getElementById("take-profit-operator").value = "gt";
+    document.getElementById("stop-loss-pct").value = "0";
+    document.getElementById("entry-drop-pct").value = "0";
+    document.getElementById("max-entries-per-session").value = "1";
+  }
+
+  function numericValue(id, fallback) {
+    const value = Number(document.getElementById(id).value);
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function collectOverrides() {
+    return {
+      threadCount: numericValue("thread-count", 7),
+      stopSessions: numericValue("stop-sessions", 30),
+      takeProfitPct: numericValue("take-profit-pct", 0),
+      takeProfitOperator: document.getElementById("take-profit-operator").value || "gt",
+      entryDropPct: numericValue("entry-drop-pct", 0),
+      stopLossPct: numericValue("stop-loss-pct", 0),
+      maxEntriesPerSession: numericValue("max-entries-per-session", 1),
+      sizingMode: document.getElementById("sizing-mode").value || "fixed_principal",
+      priceBasis: document.getElementById("price-basis").value || "adjusted_close",
+    };
   }
 
   function populateProfiles(payload) {
@@ -16,7 +55,8 @@
     select.innerHTML = state.profiles
       .map((profile) => `<option value="${ui.escapeHtml(profile.profileId)}">${ui.escapeHtml(profilePathToLabel(profile))}</option>`)
       .join("");
-    select.value = payload.defaultProfileId || "mentor_default_5x30";
+    select.value = payload.defaultProfileId || "mentor_default_7x30";
+    syncControlsFromProfile(selectedProfile());
     document.getElementById("sb-profile").textContent = select.value;
   }
 
@@ -142,6 +182,172 @@
       .join("");
   }
 
+  function matrixPercent(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return "-";
+    }
+    if (Math.abs(number) >= 1e9) {
+      return `${number.toExponential(2)}%`;
+    }
+    return `${number.toLocaleString("en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%`;
+  }
+
+  function comboOrder(combos) {
+    return Object.keys(combos || {}).sort((left, right) => {
+      const [leftThreads, leftStops] = left.split("x").map(Number);
+      const [rightThreads, rightStops] = right.split("x").map(Number);
+      if (leftThreads !== rightThreads) {
+        return leftThreads - rightThreads;
+      }
+      return leftStops - rightStops;
+    });
+  }
+
+  function mentorBadgeClass(status) {
+    if (status === "PASS") {
+      return "badge success";
+    }
+    if (status === "DATA_MISMATCH") {
+      return "badge warning";
+    }
+    return "badge danger";
+  }
+
+  function renderMentorMatrix(payload) {
+    state.mentorMatrix = payload;
+    const reference = payload.reference;
+    const actual = payload.actual;
+    const comboKeys = comboOrder(actual.combos);
+    const body = document.getElementById("mentor-matrix-body");
+    const badge = document.getElementById("mentor-matrix-status");
+    const hash = document.getElementById("mentor-matrix-hash");
+    const note = document.getElementById("mentor-matrix-note");
+    badge.className = mentorBadgeClass(payload.parity.status);
+    badge.textContent = payload.parity.status;
+    hash.textContent = ui.shortHash(payload.meta.data_hash);
+    if (payload.parity.first_mismatch) {
+      const mismatch = payload.parity.first_mismatch;
+      note.textContent = `현재 표는 실제 백테스트 값입니다. 참고용 멘토 전사값과의 첫 차이: ${mismatch.section} · ${mismatch.row} · ${mismatch.column} · mentor ${mismatch.expected} / actual ${mismatch.actual}`;
+    } else {
+      note.textContent = "현재 표는 실제 백테스트 값이며, 참고용 멘토 전사값과 현재 기준에서 정렬되어 있습니다.";
+    }
+
+    const header = `<tr>
+      <th class="sticky-1">연도</th>
+      <th class="sticky-2 benchmark-col">연간 주가 변화</th>
+      <th class="sticky-3 benchmark-col">물빵</th>
+      ${comboKeys
+        .map((comboKey) => {
+          const representative = comboKey === "5x40" ? " representative-col" : "";
+          return `<th class="num${representative}">${comboKey.replace("x", "/")}</th>`;
+        })
+        .join("")}
+    </tr>`;
+
+    const benchmarkRows = actual.benchmark.yearly;
+    const yearlyRows = benchmarkRows
+      .map((benchmarkRow) => {
+        const values = comboKeys.map((comboKey) => Number(actual.combos[comboKey].yearly_returns_pct[String(benchmarkRow.year)]));
+        const maxValue = Math.max(...values);
+        const comboColumns = comboKeys
+          .map((comboKey) => {
+            const value = Number(actual.combos[comboKey].yearly_returns_pct[String(benchmarkRow.year)]);
+            const representative = comboKey === "5x40" ? " representative-col" : "";
+            const highlight = value === maxValue ? " max-cell" : "";
+            return `<td class="num${representative}${highlight}">${ui.escapeHtml(matrixPercent(value))}</td>`;
+          })
+          .join("");
+        return `<tr>
+          <td class="sticky-1 mono">${benchmarkRow.year}</td>
+          <td class="sticky-2 benchmark-col mono">${ui.escapeHtml(benchmarkRow.price_change)}</td>
+          <td class="sticky-3 benchmark-col num">${ui.escapeHtml(matrixPercent(benchmarkRow.return_pct))}</td>
+          ${comboColumns}
+        </tr>`;
+      })
+      .join("");
+
+    const aggregateRows = [
+      { label: "표준편차", family: "per-year", benchmark: "", comboSection: "stats_pct", comboField: "stddev" },
+      { label: "전체평균", family: "2011-24", benchmark: "", comboSection: "stats_pct", comboField: "avg_all" },
+      { label: "평균5년", family: "2020-24", benchmark: actual.benchmark.aggregate_rows.average_5y, comboSection: "stats_pct", comboField: "avg_5y" },
+      { label: "단리전체", family: "2011-24", benchmark: "", comboSection: "simple_returns_pct", comboField: "total" },
+      { label: "단리5년", family: "2020-24", benchmark: actual.benchmark.aggregate_rows.simple_5y, comboSection: "simple_returns_pct", comboField: "y5" },
+      { label: "단리3년", family: "2022-24", benchmark: "", comboSection: "simple_returns_pct", comboField: "y3" },
+      { label: "복리전체", family: "2011-24", benchmark: actual.benchmark.aggregate_rows.compound_total, comboSection: "compound_returns_pct", comboField: "total" },
+      { label: "복리5년", family: "2020-24", benchmark: actual.benchmark.aggregate_rows.compound_5y, comboSection: "compound_returns_pct", comboField: "y5" },
+      { label: "복리3년", family: "2022-24", benchmark: actual.benchmark.aggregate_rows.compound_3y, comboSection: "compound_returns_pct", comboField: "y3" },
+      { label: "복리1년", family: "2024", benchmark: actual.benchmark.aggregate_rows.compound_1y, comboSection: "compound_returns_pct", comboField: "y1" },
+    ]
+      .map((row) => {
+        const comboColumns = comboKeys
+          .map((comboKey) => {
+            const representative = comboKey === "5x40" ? " representative-col" : "";
+            const value = actual.combos[comboKey][row.comboSection][row.comboField];
+            return `<td class="num${representative}">${ui.escapeHtml(matrixPercent(value))}</td>`;
+          })
+          .join("");
+        const benchmarkValue = row.benchmark === "" || row.benchmark == null ? "-" : matrixPercent(row.benchmark);
+        return `<tr>
+          <td class="sticky-1 aggregate-label">${ui.escapeHtml(row.label)}</td>
+          <td class="sticky-2 aggregate-label">${ui.escapeHtml(row.family)}</td>
+          <td class="sticky-3 benchmark-col num">${ui.escapeHtml(benchmarkValue)}</td>
+          ${comboColumns}
+        </tr>`;
+      })
+      .join("");
+
+    body.innerHTML = `${header}${yearlyRows}<tr class="section-row"><td colspan="${3 + comboKeys.length}">aggregate rows</td></tr>${aggregateRows}`;
+  }
+
+  function countPair(cell) {
+    return `${ui.formatNumber(cell.take_profit)} / ${ui.formatNumber(cell.time_stop)}`;
+  }
+
+  function renderMentorCounts(payload) {
+    const actual = payload.actual;
+    const body = document.getElementById("mentor-counts-body");
+    const comboKeys = ["5x30", "6x10", "6x30", "7x30"].filter((comboKey) => actual.selected_count_combos[comboKey]);
+    const years = Object.keys(actual.selected_count_combos[comboKeys[0]]?.yearly_counts || {});
+    const header = `<tr>
+      <th class="sticky-1">행</th>
+      <th class="sticky-2">구분</th>
+      ${comboKeys.map((comboKey) => `<th class="num">${comboKey.replace("x", "/")}</th>`).join("")}
+    </tr>`;
+    const yearlyRows = years
+      .map((year) => `<tr>
+        <td class="sticky-1 mono">${ui.escapeHtml(year)}</td>
+        <td class="sticky-2">익절 / 손절</td>
+        ${comboKeys
+          .map((comboKey) => `<td class="pair-cell">${ui.escapeHtml(countPair(actual.selected_count_combos[comboKey].yearly_counts[year]))}</td>`)
+          .join("")}
+      </tr>`)
+      .join("");
+    const aggregateOrder = [
+      ["전체평균", "avg_all"],
+      ["평균5년", "avg_5y"],
+      ["단리전체", "simple_total"],
+      ["단리5년", "simple_y5"],
+      ["단리3년", "simple_y3"],
+      ["복리전체", "compound_total"],
+      ["복리5년", "compound_y5"],
+      ["복리3년", "compound_y3"],
+      ["복리1년", "compound_y1"],
+    ];
+    const aggregateRows = aggregateOrder
+      .map(
+        ([label, key]) => `<tr>
+          <td class="sticky-1 aggregate-label">${ui.escapeHtml(label)}</td>
+          <td class="sticky-2">익절 / 손절</td>
+          ${comboKeys
+            .map((comboKey) => `<td class="pair-cell">${ui.escapeHtml(countPair(actual.selected_count_combos[comboKey].aggregate_rows[key]))}</td>`)
+            .join("")}
+        </tr>`,
+      )
+      .join("");
+    body.innerHTML = `${header}${yearlyRows}<tr class="section-row"><td colspan="${2 + comboKeys.length}">aggregate rows</td></tr>${aggregateRows}`;
+  }
+
   function formatRecovery(value) {
     return Number.isInteger(value) ? `${value} sessions` : "open";
   }
@@ -213,12 +419,22 @@
     const profileId = document.getElementById("profile-select").value;
     const csvPath = document.getElementById("csv-path").value.trim();
     const initialCapital = Number(document.getElementById("initial-capital").value || 10000);
+    const overrides = collectOverrides();
     const params = new URLSearchParams({
       profileId,
       csvPath,
       initialCapital: String(initialCapital),
-      threads: "5,6,7",
-      stops: "10,30,40",
+      threads: document.getElementById("compare-threads").value.trim() || "5,6,7",
+      stops: document.getElementById("compare-stops").value.trim() || "10,30,40",
+      threadCount: String(overrides.threadCount),
+      stopSessions: String(overrides.stopSessions),
+      takeProfitPct: String(overrides.takeProfitPct),
+      takeProfitOperator: overrides.takeProfitOperator,
+      entryDropPct: String(overrides.entryDropPct),
+      stopLossPct: String(overrides.stopLossPct),
+      maxEntriesPerSession: String(overrides.maxEntriesPerSession),
+      sizingMode: overrides.sizingMode,
+      priceBasis: overrides.priceBasis,
     });
     const payload = await ui.fetchJson(`/api/backtests/compare?${params.toString()}`);
     renderCompare(payload);
@@ -228,13 +444,49 @@
     const profileId = document.getElementById("profile-select").value;
     const csvPath = document.getElementById("csv-path").value.trim();
     const initialCapital = Number(document.getElementById("initial-capital").value || 10000);
+    const overrides = collectOverrides();
     const params = new URLSearchParams({
       profileId,
       csvPath,
       initialCapital: String(initialCapital),
+      threadCount: String(overrides.threadCount),
+      stopSessions: String(overrides.stopSessions),
+      takeProfitPct: String(overrides.takeProfitPct),
+      takeProfitOperator: overrides.takeProfitOperator,
+      entryDropPct: String(overrides.entryDropPct),
+      stopLossPct: String(overrides.stopLossPct),
+      maxEntriesPerSession: String(overrides.maxEntriesPerSession),
+      sizingMode: overrides.sizingMode,
+      priceBasis: overrides.priceBasis,
     });
     const payload = await ui.fetchJson(`/api/backtests/risk?${params.toString()}`);
     renderRisk(payload);
+  }
+
+  async function loadMentorMatrix() {
+    const profileId = document.getElementById("profile-select").value;
+    const csvPath = document.getElementById("csv-path").value.trim();
+    const initialCapital = Number(document.getElementById("initial-capital").value || 10000);
+    const overrides = collectOverrides();
+    const params = new URLSearchParams({
+      profileId,
+      csvPath,
+      initialCapital: String(initialCapital),
+      threads: document.getElementById("compare-threads").value.trim() || "5,6,7",
+      stops: document.getElementById("compare-stops").value.trim() || "10,30,40",
+      threadCount: String(overrides.threadCount),
+      stopSessions: String(overrides.stopSessions),
+      takeProfitPct: String(overrides.takeProfitPct),
+      takeProfitOperator: overrides.takeProfitOperator,
+      entryDropPct: String(overrides.entryDropPct),
+      stopLossPct: String(overrides.stopLossPct),
+      maxEntriesPerSession: String(overrides.maxEntriesPerSession),
+      sizingMode: overrides.sizingMode,
+      priceBasis: overrides.priceBasis,
+    });
+    const payload = await ui.fetchJson(`/api/backtests/mentor-matrix?${params.toString()}`);
+    renderMentorMatrix(payload);
+    renderMentorCounts(payload);
   }
 
   async function bootstrap() {
@@ -252,7 +504,7 @@
     if (overview.latestRun) {
       renderRunArtifact(overview.latestRun);
     }
-    await Promise.all([loadCompare(), loadRisk()]);
+    await Promise.all([loadCompare(), loadRisk(), loadMentorMatrix()]);
   }
 
   document.getElementById("backtest-form").addEventListener("submit", async (event) => {
@@ -261,6 +513,7 @@
       profileId: document.getElementById("profile-select").value,
       csvPath: document.getElementById("csv-path").value.trim(),
       initialCapital: Number(document.getElementById("initial-capital").value || 10000),
+      overrides: collectOverrides(),
     };
     const job = await ui.postJson("/api/backtests/jobs", payload);
     renderJob(job);
@@ -268,12 +521,13 @@
   });
 
   document.getElementById("compare-button").addEventListener("click", async () => {
-    await Promise.all([loadCompare(), loadRisk()]);
+    await Promise.all([loadCompare(), loadRisk(), loadMentorMatrix()]);
   });
 
   document.getElementById("profile-select").addEventListener("change", async (event) => {
     ui.setText("sb-profile", event.target.value);
-    await Promise.all([loadCompare(), loadRisk()]);
+    syncControlsFromProfile(selectedProfile());
+    await Promise.all([loadCompare(), loadRisk(), loadMentorMatrix()]);
   });
 
   document.addEventListener("DOMContentLoaded", () => {

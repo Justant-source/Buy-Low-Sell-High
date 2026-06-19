@@ -2,7 +2,7 @@ PYTHON := python3
 NPM := npm
 PYTHONPATH := engine/src
 
-.PHONY: bootstrap-check lint-docs test smoke test-data test-strategy test-backtest test-manual test-integration typecheck lint ci dashboard-build dashboard-test e2e clean-room migrate worker-smoke scenario-report e2e-backtest e2e-manual e2e-risk backup restore-test reference-check backtest-reference backtest-grid backtest-run data-import data-sync data-validate dashboard worker docker-init docker-sync docker-backtest
+.PHONY: bootstrap-check lint-docs test smoke test-data test-strategy test-backtest test-manual test-integration typecheck lint ci dashboard-build dashboard-test e2e clean-room migrate worker-smoke scenario-report e2e-backtest e2e-manual e2e-risk backup restore-test reference-check backtest-reference backtest-grid backtest-run mentor-matrix parity-mentor-matrix data-import data-sync data-validate dashboard worker docker-init docker-sync docker-backtest
 
 bootstrap-check:
 	$(PYTHON) scripts/verify_no_autotrading.py
@@ -37,10 +37,16 @@ worker-smoke:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m soxl_mania.cli worker smoke
 
 reference-check backtest-reference:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m soxl_mania.cli parity report --reference engine/tests/fixtures/mentor_reference_2011_2024.json --profile configs/strategies/mentor_default_5x30.yaml --csv engine/tests/fixtures/sample_soxl.csv --symbol SOXL
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m soxl_mania.cli parity report --reference engine/tests/fixtures/mentor_reference_2011_2024.json --profile configs/strategies/mentor_default_5x30.yaml --csv data/raw/soxl_daily_2011_present.csv --symbol SOXL
 
 backtest-grid:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m soxl_mania.cli backtest grid --profile configs/strategies/mentor_default_5x30.yaml --csv engine/tests/fixtures/sample_soxl.csv --threads 5,6,7 --stops 10,30,40
+
+mentor-matrix:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m soxl_mania.cli backtest mentor-matrix --profile configs/strategies/mentor_default_5x30.yaml --csv engine/tests/fixtures/sample_soxl.csv --symbol SOXL
+
+parity-mentor-matrix:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -c 'from soxl_mania.config import load_strategy_config; from soxl_mania.data.normalize import normalize_bars; from soxl_mania.data.providers.csv_provider import CsvMarketDataProvider; from soxl_mania.data.quality import compute_data_hash; from soxl_mania.reporting.mentor_matrix import build_mentor_matrix; bars = normalize_bars(CsvMarketDataProvider("data/raw/soxl_daily_2011_present.csv").load_bars("SOXL")); bars = [bar for bar in bars if bar.session_date.year <= 2024]; config = load_strategy_config("configs/strategies/mentor_default_5x30.yaml", initial_capital=10000); payload = build_mentor_matrix(bars, config, data_hash=compute_data_hash(bars)); print(payload["parity"]["status"]); print(payload["parity"]["first_mismatch"]) if payload["parity"]["first_mismatch"] else None; raise SystemExit(0 if payload["parity"]["status"] == "PASS" else 1)'
 
 scenario-report:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m soxl_mania.cli backtest risk-report --profile configs/strategies/mentor_default_5x30.yaml --csv engine/tests/fixtures/sample_soxl.csv --symbol SOXL

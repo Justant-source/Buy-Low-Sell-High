@@ -1,55 +1,57 @@
 # REST API
 
-The dashboard API is served by the Express app in `dashboard/src/server.ts` and uses the Python CLI as its execution boundary. Responses that represent research runs carry reproducibility metadata such as `config_hash`, `data_hash`, and `code_commit`.
+대시보드 API는 `dashboard/src/server.ts`의 Express 앱이 제공하며, 실행 경계로 Python CLI를 사용한다. 연구 실행 결과를 나타내는 응답에는 `config_hash`, `data_hash`, `code_commit` 같은 재현성 메타데이터가 포함된다.
 
-## Health
+## 상태 확인
 - `GET /api/health`
-  - Dashboard process status, phase label, and uptime seconds.
+  - 대시보드 프로세스 상태, phase 라벨, 업타임 초를 반환한다.
 
-## Data
+## 데이터
 - `GET /api/data/status`
-  - Returns `symbol`, `rows`, `start`, `end`, `data_hash`, `source`, `warnings`, and `snapshot_path`.
+  - `symbol`, `rows`, `start`, `end`, `data_hash`, `source`, `warnings`, `snapshot_path`를 반환한다.
 
-## Profiles
+## 프로필
 - `GET /api/profiles`
-  - Returns `defaultProfileId` plus the hydrated strategy profiles used by the dashboard.
+  - 대시보드가 사용하는 hydrated 전략 프로필과 `defaultProfileId`를 반환한다.
 - `GET /api/profiles/:profileId`
-  - Returns a single hydrated profile including `configHash` and `initialCapital`.
+  - `configHash`, `initialCapital`을 포함한 단일 hydrated 프로필을 반환한다.
 
-## Backtests
+## 백테스트
 - `GET /api/backtests`
-  - Returns recent jobs, lightweight run summaries, and the latest full run artifact.
+  - 최근 작업, 경량 실행 요약, 최신 전체 실행 산출물을 반환한다.
 - `POST /api/backtests/jobs`
-  - Creates a queued dashboard job for a single detailed backtest run.
+  - 단일 상세 백테스트 실행을 위한 대기열 작업을 생성한다.
 - `GET /api/backtests/jobs/:jobId`
-  - Returns job state, timestamps, progress, and `runId` when complete.
+  - 완료 시 `runId`를 포함한 작업 상태, 타임스탬프, 진행률을 반환한다.
 - `GET /api/backtests/runs/:runId`
-  - Returns the persisted full run artifact with metrics, yearly table, daily series, and trades.
+  - 지표, 연도 표, 일별 시계열, 거래 내역을 포함한 저장된 전체 실행 산출물을 반환한다.
 - `GET /api/backtests/runs/:runId/trades.csv`
-  - Exports the persisted trades as CSV.
+  - 저장된 거래 내역을 CSV로 내보낸다.
 - `GET /api/backtests/compare`
-  - Returns the 9-cell thread/stop comparison matrix payload for the selected profile and dataset.
+  - 선택한 프로필과 데이터셋에 대한 9셀 thread/stop 비교 매트릭스 payload를 반환한다.
+- `GET /api/backtests/mentor-matrix`
+  - `meta`, 런타임 `actual` 백테스트 값, 비교용 고정 `reference` 값, parity 상태를 포함한 멘토 매트릭스 payload를 반환한다.
 - `GET /api/backtests/risk`
-  - Returns a risk report comparing `ideal_same_close`, `next_open`, and `next_close`, plus cost sensitivity, recovery periods, and warning text for leveraged ETF use.
+  - `ideal_same_close`, `next_open`, `next_close`를 비교하는 리스크 리포트와 비용 민감도, 회복 기간, 레버리지 ETF 경고 문구를 반환한다.
 
-## Manual Operations
+## 수동 운용
 - `GET /api/manual/comparison`
-  - Returns today recommendations matched against append-only manual fills, including pending status and basis-vs-actual price gaps.
+  - 오늘의 권고와 append-only 수동 체결을 매칭한 결과를 반환하며, 대기 상태와 기준가 대비 실제 체결가 차이를 포함한다.
 - `GET /api/manual/ledger`
-  - Returns the selected profile ledger path plus summary, issues, thread states, and fill history.
+  - 선택한 프로필 장부 경로와 요약, 이슈, 스레드 상태, 체결 이력을 반환한다.
 - `GET /api/manual/threads`
-  - Returns the selected profile ledger path plus thread summary and current thread states.
+  - 선택한 프로필 장부 경로와 스레드 요약, 현재 스레드 상태를 반환한다.
 - `GET /api/manual/history`
-  - Returns the selected profile ledger path plus append-only fill history.
+  - 선택한 프로필 장부 경로와 append-only 체결 이력을 반환한다.
 - `GET /api/manual/today`
-  - Returns the selected profile ledger path plus today recommendations.
+  - 선택한 프로필 장부 경로와 오늘의 권고를 반환한다.
 - `POST /api/manual/reconcile`
-  - Returns the selected profile ledger path plus reconciliation issues for the current append-only ledger.
+  - 현재 append-only 장부에 대한 정합성 이슈와 선택한 프로필 장부 경로를 반환한다.
 - `POST /api/manual/fills`
-  - Appends a manual fill to the ledger.
+  - 장부에 수동 체결을 추가한다.
 - `POST /api/manual/fills/:fillId/reverse`
-  - Appends a reversal fill and links it to the original fill.
+  - 되돌리기 체결을 추가하고 원본 체결과 연결한다.
 - `GET /api/manual/export`
-  - Exports the selected profile ledger as restore-compatible JSON or fill-history CSV via `format=json|csv`.
+  - 선택한 프로필 장부를 복원 가능한 JSON 또는 체결 이력 CSV로 `format=json|csv` 기준 내보낸다.
 - `POST /api/manual/restore`
-  - Restores a selected profile ledger from an exported JSON payload. Requires the explicit confirm token `RESTORE_MANUAL_LEDGER`.
+  - 내보낸 JSON payload에서 선택한 프로필 장부를 복원한다. 명시적 확인 토큰 `RESTORE_MANUAL_LEDGER`가 필요하다.

@@ -1,21 +1,21 @@
-# Backup And Restore
+# 백업 및 복원
 
-## Scope
-- Manual ledger backups only
-- Research run artifacts stay separate from manual ledger snapshots
-- Restores must preserve append-only fill history
+## 범위
+- 수동 장부 백업만 포함한다.
+- 연구 실행 산출물은 수동 장부 스냅샷과 분리 유지한다.
+- 복원 시 append-only 체결 이력을 보존해야 한다.
 
-## Backup
-1. Run `make backup`
-2. Snapshot files are written to `data/runtime/backups/`
-3. Each backup file is copied from `data/runtime/dashboard/manual-ledger-*.json`
+## 백업
+1. `make backup`을 실행한다.
+2. 스냅샷 파일은 `data/runtime/backups/`에 기록된다.
+3. 각 백업 파일은 `data/runtime/dashboard/manual-ledger-*.json`에서 복사된다.
 
-## Restore Validation
-1. Run `make backup-restore-test`
-2. The test creates an isolated ledger, exports it, mutates it, restores from backup, and verifies the restored JSON matches the original snapshot
-3. No live runtime ledger file is modified by this test
+## 복원 검증
+1. `make backup-restore-test`를 실행한다.
+2. 이 테스트는 격리된 장부를 만든 뒤 내보내고, 변형하고, 백업에서 복원한 다음, 복원된 JSON이 원래 스냅샷과 일치하는지 검증한다.
+3. 이 테스트는 실제 런타임 장부 파일을 수정하지 않는다.
 
-## Safety Rules
-- Restore only from a full ledger snapshot
-- Do not patch individual fill events inside a backup file
-- Keep recommendation outputs separate from actual fill records
+## 안전 규칙
+- 반드시 전체 장부 스냅샷에서만 복원한다.
+- 백업 파일 안의 개별 체결 이벤트를 직접 수정하지 않는다.
+- 권고 출력은 실제 체결 기록과 분리해서 유지한다.
