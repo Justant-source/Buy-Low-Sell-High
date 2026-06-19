@@ -142,6 +142,57 @@
       .join("");
   }
 
+  function formatRecovery(value) {
+    return Number.isInteger(value) ? `${value} sessions` : "open";
+  }
+
+  function renderRisk(payload) {
+    ui.setText("risk-gap-drift", ui.formatPercent(payload.summary.ideal_to_next_open_return_drag_pct));
+    ui.setText("risk-delay-drift", ui.formatPercent(payload.summary.next_open_to_next_close_return_drag_pct));
+    ui.setText("risk-cost-drift", ui.formatPercent(payload.summary.stress_cost_drag_pct));
+    ui.setText("risk-recovery", payload.summary.worst_recovery_sessions == null ? "open" : `${payload.summary.worst_recovery_sessions} sessions`);
+
+    const modelsBody = document.getElementById("risk-models-tbody");
+    modelsBody.innerHTML = (payload.model_comparison || [])
+      .map(
+        (row) => `<tr>
+          <td>${ui.escapeHtml(row.label)}</td>
+          <td class="mono">${ui.escapeHtml(row.execution_model)}</td>
+          <td class="num">${ui.escapeHtml(ui.formatPercent(row.total_return_pct))}</td>
+          <td class="num">${ui.escapeHtml(ui.formatPercent(row.max_drawdown_pct))}</td>
+          <td class="num">${ui.escapeHtml(ui.formatPercent(row.volatility_pct))}</td>
+          <td class="num">${ui.escapeHtml(ui.formatNumber(row.trade_count))}</td>
+          <td class="num">${ui.escapeHtml(formatRecovery(row.peak_to_recovery_sessions))}</td>
+        </tr>`,
+      )
+      .join("");
+
+    const costsBody = document.getElementById("risk-costs-tbody");
+    costsBody.innerHTML = (payload.cost_sensitivity || [])
+      .map(
+        (row) => `<tr>
+          <td>${ui.escapeHtml(row.label)}</td>
+          <td class="num">${ui.escapeHtml(row.commission_bps)}</td>
+          <td class="num">${ui.escapeHtml(row.slippage_bps)}</td>
+          <td class="num">${ui.escapeHtml(ui.formatPercent(row.total_return_pct))}</td>
+          <td class="num">${ui.escapeHtml(ui.formatPercent(row.max_drawdown_pct))}</td>
+          <td class="num">${ui.escapeHtml(formatRecovery(row.peak_to_recovery_sessions))}</td>
+        </tr>`,
+      )
+      .join("");
+
+    const summaryList = document.getElementById("risk-summary-list");
+    summaryList.innerHTML = `
+      <div class="stack-row"><span class="title">Best Next Open Return</span><span>${ui.escapeHtml(`${payload.sensitivity_summary.best_next_open_return_cell.thread_count}T / ${payload.sensitivity_summary.best_next_open_return_cell.stop_sessions}S · ${ui.formatPercent(payload.sensitivity_summary.best_next_open_return_cell.total_return_pct)}`)}</span></div>
+      <div class="stack-row"><span class="title">Lowest Next Open MDD</span><span>${ui.escapeHtml(`${payload.sensitivity_summary.lowest_next_open_mdd_cell.thread_count}T / ${payload.sensitivity_summary.lowest_next_open_mdd_cell.stop_sessions}S · ${ui.formatPercent(payload.sensitivity_summary.lowest_next_open_mdd_cell.max_drawdown_pct)}`)}</span></div>
+    `;
+
+    const warningList = document.getElementById("risk-warning-list");
+    warningList.innerHTML = (payload.warnings || [])
+      .map((warning) => `<div class="stack-row"><span class="title">${ui.escapeHtml(warning)}</span><span class="badge danger">risk</span></div>`)
+      .join("");
+  }
+
   async function pollJob(jobId) {
     while (true) {
       const job = await ui.fetchJson(`/api/backtests/jobs/${encodeURIComponent(jobId)}`);
@@ -173,6 +224,19 @@
     renderCompare(payload);
   }
 
+  async function loadRisk() {
+    const profileId = document.getElementById("profile-select").value;
+    const csvPath = document.getElementById("csv-path").value.trim();
+    const initialCapital = Number(document.getElementById("initial-capital").value || 10000);
+    const params = new URLSearchParams({
+      profileId,
+      csvPath,
+      initialCapital: String(initialCapital),
+    });
+    const payload = await ui.fetchJson(`/api/backtests/risk?${params.toString()}`);
+    renderRisk(payload);
+  }
+
   async function bootstrap() {
     const [profiles, dataStatus, overview] = await Promise.all([
       ui.fetchJson("/api/profiles"),
@@ -188,7 +252,7 @@
     if (overview.latestRun) {
       renderRunArtifact(overview.latestRun);
     }
-    await loadCompare();
+    await Promise.all([loadCompare(), loadRisk()]);
   }
 
   document.getElementById("backtest-form").addEventListener("submit", async (event) => {
@@ -204,11 +268,12 @@
   });
 
   document.getElementById("compare-button").addEventListener("click", async () => {
-    await loadCompare();
+    await Promise.all([loadCompare(), loadRisk()]);
   });
 
-  document.getElementById("profile-select").addEventListener("change", (event) => {
+  document.getElementById("profile-select").addEventListener("change", async (event) => {
     ui.setText("sb-profile", event.target.value);
+    await Promise.all([loadCompare(), loadRisk()]);
   });
 
   document.addEventListener("DOMContentLoaded", () => {

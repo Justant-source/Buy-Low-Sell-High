@@ -116,17 +116,17 @@
       <div class="card wide-table">
         <div class="card-head">
           <div>
-            <div class="card-title">오늘의 권고</div>
-            <div class="card-sub">Recommendation stream</div>
+            <div class="card-title">권고 대비 실제 체결</div>
+            <div class="card-sub">basis price 대비 실제 fill 차이와 체결 상태를 표시합니다.</div>
           </div>
         </div>
         <div class="tbl-wrap">
           <table class="tbl">
             <thead>
-              <tr><th>Thread</th><th>Action</th><th>Reason</th><th class="num">Basis</th><th>Session</th></tr>
+              <tr><th>Thread</th><th>Action</th><th>Expected</th><th>Status</th><th class="num">Basis</th><th class="num">Actual</th><th class="num">Gap %</th><th>Filled At</th></tr>
             </thead>
             <tbody id="manual-recs-tbody">
-              <tr><td colspan="5" class="muted" style="text-align:center">권고 없음</td></tr>
+              <tr><td colspan="8" class="muted" style="text-align:center">권고 없음</td></tr>
             </tbody>
           </table>
         </div>
@@ -156,12 +156,33 @@
       <div class="card">
         <div class="card-head">
           <div>
-            <div class="card-title">장부 이슈</div>
-            <div class="card-sub">Reconciliation 결과</div>
+            <div class="card-title">장부 상태 / 백업</div>
+            <div class="card-sub">Append-only 백업과 명시적 복원 토큰을 사용합니다.</div>
           </div>
+        </div>
+        <div class="stack-list" style="margin-bottom:16px">
+          <div class="stack-row"><span class="title">Ledger Path</span><span class="mono" id="ledger-path">-</span></div>
+          <div class="stack-row"><span class="title">Restore Token</span><span class="mono">RESTORE_MANUAL_LEDGER</span></div>
         </div>
         <div class="stack-list" id="ledger-issues-list">
           <div class="stack-row"><span class="title">이슈 없음</span><span class="badge success">clean</span></div>
+        </div>
+        <div class="action-row" style="margin-top:16px">
+          <button class="btn" type="button" id="export-json-button">JSON 백업</button>
+          <button class="btn" type="button" id="export-csv-button">CSV 내보내기</button>
+        </div>
+        <div class="field-grid" style="margin-top:16px">
+          <div class="field full">
+            <label for="restore-payload">Restore JSON</label>
+            <textarea class="input mono" id="restore-payload" rows="10" placeholder='{"account_id":"mentor_default_5x30","threads":{"1":{"cash":"2000","quantity":"0","entry_price":"0","entry_date":null}},"fills":[]}'></textarea>
+          </div>
+          <div class="field full">
+            <label for="restore-token-input">Confirm Token</label>
+            <input class="input mono" id="restore-token-input" type="text" placeholder="RESTORE_MANUAL_LEDGER">
+          </div>
+        </div>
+        <div class="action-row">
+          <button class="btn primary" type="button" id="restore-button">장부 복원</button>
         </div>
       </div>
     </div>

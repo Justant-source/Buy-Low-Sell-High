@@ -94,12 +94,72 @@ export interface GridCellPayload {
   trade_count: number;
 }
 
+export interface RiskScenarioRowPayload {
+  label: string;
+  execution_model: string;
+  commission_bps: string;
+  slippage_bps: string;
+  total_return_pct: string;
+  max_drawdown_pct: string;
+  volatility_pct: string;
+  trade_count: number;
+  peak_to_trough_sessions: number | null;
+  trough_to_recovery_sessions: number | null;
+  peak_to_recovery_sessions: number | null;
+  recovered: boolean;
+}
+
+export interface BacktestRiskPayload {
+  profile_id: string;
+  symbol: string;
+  data_hash: string;
+  config_hash: string;
+  model_comparison: RiskScenarioRowPayload[];
+  cost_sensitivity: RiskScenarioRowPayload[];
+  sensitivity_summary: {
+    best_next_open_return_cell: {
+      thread_count: number;
+      stop_sessions: number;
+      total_return_pct: string;
+    };
+    lowest_next_open_mdd_cell: {
+      thread_count: number;
+      stop_sessions: number;
+      max_drawdown_pct: string;
+    };
+  };
+  summary: {
+    ideal_to_next_open_return_drag_pct: string;
+    next_open_to_next_close_return_drag_pct: string;
+    stress_cost_drag_pct: string;
+    worst_recovery_sessions: number | null;
+  };
+  warnings: string[];
+}
+
 export interface ManualRecommendationPayload {
   thread_id: number;
   action: string;
   reason: string;
   basis_price: string;
   session_date: string;
+}
+
+export interface ManualComparisonRowPayload {
+  thread_id: number;
+  action: string;
+  expected_side: string | null;
+  reason: string;
+  basis_price: string;
+  session_date: string;
+  status: string;
+  execution_quality: string;
+  fill_id: string | null;
+  actual_price: string | null;
+  actual_quantity: string | null;
+  actual_filled_at: string | null;
+  price_gap: string | null;
+  price_gap_pct: string | null;
 }
 
 export interface ManualLedgerPayload {

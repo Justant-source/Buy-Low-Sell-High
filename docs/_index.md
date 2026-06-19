@@ -17,6 +17,7 @@
 8. `docs/00-planning/workstreams.md`
 9. `docs/70-policy/manual-operations.md`
 10. `docs/90-adr/0001-mentor-semantics.md`
+11. `docs/70-policy/backup-restore.md`
 
 ## Phase Mapping
 - `Phase 0`: `docs/00-planning/workstreams.md`, `docs/70-policy/strategy.md`

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from datetime import date
+from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
+from contextlib import redirect_stdout
 
+from soxl_mania.cli import main
 from soxl_mania.domain.models import MarketBar, StrategyConfig
 from soxl_mania.domain.money import D
 from soxl_mania.manual.ledger import (
@@ -57,6 +61,33 @@ class ManualTest(unittest.TestCase):
         self.assertEqual(restored.account_id, "acct")
         self.assertEqual(restored.threads[1].quantity, D("10"))
         self.assertEqual(len(restored.fills), 1)
+
+    def test_cli_restore_rehydrates_exported_backup(self) -> None:
+        ledger = create_ledger("acct", 1, 1000)
+        record_fill(ledger, thread_id=1, side="BUY", quantity="10", price="5")
+        with TemporaryDirectory() as temp_dir:
+            source_path = Path(temp_dir) / "backup.json"
+            target_path = Path(temp_dir) / "restored.json"
+            source_path.write_text(export_ledger(ledger), encoding="utf-8")
+            stdout = StringIO()
+            with patch(
+                "sys.argv",
+                [
+                    "soxl-mania",
+                    "manual",
+                    "ledger",
+                    "restore",
+                    "--ledger-path",
+                    str(target_path),
+                    "--source-path",
+                    str(source_path),
+                ],
+            ), redirect_stdout(stdout):
+                exit_code = main()
+            restored = load_ledger(target_path)
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(restored.account_id, "acct")
+            self.assertEqual(restored.threads[1].quantity, D("10"))
 
     def test_save_and_load_ledger_round_trip(self) -> None:
         ledger = create_ledger("acct", 2, 1000)

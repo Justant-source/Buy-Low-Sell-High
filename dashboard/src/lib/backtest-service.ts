@@ -13,6 +13,7 @@ import {
   saveRunArtifact,
 } from "./runtime-store.js";
 import type {
+  BacktestRiskPayload,
   BacktestDetailPayload,
   DashboardJobRecord,
   GridCellPayload,
@@ -227,6 +228,31 @@ export class BacktestService {
       stopSessions: input.stops,
       cells,
     };
+  }
+
+  async riskReport(input: {
+    profileId: string;
+    csvPath?: string;
+    initialCapital?: number;
+  }): Promise<BacktestRiskPayload> {
+    const initialCapital = input.initialCapital ?? 10000;
+    const profile = getProfileDefinition(input.profileId);
+    if (!profile) {
+      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
+    }
+    const csvPath = input.csvPath ?? defaultCsvPath;
+    return runCliJson<BacktestRiskPayload>([
+      "backtest",
+      "risk-report",
+      "--profile",
+      profile.profilePath,
+      "--csv",
+      csvPath,
+      "--symbol",
+      profile.symbol,
+      "--initial-capital",
+      String(initialCapital),
+    ]);
   }
 
   private async drainQueue(): Promise<void> {

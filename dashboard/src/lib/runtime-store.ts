@@ -37,12 +37,18 @@ async function readJson<T>(filePath: string): Promise<T | null> {
 async function listJson<T>(dirPath: string): Promise<T[]> {
   await ensureLayout();
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
-  const results = await Promise.all(
+  const loaded = await Promise.all(
     entries
       .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
       .map((entry) => readJson<T>(path.join(dirPath, entry.name))),
   );
-  return results.filter((item): item is T => item !== null);
+  const results: T[] = [];
+  for (const item of loaded) {
+    if (item !== null) {
+      results.push(item);
+    }
+  }
+  return results;
 }
 
 function jobPath(jobId: string): string {

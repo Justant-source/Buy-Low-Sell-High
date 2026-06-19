@@ -8,3 +8,5 @@
 Redis is intentionally excluded.
 
 Container names must use the `soxlmania-` prefix. One-shot helper containers use explicit names such as `soxlmania-engine-sync` and `soxlmania-engine-backtest`.
+
+Local Docker scripts require both the `docker` CLI and daemon access through `/var/run/docker.sock`.

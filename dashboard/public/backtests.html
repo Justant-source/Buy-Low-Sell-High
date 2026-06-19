@@ -193,7 +193,7 @@
       <div class="card-head">
         <div>
           <div class="card-title">9조합 비교 매트릭스</div>
-          <div class="card-sub">Thread x Stop grid. 각 셀은 수익률 / MDD / 거래 수를 표시합니다.</div>
+          <div class="card-sub">Thread x Stop sensitivity grid. 각 셀은 수익률 / MDD / 거래 수를 표시합니다.</div>
         </div>
       </div>
       <div class="tbl-wrap">
@@ -205,6 +205,77 @@
             <tr><td colspan="4" class="muted" style="text-align:center">비교 데이터를 불러오지 않았습니다.</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <div class="row row-4">
+      <div class="kpi"><span class="kpi-label">Close→Open Drift</span><span class="kpi-value" id="risk-gap-drift">-</span><div class="kpi-meta">ideal_same_close vs next_open</div></div>
+      <div class="kpi"><span class="kpi-label">Data Delay Drag</span><span class="kpi-value" id="risk-delay-drift">-</span><div class="kpi-meta">next_open vs next_close</div></div>
+      <div class="kpi"><span class="kpi-label">Stress Cost Drag</span><span class="kpi-value" id="risk-cost-drift">-</span><div class="kpi-meta">next_open zero cost vs stress</div></div>
+      <div class="kpi"><span class="kpi-label">Worst Recovery</span><span class="kpi-value" id="risk-recovery">-</span><div class="kpi-meta">Peak to recovery sessions</div></div>
+    </div>
+
+    <div class="row row-2">
+      <div class="card wide-table">
+        <div class="card-head">
+          <div>
+            <div class="card-title">실행 모델 리스크 비교</div>
+            <div class="card-sub">ideal_same_close, next_open, next_close 비교로 gap risk와 data delay 영향을 봅니다.</div>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead>
+              <tr><th>Scenario</th><th>Model</th><th class="num">Return</th><th class="num">MDD</th><th class="num">Vol</th><th class="num">Trades</th><th class="num">Recovery</th></tr>
+            </thead>
+            <tbody id="risk-models-tbody">
+              <tr><td colspan="7" class="muted" style="text-align:center">리스크 리포트를 불러오지 않았습니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card wide-table">
+        <div class="card-head">
+          <div>
+            <div class="card-title">비용 민감도</div>
+            <div class="card-sub">next_open 기준에서 수수료와 슬리피지 가정이 결과를 얼마나 훼손하는지 비교합니다.</div>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead>
+              <tr><th>Scenario</th><th class="num">Comm bps</th><th class="num">Slip bps</th><th class="num">Return</th><th class="num">MDD</th><th class="num">Recovery</th></tr>
+            </thead>
+            <tbody id="risk-costs-tbody">
+              <tr><td colspan="6" class="muted" style="text-align:center">비용 리포트를 불러오지 않았습니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="row row-2">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">현실 모델 기준 민감도 하이라이트</div>
+            <div class="card-sub">next_open 기준에서 가장 높은 수익률 셀과 가장 낮은 MDD 셀을 요약합니다.</div>
+          </div>
+        </div>
+        <div class="stack-list" id="risk-summary-list">
+          <div class="stack-row"><span class="title">대기 중</span><span class="badge neutral">pending</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">리스크 경고</div>
+            <div class="card-sub">투자 조언 아님 및 레버리지 ETF 위험 고지</div>
+          </div>
+        </div>
+        <div class="stack-list" id="risk-warning-list">
+          <div class="stack-row"><span class="title">대기 중</span><span class="badge neutral">pending</span></div>
+        </div>
       </div>
     </div>
   </main>

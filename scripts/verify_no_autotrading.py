@@ -6,6 +6,7 @@ import sys
 
 SCAN_DIRS = ["engine", "dashboard", "db", "scripts", "configs", ".github"]
 SCAN_SUFFIXES = {".py", ".ts", ".tsx", ".js", ".json", ".yml", ".yaml", ".md"}
+IGNORED_PARTS = {"node_modules", "dist", "__pycache__"}
 FORBIDDEN_PATTERNS = {
     "redis": "Redis is outside the product boundary",
     "ioredis": "Redis clients are forbidden",
@@ -34,6 +35,8 @@ def _scan_source(root: Path) -> list[str]:
             continue
         for path in base.rglob("*"):
             if not path.is_file() or path.suffix not in SCAN_SUFFIXES:
+                continue
+            if any(part in IGNORED_PARTS for part in path.parts):
                 continue
             relative_path = str(path.relative_to(root))
             text = path.read_text(encoding="utf-8")

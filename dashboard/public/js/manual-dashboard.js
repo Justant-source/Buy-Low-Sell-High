@@ -9,25 +9,60 @@
     return document.getElementById("profile-select").value || state.currentProfileId;
   }
 
+  function profileQuery() {
+    return `profileId=${encodeURIComponent(currentProfileId())}`;
+  }
+
+  function showError(error) {
+    const box = document.getElementById("manual-error");
+    box.textContent = error instanceof Error ? error.message : String(error);
+    box.classList.add("visible");
+  }
+
+  function clearError() {
+    const box = document.getElementById("manual-error");
+    box.textContent = "";
+    box.classList.remove("visible");
+  }
+
   function populateProfiles(payload) {
     state.profiles = payload.profiles || [];
     const select = document.getElementById("profile-select");
     select.innerHTML = state.profiles
-      .map((profile) => `<option value="${ui.escapeHtml(profile.profileId)}">${ui.escapeHtml(profile.profileId)}</option>`)
+      .map(
+        (profile) =>
+          `<option value="${ui.escapeHtml(profile.profileId)}">${ui.escapeHtml(`${profile.profileId} · ${profile.threadCount}T/${profile.stopSessions}S`)}</option>`,
+      )
       .join("");
     select.value = payload.defaultProfileId || state.currentProfileId;
     state.currentProfileId = select.value;
   }
 
-  function renderRecommendations(payload) {
-    const rows = payload.recommendations || [];
+  function comparisonBadge(status, quality) {
+    if (status === "FILLED") {
+      if (quality === "BETTER") {
+        return "success";
+      }
+      if (quality === "WORSE") {
+        return "danger";
+      }
+      return "info";
+    }
+    if (status === "PENDING_FILL") {
+      return "warning";
+    }
+    return "neutral";
+  }
+
+  function renderComparison(payload) {
+    const rows = payload.rows || [];
     const buyCount = rows.filter((row) => row.action === "BUY").length;
     const exitCount = rows.filter((row) => row.action === "TAKE_PROFIT" || row.action === "TIME_STOP").length;
     ui.setText("kpi-buy-recs", ui.formatNumber(buyCount));
     ui.setText("kpi-exit-recs", ui.formatNumber(exitCount));
     const tbody = document.getElementById("manual-recs-tbody");
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center">권고 없음</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center">권고 없음</td></tr>';
       return;
     }
     tbody.innerHTML = rows
@@ -35,28 +70,30 @@
         (row) => `<tr>
           <td>${ui.escapeHtml(String(row.thread_id))}</td>
           <td><span class="badge ${ui.actionBadge(row.action)}">${ui.escapeHtml(row.action)}</span></td>
-          <td>${ui.escapeHtml(row.reason)}</td>
+          <td>${ui.escapeHtml(row.expected_side || "-")}</td>
+          <td><span class="badge ${comparisonBadge(row.status, row.execution_quality)}">${ui.escapeHtml(row.status)}</span></td>
           <td class="num">${ui.escapeHtml(row.basis_price)}</td>
-          <td class="mono">${ui.escapeHtml(row.session_date)}</td>
+          <td class="num">${ui.escapeHtml(row.actual_price || "-")}</td>
+          <td class="num">${ui.escapeHtml(row.price_gap_pct ? ui.formatPercent(row.price_gap_pct) : "-")}</td>
+          <td class="mono">${ui.escapeHtml(row.actual_filled_at || row.session_date)}</td>
         </tr>`,
       )
       .join("");
   }
 
-  function renderLedger(payload) {
-    const ledger = payload.ledger;
-    ui.setText("kpi-open-threads", ui.formatNumber(ledger.summary.open_threads));
-    ui.setText("kpi-fill-count", ui.formatNumber(ledger.summary.fill_count));
-    ui.setText("kpi-cash", ledger.summary.total_cash);
-    ui.setText("kpi-qty", ledger.summary.total_quantity);
+  function renderThreads(payload) {
+    ui.setText("ledger-path", payload.ledgerPath);
+    ui.setText("kpi-open-threads", ui.formatNumber(payload.summary.open_threads));
+    ui.setText("kpi-cash", payload.summary.total_cash);
+    ui.setText("kpi-qty", payload.summary.total_quantity);
 
     const threadSelect = document.getElementById("thread-select");
-    threadSelect.innerHTML = ledger.threads
+    threadSelect.innerHTML = payload.threads
       .map((thread) => `<option value="${ui.escapeHtml(String(thread.thread_id))}">${ui.escapeHtml(String(thread.thread_id))}</option>`)
       .join("");
 
     const threadsTbody = document.getElementById("manual-threads-tbody");
-    threadsTbody.innerHTML = ledger.threads
+    threadsTbody.innerHTML = payload.threads
       .map(
         (thread) => `<tr>
           <td>${ui.escapeHtml(String(thread.thread_id))}</td>
@@ -67,18 +104,23 @@
         </tr>`,
       )
       .join("");
+  }
 
+  function renderReconcile(payload) {
     const issuesList = document.getElementById("ledger-issues-list");
-    if (!ledger.issues.length) {
+    if (!payload.issues.length) {
       issuesList.innerHTML = '<div class="stack-row"><span class="title">이슈 없음</span><span class="badge success">clean</span></div>';
-    } else {
-      issuesList.innerHTML = ledger.issues
-        .map((issue) => `<div class="stack-row"><span class="title">${ui.escapeHtml(issue)}</span><span class="badge danger">issue</span></div>`)
-        .join("");
+      return;
     }
+    issuesList.innerHTML = payload.issues
+      .map((issue) => `<div class="stack-row"><span class="title">${ui.escapeHtml(issue)}</span><span class="badge danger">issue</span></div>`)
+      .join("");
+  }
 
+  function renderHistory(payload) {
+    ui.setText("kpi-fill-count", ui.formatNumber(payload.summary.fill_count));
     const fillsTbody = document.getElementById("fills-tbody");
-    const fills = [...ledger.fills].reverse();
+    const fills = [...payload.fills].reverse();
     if (!fills.length) {
       fillsTbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center">fill 이력이 없습니다.</td></tr>';
       return;
@@ -98,16 +140,18 @@
   }
 
   async function refreshPage() {
-    const profileId = currentProfileId();
-    state.currentProfileId = profileId;
-    const [ledger, recommendations] = await Promise.all([
-      ui.fetchJson(`/api/manual/ledger?profileId=${encodeURIComponent(profileId)}`),
-      ui.fetchJson(`/api/manual/today?profileId=${encodeURIComponent(profileId)}`),
+    state.currentProfileId = currentProfileId();
+    const [threads, history, reconcile, comparison] = await Promise.all([
+      ui.fetchJson(`/api/manual/threads?${profileQuery()}`),
+      ui.fetchJson(`/api/manual/history?${profileQuery()}`),
+      ui.postJson("/api/manual/reconcile", { profileId: currentProfileId() }),
+      ui.fetchJson(`/api/manual/comparison?${profileQuery()}`),
     ]);
-    renderLedger(ledger);
-    renderRecommendations(recommendations);
-    document.getElementById("manual-error").classList.remove("visible");
-    document.getElementById("manual-error").textContent = "";
+    renderThreads(threads);
+    renderHistory(history);
+    renderReconcile(reconcile);
+    renderComparison(comparison);
+    clearError();
   }
 
   async function bootstrap() {
@@ -122,6 +166,33 @@
 
   document.getElementById("refresh-button").addEventListener("click", async () => {
     await refreshPage();
+  });
+
+  document.getElementById("export-json-button").addEventListener("click", () => {
+    window.location.href = `/api/manual/export?${profileQuery()}&format=json`;
+  });
+
+  document.getElementById("export-csv-button").addEventListener("click", () => {
+    window.location.href = `/api/manual/export?${profileQuery()}&format=csv`;
+  });
+
+  document.getElementById("restore-button").addEventListener("click", async () => {
+    try {
+      const rawPayload = document.getElementById("restore-payload").value.trim();
+      if (!rawPayload) {
+        throw new Error("Restore JSON을 입력하세요.");
+      }
+      await ui.postJson("/api/manual/restore", {
+        profileId: currentProfileId(),
+        payload: JSON.parse(rawPayload),
+        confirmToken: document.getElementById("restore-token-input").value.trim(),
+      });
+      document.getElementById("restore-payload").value = "";
+      document.getElementById("restore-token-input").value = "";
+      await refreshPage();
+    } catch (error) {
+      showError(error);
+    }
   });
 
   document.getElementById("fill-form").addEventListener("submit", async (event) => {
@@ -141,13 +212,14 @@
       document.getElementById("filled-at-input").value = "";
       await refreshPage();
     } catch (error) {
-      const box = document.getElementById("manual-error");
-      box.textContent = error.message;
-      box.classList.add("visible");
+      showError(error);
     }
   });
 
   document.getElementById("fills-tbody").addEventListener("click", async (event) => {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
     const button = event.target.closest("[data-reverse-id]");
     if (!button) {
       return;
@@ -158,17 +230,13 @@
       });
       await refreshPage();
     } catch (error) {
-      const box = document.getElementById("manual-error");
-      box.textContent = error.message;
-      box.classList.add("visible");
+      showError(error);
     }
   });
 
   document.addEventListener("DOMContentLoaded", () => {
     bootstrap().catch((error) => {
-      const box = document.getElementById("manual-error");
-      box.textContent = error.message;
-      box.classList.add("visible");
+      showError(error);
     });
   });
 })();

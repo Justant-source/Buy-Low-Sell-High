@@ -15,11 +15,12 @@ from .data.quality import compute_data_hash, summarize_import
 from .data.sync import sync_soxl_history
 from .domain.models import BacktestJob, ManualLedger, StrategyConfig, new_run_id
 from .domain.money import ZERO
-from .manual.ledger import create_ledger, load_ledger, record_fill, reverse_fill, save_ledger, summarize_ledger
+from .manual.ledger import create_ledger, export_ledger, import_ledger, load_ledger, record_fill, reverse_fill, save_ledger, summarize_ledger
 from .manual.recommendation import build_recommendations
 from .manual.reconciliation import reconcile_ledger
 from .persistence.repositories import InMemoryJobRepository
 from .persistence.worker import run_once
+from .reporting.risk_report import build_risk_report
 
 
 def _repo_root() -> Path:
@@ -267,6 +268,12 @@ def _backtest_grid(args: argparse.Namespace) -> int:
     )
 
 
+def _backtest_risk_report(args: argparse.Namespace) -> int:
+    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    return _print_json(build_risk_report(bars, config, data_hash=data_hash))
+
+
 def _parity_report(args: argparse.Namespace) -> int:
     reference = load_reference_fixture(args.reference)
     bars, data_hash = _load_bars(args.csv, args.symbol)
@@ -376,6 +383,17 @@ def _manual_ledger_reverse(args: argparse.Namespace) -> int:
     )
 
 
+def _manual_ledger_restore(args: argparse.Namespace) -> int:
+    ledger = import_ledger(Path(args.source_path).read_text(encoding="utf-8"))
+    save_ledger(args.ledger_path, ledger)
+    return _print_json(
+        {
+            "ledger": _serialize_ledger(ledger),
+            "backup": json.loads(export_ledger(ledger)),
+        }
+    )
+
+
 def _worker_smoke(_args: argparse.Namespace) -> int:
     repo = InMemoryJobRepository()
     job = BacktestJob(job_id="smoke-job", config_hash="cfg", data_hash="data")
@@ -429,6 +447,12 @@ def main() -> int:
     backtest_grid_parser.add_argument("--stops", required=True)
     backtest_grid_parser.add_argument("--initial-capital", type=float, default=10000.0)
     backtest_grid_parser.set_defaults(handler=_backtest_grid)
+    backtest_risk_parser = backtest_subparsers.add_parser("risk-report")
+    backtest_risk_parser.add_argument("--profile", required=True)
+    _add_csv_argument(backtest_risk_parser)
+    backtest_risk_parser.add_argument("--symbol")
+    backtest_risk_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    backtest_risk_parser.set_defaults(handler=_backtest_risk_report)
 
     parity_parser = subparsers.add_parser("parity")
     parity_subparsers = parity_parser.add_subparsers(dest="parity_command", required=True)
@@ -481,6 +505,10 @@ def main() -> int:
     _add_ledger_argument(manual_ledger_reverse)
     manual_ledger_reverse.add_argument("--fill-id", required=True)
     manual_ledger_reverse.set_defaults(handler=_manual_ledger_reverse)
+    manual_ledger_restore = manual_ledger_subparsers.add_parser("restore")
+    _add_ledger_argument(manual_ledger_restore)
+    manual_ledger_restore.add_argument("--source-path", required=True)
+    manual_ledger_restore.set_defaults(handler=_manual_ledger_restore)
 
     worker_parser = subparsers.add_parser("worker")
     worker_subparsers = worker_parser.add_subparsers(dest="worker_command", required=True)

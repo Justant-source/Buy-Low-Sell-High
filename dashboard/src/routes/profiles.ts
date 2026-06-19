@@ -1,6 +1,6 @@
 import { Router } from "express";
 
-import { asyncHandler, HttpError, parseNumber } from "../lib/http.js";
+import { asyncHandler, HttpError, parseNumber, requireString } from "../lib/http.js";
 import { defaultProfileId, getProfileDefinition, listProfileDefinitions } from "../lib/profiles.js";
 import { runCliJson } from "../lib/python.js";
 import type { ProfilePayload } from "../lib/types.js";
@@ -46,7 +46,7 @@ export function createProfilesRouter(): Router {
     "/:profileId",
     asyncHandler(async (req, res) => {
       const initialCapital = parseNumber(req.query.initialCapital, 10000);
-      const profile = await hydrateProfile(req.params.profileId, initialCapital);
+      const profile = await hydrateProfile(requireString(req.params.profileId, "profileId"), initialCapital);
       res.json(profile);
     }),
   );

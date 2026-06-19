@@ -29,13 +29,27 @@ The dashboard API is served by the Express app in `dashboard/src/server.ts` and 
   - Exports the persisted trades as CSV.
 - `GET /api/backtests/compare`
   - Returns the 9-cell thread/stop comparison matrix payload for the selected profile and dataset.
+- `GET /api/backtests/risk`
+  - Returns a risk report comparing `ideal_same_close`, `next_open`, and `next_close`, plus cost sensitivity, recovery periods, and warning text for leveraged ETF use.
 
 ## Manual Operations
+- `GET /api/manual/comparison`
+  - Returns today recommendations matched against append-only manual fills, including pending status and basis-vs-actual price gaps.
 - `GET /api/manual/ledger`
   - Returns the selected profile ledger path plus summary, issues, thread states, and fill history.
+- `GET /api/manual/threads`
+  - Returns the selected profile ledger path plus thread summary and current thread states.
+- `GET /api/manual/history`
+  - Returns the selected profile ledger path plus append-only fill history.
 - `GET /api/manual/today`
   - Returns the selected profile ledger path plus today recommendations.
+- `POST /api/manual/reconcile`
+  - Returns the selected profile ledger path plus reconciliation issues for the current append-only ledger.
 - `POST /api/manual/fills`
   - Appends a manual fill to the ledger.
 - `POST /api/manual/fills/:fillId/reverse`
   - Appends a reversal fill and links it to the original fill.
+- `GET /api/manual/export`
+  - Exports the selected profile ledger as restore-compatible JSON or fill-history CSV via `format=json|csv`.
+- `POST /api/manual/restore`
+  - Restores a selected profile ledger from an exported JSON payload. Requires the explicit confirm token `RESTORE_MANUAL_LEDGER`.

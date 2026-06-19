@@ -7,7 +7,7 @@ SOXL-Mania is a clean-room research and manual decision-support stack for the SO
 - SOXL daily history can be synced from 2011-01-01 onward into the canonical local CSV snapshot at `data/raw/soxl_daily_2011_present.csv`.
 - Network sync currently falls back in the order `Yahoo chart -> Investing historical API -> Stooq`.
 - Strategy logic, parity fixtures, and manual ledger workflows are available in the Python CLI.
-- The Express dashboard now serves Bit-Mania-style `monitor`, `backtests`, and `manual` pages backed by CLI-driven API routes and file-backed dashboard jobs.
+- The Express dashboard now serves Bit-Mania-style `monitor`, `backtests`, and `manual` pages backed by CLI-driven API routes, file-backed dashboard jobs, and manual ledger export / restore flows.
 
 ## 8 Workstreams
 1. Foundation and safety guardrails
@@ -30,6 +30,16 @@ SOXL-Mania is a clean-room research and manual decision-support stack for the SO
 ```bash
 make bootstrap-check
 make lint-docs
+make scenario-report
+make e2e-backtest
+make e2e-manual
+make e2e-risk
+make backup
+make backup-restore-test
+make clean-room
+make ci
+npm --prefix dashboard run build
+npm --prefix dashboard test
 python3 scripts/verify_no_autotrading.py
 PYTHONPATH=engine/src python3 -m soxl_mania.cli data sync --symbol SOXL --start-date 2011-01-01
 PYTHONPATH=engine/src python3 -m soxl_mania.cli backtest run --profile configs/strategies/mentor_default_5x30.yaml --symbol SOXL
@@ -43,6 +53,8 @@ PYTHONPATH=engine/src python3 -m soxl_mania.cli backtest run --profile configs/s
 ```
 
 Docker helper containers use the `soxlmania-` prefix, including `soxlmania-postgres`, `soxlmania-dashboard`, `soxlmania-engine-sync`, and `soxlmania-engine-backtest`.
+
+In the current Codex snap environment, the Docker CLI can be installed locally, but daemon access may still be blocked at `/var/run/docker.sock` by confinement rules.
 
 ## Dashboard Routes
 - `http://localhost:3000/monitor`
