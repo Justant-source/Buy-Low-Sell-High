@@ -57,13 +57,32 @@ else:
 html = get(f"http://127.0.0.1:{port}/backtests")
 required_markers = [
     "백테스트 워크벤치",
-    "9조합 비교 매트릭스",
+    "Strategy Explorer",
+    "Sweep Explorer",
+    "비교 매트릭스",
     "실행 모델 리스크 비교",
     "리스크 경고",
+    "/home/justant/Data/Bit-Mania/backtest/dashboards/strategy_dashboard.html",
+    "/home/justant/Data/Bit-Mania/backtest/dashboards/supertrend_sweep_dashboard.html",
 ]
 for marker in required_markers:
     if marker not in html:
         raise SystemExit(f"missing backtest UI marker: {marker}")
+
+strategy_explorer = json.loads(
+    get(
+        f"http://127.0.0.1:{port}/api/backtests/strategy-explorer?profileId=mentor_default_5x30"
+        f"&csvPath={urllib.parse.quote(csv_path, safe='')}&executionModel=next_open&priceBasis=adjusted_close"
+    )
+)
+if strategy_explorer.get("meta", {}).get("catalog_id") != "core_profiles_v1":
+    raise SystemExit("strategy explorer did not return the expected catalog_id")
+if len(strategy_explorer.get("strategies", [])) != 9:
+    raise SystemExit("strategy explorer did not return the 9 preset strategies")
+if not strategy_explorer["strategies"][0].get("segments"):
+    raise SystemExit("strategy explorer payload missing segment summaries")
+if not strategy_explorer["strategies"][0].get("daily"):
+    raise SystemExit("strategy explorer payload missing daily series")
 
 job = json.loads(
     post(
@@ -72,6 +91,16 @@ job = json.loads(
             "profileId": "mentor_default_5x30",
             "csvPath": csv_path,
             "initialCapital": 10000,
+            "overrides": {
+                "threadCount": 7,
+                "stopSessions": 30,
+                "takeProfitPct": 5,
+                "entryDropPct": 0,
+                "stopLossPct": 0,
+                "maxEntriesPerSession": 1,
+                "sizingMode": "fixed_principal",
+                "priceBasis": "adjusted_close",
+            },
         },
     )
 )
@@ -91,20 +120,25 @@ else:
 run = json.loads(get(f"http://127.0.0.1:{port}/api/backtests/runs/{run_id}"))
 if "metrics" not in run.get("payload", {}):
     raise SystemExit("run payload missing metrics")
+if str(run["payload"]["config"].get("thread_count")) != "7":
+    raise SystemExit("run payload did not apply thread_count override")
+if str(run["payload"]["config"].get("take_profit_pct")) != "5":
+    raise SystemExit("run payload did not apply take_profit_pct override")
 
 compare = json.loads(
     get(
         f"http://127.0.0.1:{port}/api/backtests/compare?profileId=mentor_default_5x30"
-        f"&csvPath={urllib.parse.quote(csv_path, safe='')}&threads=5,6,7&stops=10,30,40"
+        f"&csvPath={urllib.parse.quote(csv_path, safe='')}&threads=6,7&stops=10,30"
+        f"&takeProfitPct=5&threadCount=7&stopSessions=30"
     )
 )
-if len(compare.get("cells", [])) != 9:
-    raise SystemExit("compare matrix did not return 9 cells")
+if len(compare.get("cells", [])) != 4:
+    raise SystemExit("compare matrix did not return the requested cell count")
 
 risk = json.loads(
     get(
         f"http://127.0.0.1:{port}/api/backtests/risk?profileId=mentor_default_5x30"
-        f"&csvPath={urllib.parse.quote(csv_path, safe='')}"
+        f"&csvPath={urllib.parse.quote(csv_path, safe='')}&takeProfitPct=5&threadCount=7&stopSessions=30"
     )
 )
 if len(risk.get("model_comparison", [])) != 3:
@@ -113,6 +147,58 @@ if len(risk.get("model_comparison", [])) != 3:
 csv_export = get(f"http://127.0.0.1:{port}/api/backtests/runs/{run_id}/trades.csv")
 if "thread_id,signal_date" not in csv_export:
     raise SystemExit("trade export header missing")
+
+sweep_job = json.loads(
+    post(
+        f"http://127.0.0.1:{port}/api/backtests/sweeps/jobs",
+        {
+            "profileId": "mentor_default_5x30",
+            "csvPath": csv_path,
+            "initialCapital": 10000,
+            "executionModel": "next_open",
+            "priceBasis": "adjusted_close",
+        },
+    )
+)
+sweep_job_id = sweep_job["jobId"]
+
+artifact_id = sweep_job.get("artifactId")
+if sweep_job["status"] != "COMPLETED":
+    for _ in range(240):
+        payload = json.loads(get(f"http://127.0.0.1:{port}/api/backtests/sweeps/jobs/{sweep_job_id}"))
+        if payload["status"] == "COMPLETED":
+            artifact_id = payload["artifactId"]
+            break
+        if payload["status"] == "FAILED":
+            raise SystemExit(f"sweep job failed: {payload.get('error')}")
+        time.sleep(0.25)
+    else:
+        raise SystemExit("sweep job did not complete")
+
+if not artifact_id:
+    raise SystemExit("sweep job did not produce an artifact_id")
+
+sweep_artifact = json.loads(get(f"http://127.0.0.1:{port}/api/backtests/sweeps/runs/{artifact_id}"))
+sweep_payload = sweep_artifact.get("payload", {})
+if sweep_artifact.get("kind") != "PARAMETER_SWEEP":
+    raise SystemExit("sweep artifact kind mismatch")
+if sweep_payload.get("meta", {}).get("sweep_id") != "core6_v1":
+    raise SystemExit("sweep payload missing core6_v1 metadata")
+if sweep_payload.get("meta", {}).get("combo_count") != 648:
+    raise SystemExit("sweep payload combo count mismatch")
+if len(sweep_payload.get("rows", [])) != 648:
+    raise SystemExit("sweep payload rows mismatch")
+if not sweep_payload.get("summary", {}).get("best_robust_combo"):
+    raise SystemExit("sweep payload missing robust summary")
+
+latest_sweep = json.loads(
+    get(
+        f"http://127.0.0.1:{port}/api/backtests/sweeps/latest?profileId=mentor_default_5x30"
+        f"&csvPath={urllib.parse.quote(csv_path, safe='')}&executionModel=next_open&priceBasis=adjusted_close"
+    )
+)
+if latest_sweep is None or latest_sweep.get("artifactId") != artifact_id:
+    raise SystemExit("latest sweep endpoint did not return the completed artifact")
 
 print("backtest e2e smoke passed")
 PY

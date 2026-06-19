@@ -28,6 +28,25 @@ class StrategyResult:
     daily: list[DailySnapshot]
 
 
+def _entry_signal(session_price: Decimal, previous_price: Decimal, config: StrategyConfig) -> bool:
+    threshold = previous_price * (D("1") - config.entry_drop_pct / D("100"))
+    return session_price < threshold
+
+
+def _take_profit_signal(session_price: Decimal, entry_price: Decimal, config: StrategyConfig) -> bool:
+    threshold = entry_price * (D("1") + config.take_profit_pct / D("100"))
+    if config.take_profit_operator == "gte":
+        return session_price >= threshold
+    return session_price > threshold
+
+
+def _price_stop_signal(session_price: Decimal, entry_price: Decimal, config: StrategyConfig) -> bool:
+    if config.stop_loss_pct <= ZERO:
+        return False
+    threshold = entry_price * (D("1") - config.stop_loss_pct / D("100"))
+    return session_price <= threshold
+
+
 def _select_thread(threads: list[CapitalThread], config: StrategyConfig, session_index: int) -> CapitalThread | None:
     free_threads = [thread for thread in threads if thread.state == ThreadState.FREE]
     if not config.allow_same_session_thread_reuse:
@@ -168,7 +187,7 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                     )
                     if action.reason == CloseReason.TAKE_PROFIT.value:
                         take_profits += 1
-                    elif action.reason == CloseReason.TIME_STOP.value:
+                    elif action.reason in {CloseReason.TIME_STOP.value, CloseReason.PRICE_STOP.value}:
                         time_stops += 1
                 else:
                     still_pending.append(action)
@@ -302,30 +321,45 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                 if thread.state != ThreadState.OPEN or thread.entry_session_index is None:
                     continue
                 age = index - thread.entry_session_index
-                profitable = session_price > thread.entry_price
-                stop_due = age >= config.stop_sessions and session_price <= thread.entry_price
-                if profitable:
-                    close_thread(thread, CloseReason.TAKE_PROFIT)
-                elif stop_due:
-                    close_thread(thread, CloseReason.TIME_STOP)
+                profitable = _take_profit_signal(session_price, thread.entry_price, config)
+                price_stop_due = _price_stop_signal(session_price, thread.entry_price, config)
+                time_stop_due = age >= config.stop_sessions and session_price <= thread.entry_price
+                if config.profit_precedes_stop:
+                    if profitable:
+                        close_thread(thread, CloseReason.TAKE_PROFIT)
+                    elif price_stop_due:
+                        close_thread(thread, CloseReason.PRICE_STOP)
+                    elif time_stop_due:
+                        close_thread(thread, CloseReason.TIME_STOP)
+                else:
+                    if price_stop_due:
+                        close_thread(thread, CloseReason.PRICE_STOP)
+                    elif time_stop_due:
+                        close_thread(thread, CloseReason.TIME_STOP)
+                    elif profitable:
+                        close_thread(thread, CloseReason.TAKE_PROFIT)
 
         def process_entry() -> None:
             nonlocal skipped_entries
-            if session_price >= previous_price:
+            if not _entry_signal(session_price, previous_price, config):
                 return
-            thread = _select_thread(threads, config, index)
-            if thread is None:
-                skipped_entries += 1
-                events.append(
-                    StrategyEvent(
-                        session_date=bar.session_date,
-                        session_index=index,
-                        thread_id=None,
-                        event_type="SKIPPED_NO_FREE_THREAD",
-                    )
-                )
-                return
-            open_thread(thread)
+            opened = 0
+            for _ in range(config.max_entries_per_session):
+                thread = _select_thread(threads, config, index)
+                if thread is None:
+                    if opened == 0:
+                        skipped_entries += 1
+                        events.append(
+                            StrategyEvent(
+                                session_date=bar.session_date,
+                                session_index=index,
+                                thread_id=None,
+                                event_type="SKIPPED_NO_FREE_THREAD",
+                            )
+                        )
+                    return
+                open_thread(thread)
+                opened += 1
 
         if config.event_order == EventOrder.EXITS_THEN_ENTRY:
             process_exits()
@@ -385,20 +419,26 @@ def recommend_actions(bars: list[MarketBar], config: StrategyConfig, open_positi
     latest = bars[-1]
     previous = bars[-2]
     price = latest.price_for_basis(config.price_basis)
+    previous_price = previous.price_for_basis(config.price_basis)
     recommendations: list[tuple[int, RecommendationAction, str]] = []
+    buy_candidates: set[int] = set()
+    if _entry_signal(price, previous_price, config):
+        free_threads = [thread_id for thread_id in range(1, config.thread_count + 1) if thread_id not in open_positions]
+        buy_candidates = set(free_threads[: config.max_entries_per_session])
     for thread_id in range(1, config.thread_count + 1):
         if thread_id not in open_positions:
-            if price < previous.price_for_basis(config.price_basis):
-                recommendations.append((thread_id, RecommendationAction.BUY, "DOWN_DAY and free thread"))
+            if thread_id in buy_candidates:
+                recommendations.append((thread_id, RecommendationAction.BUY, "Entry threshold met and free thread"))
             else:
-                recommendations.append((thread_id, RecommendationAction.NO_ACTION, "No down-day signal"))
+                recommendations.append((thread_id, RecommendationAction.NO_ACTION, "No entry allocated"))
             continue
         entry_price, age = open_positions[thread_id]
-        if price > entry_price:
-            recommendations.append((thread_id, RecommendationAction.TAKE_PROFIT, "Price recovered above entry"))
+        if _take_profit_signal(price, entry_price, config):
+            recommendations.append((thread_id, RecommendationAction.TAKE_PROFIT, "Take-profit threshold reached"))
+        elif _price_stop_signal(price, entry_price, config):
+            recommendations.append((thread_id, RecommendationAction.TIME_STOP, "Price stop threshold reached"))
         elif age >= config.stop_sessions:
             recommendations.append((thread_id, RecommendationAction.TIME_STOP, "Holding age reached stop sessions"))
         else:
             recommendations.append((thread_id, RecommendationAction.HOLD, "Position remains open"))
     return recommendations
-

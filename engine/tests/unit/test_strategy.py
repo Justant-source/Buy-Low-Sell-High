@@ -4,7 +4,7 @@ from datetime import date
 import unittest
 
 from soxl_mania.backtest.engine import run_backtest
-from soxl_mania.domain.enums import EventOrder, ExecutionModel, PriceBasis, SizingMode, ThreadSelector
+from soxl_mania.domain.enums import CloseReason, EventOrder, ExecutionModel, PriceBasis, SizingMode, ThreadSelector
 from soxl_mania.domain.models import MarketBar, StrategyConfig
 from soxl_mania.domain.money import D
 
@@ -104,6 +104,36 @@ class StrategyTest(unittest.TestCase):
         run = run_backtest(bars, self.make_config(execution_model="next_open", thread_count=1))
         entry_fill = next(event for event in run.events if event.event_type == "ENTRY_FILL")
         self.assertEqual(str(entry_fill.price), "12")
+
+    def test_take_profit_pct_requires_threshold_excess(self) -> None:
+        bars = [bar(2, "10"), bar(3, "9"), bar(4, "9.45"), bar(5, "9.46")]
+        run = run_backtest(
+            bars,
+            self.make_config(thread_count=1, stop_sessions=99, take_profit_pct="5", take_profit_operator="gt"),
+        )
+        self.assertEqual(run.trades[0].close_reason, CloseReason.TAKE_PROFIT)
+        self.assertEqual(run.trades[0].fill_exit_date, date(2024, 1, 5))
+
+    def test_entry_drop_pct_requires_threshold_breach(self) -> None:
+        bars = [bar(2, "10"), bar(3, "9.9"), bar(4, "9.7"), bar(5, "9.6")]
+        run = run_backtest(bars, self.make_config(thread_count=1, stop_sessions=99, entry_drop_pct="2"))
+        entry_dates = [event.session_date for event in run.events if event.event_type == "ENTRY"]
+        self.assertEqual(entry_dates, [date(2024, 1, 4)])
+
+    def test_stop_loss_pct_closes_immediately(self) -> None:
+        bars = [bar(2, "10"), bar(3, "9"), bar(4, "8.1")]
+        run = run_backtest(bars, self.make_config(thread_count=1, stop_sessions=99, stop_loss_pct="10"))
+        self.assertEqual(run.trades[0].close_reason, CloseReason.PRICE_STOP)
+
+    def test_max_entries_per_session_allows_multiple_new_threads(self) -> None:
+        bars = [bar(2, "10"), bar(3, "9")]
+        run = run_backtest(bars, self.make_config(thread_count=3, max_entries_per_session=2, stop_sessions=99))
+        self.assertEqual([event.event_type for event in run.events].count("ENTRY"), 2)
+
+    def test_config_hash_changes_with_threshold_fields(self) -> None:
+        base = self.make_config()
+        changed = self.make_config(take_profit_pct="5", entry_drop_pct="2", stop_loss_pct="10", take_profit_operator="gte")
+        self.assertNotEqual(base.config_hash(), changed.config_hash())
 
 
 if __name__ == "__main__":

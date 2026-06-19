@@ -1,10 +1,21 @@
 (function () {
   const ui = window.SOXLDashboard;
+  const MAX_STRATEGY_SELECTION = 6;
+  const STRATEGY_COLORS = ["#d78a4b", "#2f7ed8", "#2fb344", "#d63939", "#7b5cff", "#1f9d8b"];
+  const SWEEP_PARETO_LABELS = {
+    all: "all",
+    return_mdd: "return / MDD",
+    return_stability: "return / stability",
+  };
   const state = {
     latestRun: null,
     profiles: [],
     dataStatus: null,
     mentorMatrix: null,
+    strategyExplorer: null,
+    selectedStrategyIds: [],
+    selectedStrategyPresetId: "all",
+    sweepArtifact: null,
   };
 
   function profilePathToLabel(profile) {
@@ -13,6 +24,10 @@
 
   function selectedProfile() {
     return state.profiles.find((profile) => profile.profileId === document.getElementById("profile-select").value) || null;
+  }
+
+  function selectedProfileId() {
+    return document.getElementById("profile-select").value;
   }
 
   function syncControlsFromProfile(profile) {
@@ -47,6 +62,41 @@
       sizingMode: document.getElementById("sizing-mode").value || "fixed_principal",
       priceBasis: document.getElementById("price-basis").value || "adjusted_close",
     };
+  }
+
+  function setEmptyChart(id, message) {
+    const target = document.getElementById(id);
+    if (!target) {
+      return;
+    }
+    target.innerHTML = `<div class="empty-state">${ui.escapeHtml(message)}</div>`;
+  }
+
+  function chartLayoutBase() {
+    return {
+      paper_bgcolor: "transparent",
+      plot_bgcolor: "transparent",
+      margin: { t: 12, r: 16, b: 36, l: 56 },
+      font: {
+        family: "Inter, sans-serif",
+        color: getComputedStyle(document.documentElement).getPropertyValue("--text").trim(),
+      },
+      xaxis: { gridcolor: getComputedStyle(document.documentElement).getPropertyValue("--border").trim() },
+      yaxis: { gridcolor: getComputedStyle(document.documentElement).getPropertyValue("--border").trim() },
+      legend: { orientation: "h", y: -0.2 },
+    };
+  }
+
+  function parseMoney(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
+  }
+
+  function formatSessionPeriod(start, end) {
+    if (!start || !end) {
+      return "-";
+    }
+    return `${start} → ${end}`;
   }
 
   function populateProfiles(payload) {
@@ -108,21 +158,14 @@
       .join("");
   }
 
-  function renderCharts(run) {
+  function renderRunCharts(run) {
     if (!window.Plotly || !run || !run.daily || !run.daily.length) {
       return;
     }
     const x = run.daily.map((point) => point.session_date);
     const equity = run.daily.map((point) => Number(point.total_equity));
     const drawdown = run.daily.map((point) => Number(point.drawdown) * 100);
-    const commonLayout = {
-      paper_bgcolor: "transparent",
-      plot_bgcolor: "transparent",
-      margin: { t: 10, r: 16, b: 36, l: 56 },
-      font: { family: "Inter, sans-serif", color: getComputedStyle(document.documentElement).getPropertyValue("--text").trim() },
-      xaxis: { gridcolor: getComputedStyle(document.documentElement).getPropertyValue("--border").trim() },
-      yaxis: { gridcolor: getComputedStyle(document.documentElement).getPropertyValue("--border").trim() },
-    };
+    const commonLayout = chartLayoutBase();
     window.Plotly.newPlot(
       "equity-chart",
       [{ x, y: equity, type: "scatter", mode: "lines", line: { color: "#d78a4b", width: 2.5 } }],
@@ -152,7 +195,7 @@
     ui.setText("sb-model", String(run.config.execution_model || "-"));
     document.getElementById("trades-download").href = `/api/backtests/runs/${encodeURIComponent(artifact.runId)}/trades.csv`;
     renderYearly(run.yearly);
-    renderCharts(run);
+    renderRunCharts(run);
   }
 
   function renderCompare(payload) {
@@ -216,7 +259,6 @@
 
   function renderMentorMatrix(payload) {
     state.mentorMatrix = payload;
-    const reference = payload.reference;
     const actual = payload.actual;
     const comboKeys = comboOrder(actual.combos);
     const body = document.getElementById("mentor-matrix-body");
@@ -399,6 +441,687 @@
       .join("");
   }
 
+  function getStrategyById(strategyId) {
+    return state.strategyExplorer?.strategies.find((strategy) => strategy.strategy_id === strategyId) || null;
+  }
+
+  function ensureStrategySelection() {
+    if (!state.strategyExplorer) {
+      return;
+    }
+    const validIds = new Set(state.strategyExplorer.strategies.map((strategy) => strategy.strategy_id));
+    state.selectedStrategyIds = state.selectedStrategyIds.filter((strategyId) => validIds.has(strategyId)).slice(0, MAX_STRATEGY_SELECTION);
+    if (!state.selectedStrategyIds.length) {
+      state.selectedStrategyIds = state.strategyExplorer.strategies
+        .slice()
+        .sort((left, right) => Number(right.metrics.total_return_pct) - Number(left.metrics.total_return_pct))
+        .slice(0, 3)
+        .map((strategy) => strategy.strategy_id);
+    }
+    if (!state.selectedStrategyPresetId) {
+      state.selectedStrategyPresetId = "all";
+    }
+  }
+
+  function setStrategyDateInputs(start, end) {
+    document.getElementById("strategy-slice-start").value = start;
+    document.getElementById("strategy-slice-end").value = end;
+  }
+
+  function currentStrategySlice() {
+    if (!state.strategyExplorer) {
+      return null;
+    }
+    const meta = state.strategyExplorer.meta;
+    let start = document.getElementById("strategy-slice-start").value || meta.period_start;
+    let end = document.getElementById("strategy-slice-end").value || meta.period_end;
+    if (start < meta.period_start) {
+      start = meta.period_start;
+    }
+    if (end > meta.period_end) {
+      end = meta.period_end;
+    }
+    if (start > end) {
+      start = end;
+    }
+    return { start, end };
+  }
+
+  function strategyDailySlice(strategy, start, end) {
+    return (strategy.daily || []).filter((point) => point.session_date >= start && point.session_date <= end);
+  }
+
+  function rebaseDaily(daily) {
+    if (!daily.length) {
+      return [];
+    }
+    const startEquity = parseMoney(daily[0].total_equity);
+    if (!startEquity) {
+      return [];
+    }
+    let peak = 10000;
+    return daily.map((point) => {
+      const equity = (parseMoney(point.total_equity) / startEquity) * 10000;
+      peak = Math.max(peak, equity);
+      const drawdownPct = peak === 0 ? 0 : ((equity - peak) / peak) * 100;
+      return {
+        date: point.session_date,
+        equity,
+        drawdownPct,
+      };
+    });
+  }
+
+  function summarizeRebasedSlice(series) {
+    if (!series.length) {
+      return null;
+    }
+    const start = series[0].equity;
+    const end = series[series.length - 1].equity;
+    const maxDrawdown = Math.min(...series.map((point) => point.drawdownPct));
+    return {
+      returnPct: start === 0 ? 0 : ((end - start) / start) * 100,
+      maxDrawdownPct: maxDrawdown,
+      start: series[0].date,
+      end: series[series.length - 1].date,
+    };
+  }
+
+  function rollingReturnSeries(series, window) {
+    const rows = [];
+    for (let index = window; index < series.length; index += 1) {
+      const previous = series[index - window];
+      if (!previous || previous.equity === 0) {
+        continue;
+      }
+      rows.push({
+        date: series[index].date,
+        returnPct: ((series[index].equity - previous.equity) / previous.equity) * 100,
+      });
+    }
+    return rows;
+  }
+
+  function monthlyRowsFromSeries(series) {
+    const map = new Map();
+    for (const point of series) {
+      const month = point.date.slice(0, 7);
+      if (!map.has(month)) {
+        map.set(month, []);
+      }
+      map.get(month).push(point);
+    }
+    return [...map.entries()]
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([month, rows]) => ({
+        month,
+        returnPct: rows[0].equity === 0 ? 0 : ((rows[rows.length - 1].equity - rows[0].equity) / rows[0].equity) * 100,
+      }));
+  }
+
+  function renderStrategySelector() {
+    if (!state.strategyExplorer) {
+      return;
+    }
+    const target = document.getElementById("strategy-selector");
+    target.innerHTML = state.strategyExplorer.strategies
+      .map((strategy) => {
+        const active = state.selectedStrategyIds.includes(strategy.strategy_id) ? " active" : "";
+        const badges = (strategy.mentor_profiles || [])
+          .map((profileId) => `<span class="badge info mono">${ui.escapeHtml(profileId)}</span>`)
+          .join("");
+        return `<button type="button" class="strategy-toggle${active}" data-strategy-id="${ui.escapeHtml(strategy.strategy_id)}">
+          <strong>${ui.escapeHtml(strategy.label)}</strong>
+          <span class="meta">${ui.escapeHtml(`${strategy.thread_count}T / ${strategy.stop_sessions}S · total ${ui.formatPercent(strategy.metrics.total_return_pct)}`)}</span>
+          <span class="badges">${badges || '<span class="badge neutral">catalog</span>'}</span>
+        </button>`;
+      })
+      .join("");
+    target.querySelectorAll("[data-strategy-id]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const strategyId = button.getAttribute("data-strategy-id");
+        if (!strategyId) {
+          return;
+        }
+        const alreadySelected = state.selectedStrategyIds.includes(strategyId);
+        if (alreadySelected) {
+          state.selectedStrategyIds = state.selectedStrategyIds.filter((value) => value !== strategyId);
+        } else if (state.selectedStrategyIds.length < MAX_STRATEGY_SELECTION) {
+          state.selectedStrategyIds = [...state.selectedStrategyIds, strategyId];
+        }
+        renderStrategySelector();
+        renderStrategyViews();
+      });
+    });
+    document.getElementById("strategy-selector-note").textContent = `선택 ${state.selectedStrategyIds.length} / ${MAX_STRATEGY_SELECTION}`;
+  }
+
+  function renderStrategySlicePresets() {
+    if (!state.strategyExplorer) {
+      return;
+    }
+    const target = document.getElementById("strategy-slice-presets");
+    target.innerHTML = state.strategyExplorer.meta.slice_presets
+      .map((preset) => {
+        const active = preset.preset_id === state.selectedStrategyPresetId ? " active" : "";
+        return `<button type="button" class="preset-chip${active}" data-preset-id="${ui.escapeHtml(preset.preset_id)}">${ui.escapeHtml(preset.label)}</button>`;
+      })
+      .join("");
+    target.querySelectorAll("[data-preset-id]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const presetId = button.getAttribute("data-preset-id");
+        const preset = state.strategyExplorer.meta.slice_presets.find((item) => item.preset_id === presetId);
+        if (!preset) {
+          return;
+        }
+        state.selectedStrategyPresetId = preset.preset_id;
+        setStrategyDateInputs(preset.start, preset.end);
+        renderStrategySlicePresets();
+        renderStrategyViews();
+      });
+    });
+  }
+
+  function renderStrategyKpis() {
+    const slice = currentStrategySlice();
+    if (!slice) {
+      return;
+    }
+    const summaries = state.selectedStrategyIds
+      .map((strategyId) => {
+        const strategy = getStrategyById(strategyId);
+        if (!strategy) {
+          return null;
+        }
+        const summary = summarizeRebasedSlice(rebaseDaily(strategyDailySlice(strategy, slice.start, slice.end)));
+        return summary ? { strategy, summary } : null;
+      })
+      .filter(Boolean);
+    if (!summaries.length) {
+      ui.setText("strategy-kpi-count", "0");
+      ui.setText("strategy-kpi-best-return", "-");
+      ui.setText("strategy-kpi-best-mdd", "-");
+      ui.setText("strategy-kpi-period", "-");
+      return;
+    }
+    const bestReturn = summaries.reduce((best, current) => (current.summary.returnPct > best.summary.returnPct ? current : best));
+    const bestMdd = summaries.reduce((best, current) => (current.summary.maxDrawdownPct > best.summary.maxDrawdownPct ? current : best));
+    ui.setText("strategy-kpi-count", String(summaries.length));
+    ui.setText("strategy-kpi-best-return", `${bestReturn.strategy.label} · ${ui.formatPercent(bestReturn.summary.returnPct)}`);
+    ui.setText("strategy-kpi-best-mdd", `${bestMdd.strategy.label} · ${ui.formatPercent(bestMdd.summary.maxDrawdownPct)}`);
+    ui.setText("strategy-kpi-period", formatSessionPeriod(slice.start, slice.end));
+  }
+
+  function renderStrategyEquityChart() {
+    const slice = currentStrategySlice();
+    if (!slice || !window.Plotly || !state.selectedStrategyIds.length) {
+      setEmptyChart("strategy-equity-chart", "선택 전략이 없습니다.");
+      return;
+    }
+    const traces = state.selectedStrategyIds
+      .map((strategyId, index) => {
+        const strategy = getStrategyById(strategyId);
+        if (!strategy) {
+          return null;
+        }
+        const series = rebaseDaily(strategyDailySlice(strategy, slice.start, slice.end));
+        if (!series.length) {
+          return null;
+        }
+        return {
+          x: series.map((point) => point.date),
+          y: series.map((point) => point.equity),
+          type: "scatter",
+          mode: "lines",
+          name: strategy.label,
+          line: { color: STRATEGY_COLORS[index % STRATEGY_COLORS.length], width: 2.4 },
+        };
+      })
+      .filter(Boolean);
+    if (!traces.length) {
+      setEmptyChart("strategy-equity-chart", "선택 구간에 데이터가 없습니다.");
+      return;
+    }
+    const layout = chartLayoutBase();
+    window.Plotly.newPlot(
+      "strategy-equity-chart",
+      traces,
+      { ...layout, yaxis: { ...layout.yaxis, tickprefix: "$" } },
+      { displayModeBar: false, responsive: true },
+    );
+  }
+
+  function renderStrategyDrawdownChart() {
+    const slice = currentStrategySlice();
+    if (!slice || !window.Plotly || !state.selectedStrategyIds.length) {
+      setEmptyChart("strategy-drawdown-chart", "선택 전략이 없습니다.");
+      return;
+    }
+    const traces = state.selectedStrategyIds
+      .map((strategyId, index) => {
+        const strategy = getStrategyById(strategyId);
+        if (!strategy) {
+          return null;
+        }
+        const series = rebaseDaily(strategyDailySlice(strategy, slice.start, slice.end));
+        if (!series.length) {
+          return null;
+        }
+        return {
+          x: series.map((point) => point.date),
+          y: series.map((point) => point.drawdownPct),
+          type: "scatter",
+          mode: "lines",
+          name: strategy.label,
+          line: { color: STRATEGY_COLORS[index % STRATEGY_COLORS.length], width: 2.2 },
+        };
+      })
+      .filter(Boolean);
+    if (!traces.length) {
+      setEmptyChart("strategy-drawdown-chart", "선택 구간에 데이터가 없습니다.");
+      return;
+    }
+    const layout = chartLayoutBase();
+    window.Plotly.newPlot(
+      "strategy-drawdown-chart",
+      traces,
+      { ...layout, yaxis: { ...layout.yaxis, ticksuffix: "%" } },
+      { displayModeBar: false, responsive: true },
+    );
+  }
+
+  function renderStrategyRollingChart() {
+    const slice = currentStrategySlice();
+    const windowSize = Number(document.getElementById("strategy-roll-window").value || 252);
+    if (!slice || !window.Plotly || !state.selectedStrategyIds.length) {
+      setEmptyChart("strategy-rolling-chart", "선택 전략이 없습니다.");
+      return;
+    }
+    const traces = state.selectedStrategyIds
+      .map((strategyId, index) => {
+        const strategy = getStrategyById(strategyId);
+        if (!strategy) {
+          return null;
+        }
+        const rolling = rollingReturnSeries(rebaseDaily(strategyDailySlice(strategy, slice.start, slice.end)), windowSize);
+        if (!rolling.length) {
+          return null;
+        }
+        return {
+          x: rolling.map((point) => point.date),
+          y: rolling.map((point) => point.returnPct),
+          type: "scatter",
+          mode: "lines",
+          name: strategy.label,
+          line: { color: STRATEGY_COLORS[index % STRATEGY_COLORS.length], width: 2.0 },
+        };
+      })
+      .filter(Boolean);
+    if (!traces.length) {
+      setEmptyChart("strategy-rolling-chart", "선택 구간이 롤링 윈도보다 짧습니다.");
+      return;
+    }
+    const layout = chartLayoutBase();
+    window.Plotly.newPlot(
+      "strategy-rolling-chart",
+      traces,
+      { ...layout, yaxis: { ...layout.yaxis, ticksuffix: "%" } },
+      { displayModeBar: false, responsive: true },
+    );
+  }
+
+  function renderStrategyMonthlyChart() {
+    const slice = currentStrategySlice();
+    if (!slice || !window.Plotly || !state.selectedStrategyIds.length) {
+      setEmptyChart("strategy-monthly-chart", "선택 전략이 없습니다.");
+      return;
+    }
+    const monthlyByStrategy = state.selectedStrategyIds
+      .map((strategyId) => {
+        const strategy = getStrategyById(strategyId);
+        if (!strategy) {
+          return null;
+        }
+        return {
+          strategy,
+          monthly: monthlyRowsFromSeries(rebaseDaily(strategyDailySlice(strategy, slice.start, slice.end))),
+        };
+      })
+      .filter(Boolean);
+    const months = [...new Set(monthlyByStrategy.flatMap((item) => item.monthly.map((row) => row.month)))].sort();
+    if (!months.length) {
+      setEmptyChart("strategy-monthly-chart", "선택 구간에 월별 집계가 없습니다.");
+      return;
+    }
+    const z = monthlyByStrategy.map((item) =>
+      months.map((month) => {
+        const row = item.monthly.find((entry) => entry.month === month);
+        return row ? row.returnPct : null;
+      }),
+    );
+    window.Plotly.newPlot(
+      "strategy-monthly-chart",
+      [
+        {
+          x: months,
+          y: monthlyByStrategy.map((item) => item.strategy.label),
+          z,
+          type: "heatmap",
+          colorscale: [
+            [0, "#d63939"],
+            [0.5, "#f7f6f2"],
+            [1, "#2fb344"],
+          ],
+          zmid: 0,
+          hovertemplate: "%{y}<br>%{x}<br>%{z:.2f}%<extra></extra>",
+        },
+      ],
+      {
+        ...chartLayoutBase(),
+        margin: { t: 12, r: 16, b: 72, l: 96 },
+      },
+      { displayModeBar: false, responsive: true },
+    );
+  }
+
+  function renderStrategySegmentTable() {
+    if (!state.strategyExplorer || !state.selectedStrategyIds.length) {
+      document.getElementById("strategy-segment-body").innerHTML =
+        '<tr><td colspan="3" class="muted" style="text-align:center">선택 전략이 없습니다.</td></tr>';
+      return;
+    }
+    const presets = state.strategyExplorer.meta.segment_presets || [];
+    const strategies = state.selectedStrategyIds.map((strategyId) => getStrategyById(strategyId)).filter(Boolean);
+    document.getElementById("strategy-segment-head").innerHTML = `<tr>
+      <th>Segment</th>
+      ${strategies.map((strategy) => `<th class="num">${ui.escapeHtml(strategy.label)}</th>`).join("")}
+    </tr>`;
+    document.getElementById("strategy-segment-body").innerHTML = presets
+      .map((preset) => {
+        const cells = strategies
+          .map((strategy) => {
+            const row = (strategy.segments || []).find((segment) => segment.segment_id === preset.preset_id);
+            if (!row) {
+              return '<td class="num muted">-</td>';
+            }
+            return `<td>
+              <strong>${ui.escapeHtml(ui.formatPercent(row.return_pct))}</strong>
+              <small>MDD ${ui.escapeHtml(ui.formatPercent(row.max_drawdown_pct))}</small>
+            </td>`;
+          })
+          .join("");
+        return `<tr>
+          <td>
+            <strong>${ui.escapeHtml(preset.label)}</strong>
+            <small>${ui.escapeHtml(formatSessionPeriod(preset.start, preset.end))}</small>
+          </td>
+          ${cells}
+        </tr>`;
+      })
+      .join("");
+  }
+
+  function renderStrategyViews() {
+    renderStrategyKpis();
+    renderStrategyEquityChart();
+    renderStrategyDrawdownChart();
+    renderStrategyRollingChart();
+    renderStrategyMonthlyChart();
+    renderStrategySegmentTable();
+  }
+
+  function renderStrategyExplorer(payload) {
+    state.strategyExplorer = payload;
+    ensureStrategySelection();
+    const allPreset = payload.meta.slice_presets.find((preset) => preset.preset_id === state.selectedStrategyPresetId) || payload.meta.slice_presets[0];
+    if (allPreset) {
+      setStrategyDateInputs(allPreset.start, allPreset.end);
+    }
+    renderStrategySelector();
+    renderStrategySlicePresets();
+    document.getElementById("strategy-meta-note").textContent =
+      `참조: /home/justant/Data/Bit-Mania/backtest/dashboards/strategy_dashboard.html · catalog ${payload.meta.catalog_id} · data ${ui.shortHash(payload.meta.data_hash)} · model ${payload.meta.execution_model}`;
+    renderStrategyViews();
+  }
+
+  function renderSweepJob(job) {
+    ui.setText("sweep-job-id", job.jobId || "-");
+    ui.setText("sweep-job-status", job.status || "-");
+    ui.setText("sweep-job-progress", `${job.progress || 0}%`);
+    ui.setText("sweep-artifact-id", job.artifactId || "-");
+    ui.setText("sweep-job-requested", ui.formatDateTime(job.requestedAt));
+    ui.setText("sweep-job-finished", ui.formatDateTime(job.finishedAt));
+    const errorBox = document.getElementById("sweep-job-error");
+    if (job.error) {
+      errorBox.textContent = job.error;
+      errorBox.classList.add("visible");
+    } else {
+      errorBox.textContent = "";
+      errorBox.classList.remove("visible");
+    }
+  }
+
+  function currentSweepRows() {
+    const payload = state.sweepArtifact?.payload;
+    if (!payload) {
+      return [];
+    }
+    const minReturn = Number(document.getElementById("sweep-filter-min-return").value || 0);
+    const maxMdd = Number(document.getElementById("sweep-filter-max-mdd").value || -100);
+    const maxStd = Number(document.getElementById("sweep-filter-max-std").value || 100);
+    const paretoMode = document.getElementById("sweep-filter-pareto").value || "all";
+    return payload.rows.filter((row) => {
+      if (row.metrics.full_return_pct < minReturn) {
+        return false;
+      }
+      if (row.metrics.max_drawdown_pct < maxMdd) {
+        return false;
+      }
+      if (row.metrics.segment_stddev_pct > maxStd) {
+        return false;
+      }
+      if (paretoMode === "return_mdd" && !row.flags.pareto_return_mdd) {
+        return false;
+      }
+      if (paretoMode === "return_stability" && !row.flags.pareto_return_stability) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  function renderSweepSummary(payload, filteredRows) {
+    ui.setText("sweep-kpi-count", ui.formatNumber(payload.meta.combo_count));
+    ui.setText("sweep-kpi-best-full", payload.summary.best_full_return_combo);
+    ui.setText("sweep-kpi-best-robust", payload.summary.best_robust_combo);
+    ui.setText(
+      "sweep-kpi-pareto",
+      `${payload.summary.pareto_return_mdd_count} / ${payload.summary.pareto_return_stability_count}`,
+    );
+    ui.setText("sweep-latest-state", `${filteredRows.length} rows · ${SWEEP_PARETO_LABELS[document.getElementById("sweep-filter-pareto").value || "all"]}`);
+  }
+
+  function renderSweepWarnings(payload, filteredRows) {
+    const rows = payload.warnings.slice();
+    if (filteredRows.length) {
+      const leader = filteredRows[0];
+      const drift = leader.metrics.full_return_pct - leader.metrics.recent_segment_return_pct;
+      if (drift > 50) {
+        rows.push(`필터 기준 1위 ${leader.combo_key} 는 전체 대비 최근 성과 드리프트가 ${drift.toFixed(2)}%p 입니다.`);
+      }
+      if (leader.metrics.segment_stddev_pct > 20) {
+        rows.push(`필터 기준 1위 ${leader.combo_key} 의 구간 표준편차가 ${leader.metrics.segment_stddev_pct.toFixed(2)}% 입니다.`);
+      }
+    }
+    const target = document.getElementById("sweep-warning-list");
+    if (!rows.length) {
+      target.innerHTML = '<div class="stack-row"><span class="title">현재 필터에서 추가 경고 없음</span><span class="badge success">ok</span></div>';
+      return;
+    }
+    target.innerHTML = rows
+      .map((warning) => `<div class="warning-row"><span class="title">${ui.escapeHtml(warning)}</span></div>`)
+      .join("");
+  }
+
+  function renderSweepScatter(filteredRows) {
+    if (!window.Plotly || !filteredRows.length) {
+      setEmptyChart("sweep-scatter-chart", "표시할 스윕 결과가 없습니다.");
+      return;
+    }
+    window.Plotly.newPlot(
+      "sweep-scatter-chart",
+      [
+        {
+          x: filteredRows.map((row) => row.metrics.max_drawdown_pct),
+          y: filteredRows.map((row) => row.metrics.full_return_pct),
+          text: filteredRows.map((row) => row.combo_key),
+          mode: "markers",
+          type: "scatter",
+          marker: {
+            size: 10,
+            color: filteredRows.map((row) => row.metrics.recent_segment_return_pct),
+            colorscale: "RdYlGn",
+            line: {
+              color: filteredRows.map((row) => (row.flags.pareto_return_mdd ? "#241d15" : "transparent")),
+              width: 1.4,
+            },
+            colorbar: { title: "recent %" },
+          },
+          hovertemplate: "%{text}<br>MDD %{x:.2f}%<br>Return %{y:.2f}%<extra></extra>",
+        },
+      ],
+      {
+        ...chartLayoutBase(),
+        xaxis: { ...chartLayoutBase().xaxis, title: "Max Drawdown %" },
+        yaxis: { ...chartLayoutBase().yaxis, title: "Full Return %" },
+      },
+      { displayModeBar: false, responsive: true },
+    );
+  }
+
+  function renderSweepBox(filteredRows) {
+    const axis = document.getElementById("sweep-box-axis").value;
+    if (!window.Plotly || !filteredRows.length) {
+      setEmptyChart("sweep-box-chart", "표시할 스윕 결과가 없습니다.");
+      return;
+    }
+    window.Plotly.newPlot(
+      "sweep-box-chart",
+      [
+        {
+          x: filteredRows.map((row) => String(row.params[axis])),
+          y: filteredRows.map((row) => row.metrics.mean_segment_return_pct),
+          type: "box",
+          boxpoints: "outliers",
+          marker: { color: "#d78a4b" },
+          line: { color: "#91502d" },
+          hovertemplate: `${axis}=%{x}<br>mean segment %{y:.2f}%<extra></extra>`,
+        },
+      ],
+      {
+        ...chartLayoutBase(),
+        xaxis: { ...chartLayoutBase().xaxis, title: axis },
+        yaxis: { ...chartLayoutBase().yaxis, title: "Mean Segment Return %" },
+      },
+      { displayModeBar: false, responsive: true },
+    );
+  }
+
+  function renderSweepParcoords(filteredRows) {
+    if (!window.Plotly || !filteredRows.length) {
+      setEmptyChart("sweep-parcoords-chart", "표시할 스윕 결과가 없습니다.");
+      return;
+    }
+    window.Plotly.newPlot(
+      "sweep-parcoords-chart",
+      [
+        {
+          type: "parcoords",
+          line: {
+            color: filteredRows.map((row) => row.metrics.recent_segment_return_pct),
+            colorscale: "RdYlGn",
+            showscale: true,
+            colorbar: { title: "recent %" },
+          },
+          dimensions: [
+            { label: "thread", values: filteredRows.map((row) => row.params.thread_count) },
+            { label: "stop", values: filteredRows.map((row) => row.params.stop_sessions) },
+            { label: "take profit", values: filteredRows.map((row) => row.params.take_profit_pct) },
+            { label: "entry drop", values: filteredRows.map((row) => row.params.entry_drop_pct) },
+            { label: "stop loss", values: filteredRows.map((row) => row.params.stop_loss_pct) },
+            { label: "max entries", values: filteredRows.map((row) => row.params.max_entries_per_session) },
+            { label: "full return", values: filteredRows.map((row) => row.metrics.full_return_pct) },
+            { label: "MDD", values: filteredRows.map((row) => row.metrics.max_drawdown_pct) },
+            { label: "mean seg", values: filteredRows.map((row) => row.metrics.mean_segment_return_pct) },
+            { label: "seg std", values: filteredRows.map((row) => row.metrics.segment_stddev_pct) },
+          ],
+        },
+      ],
+      {
+        paper_bgcolor: "transparent",
+        plot_bgcolor: "transparent",
+        margin: { t: 12, r: 16, b: 24, l: 16 },
+      },
+      { displayModeBar: false, responsive: true },
+    );
+  }
+
+  function renderSweepTable(filteredRows) {
+    const tbody = document.getElementById("sweep-table-body");
+    if (!filteredRows.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center">필터 결과가 없습니다.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = filteredRows.slice(0, 100).map((row) => {
+      const pareto = [];
+      if (row.flags.pareto_return_mdd) {
+        pareto.push("R/MDD");
+      }
+      if (row.flags.pareto_return_stability) {
+        pareto.push("R/STAB");
+      }
+      return `<tr>
+        <td class="mono">${ui.escapeHtml(row.combo_key)}</td>
+        <td class="num">${ui.escapeHtml(`T${row.params.thread_count} S${row.params.stop_sessions} TP${row.params.take_profit_pct} ED${row.params.entry_drop_pct} SL${row.params.stop_loss_pct} ME${row.params.max_entries_per_session}`)}</td>
+        <td class="num">${ui.escapeHtml(ui.formatPercent(row.metrics.full_return_pct))}</td>
+        <td class="num">${ui.escapeHtml(ui.formatPercent(row.metrics.max_drawdown_pct))}</td>
+        <td class="num">${ui.escapeHtml(ui.formatPercent(row.metrics.mean_segment_return_pct))}</td>
+        <td class="num">${ui.escapeHtml(ui.formatPercent(row.metrics.segment_stddev_pct))}</td>
+        <td class="num">${ui.escapeHtml(ui.formatPercent(row.metrics.recent_segment_return_pct))}</td>
+        <td class="num">${pareto.length ? pareto.map((label) => `<span class="badge info">${ui.escapeHtml(label)}</span>`).join(" ") : '<span class="badge neutral">-</span>'}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  function renderSweepArtifact(artifactRecord) {
+    state.sweepArtifact = artifactRecord;
+    if (!artifactRecord || !artifactRecord.payload) {
+      ui.setText("sweep-kpi-count", "-");
+      ui.setText("sweep-kpi-best-full", "-");
+      ui.setText("sweep-kpi-best-robust", "-");
+      ui.setText("sweep-kpi-pareto", "-");
+      setEmptyChart("sweep-scatter-chart", "최신 스윕 산출물이 없습니다.");
+      setEmptyChart("sweep-box-chart", "최신 스윕 산출물이 없습니다.");
+      setEmptyChart("sweep-parcoords-chart", "최신 스윕 산출물이 없습니다.");
+      document.getElementById("sweep-table-body").innerHTML =
+        '<tr><td colspan="8" class="muted" style="text-align:center">스윕 결과를 불러오지 않았습니다.</td></tr>';
+      document.getElementById("sweep-warning-list").innerHTML =
+        '<div class="stack-row"><span class="title">최신 스윕 산출물이 없습니다.</span><span class="badge neutral">empty</span></div>';
+      return;
+    }
+    const payload = artifactRecord.payload;
+    ui.setText("sweep-artifact-id", artifactRecord.artifactId || "-");
+    document.getElementById("sweep-meta-note").textContent =
+      `참조: /home/justant/Data/Bit-Mania/backtest/dashboards/supertrend_sweep_dashboard.html · ${payload.meta.sweep_id} · data ${ui.shortHash(payload.meta.data_hash)} · hash ${ui.shortHash(payload.meta.sweep_hash)}`;
+    const filteredRows = currentSweepRows();
+    renderSweepSummary(payload, filteredRows);
+    renderSweepWarnings(payload, filteredRows);
+    renderSweepScatter(filteredRows);
+    renderSweepBox(filteredRows);
+    renderSweepParcoords(filteredRows);
+    renderSweepTable(filteredRows);
+  }
+
   async function pollJob(jobId) {
     while (true) {
       const job = await ui.fetchJson(`/api/backtests/jobs/${encodeURIComponent(jobId)}`);
@@ -415,8 +1138,24 @@
     }
   }
 
+  async function pollSweepJob(jobId) {
+    while (true) {
+      const job = await ui.fetchJson(`/api/backtests/sweeps/jobs/${encodeURIComponent(jobId)}`);
+      renderSweepJob(job);
+      if (job.status === "COMPLETED" && job.artifactId) {
+        const artifact = await ui.fetchJson(`/api/backtests/sweeps/runs/${encodeURIComponent(job.artifactId)}`);
+        renderSweepArtifact(artifact);
+        return;
+      }
+      if (job.status === "FAILED") {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  }
+
   async function loadCompare() {
-    const profileId = document.getElementById("profile-select").value;
+    const profileId = selectedProfileId();
     const csvPath = document.getElementById("csv-path").value.trim();
     const initialCapital = Number(document.getElementById("initial-capital").value || 10000);
     const overrides = collectOverrides();
@@ -441,7 +1180,7 @@
   }
 
   async function loadRisk() {
-    const profileId = document.getElementById("profile-select").value;
+    const profileId = selectedProfileId();
     const csvPath = document.getElementById("csv-path").value.trim();
     const initialCapital = Number(document.getElementById("initial-capital").value || 10000);
     const overrides = collectOverrides();
@@ -464,7 +1203,7 @@
   }
 
   async function loadMentorMatrix() {
-    const profileId = document.getElementById("profile-select").value;
+    const profileId = selectedProfileId();
     const csvPath = document.getElementById("csv-path").value.trim();
     const initialCapital = Number(document.getElementById("initial-capital").value || 10000);
     const overrides = collectOverrides();
@@ -489,6 +1228,33 @@
     renderMentorCounts(payload);
   }
 
+  async function loadStrategyExplorer() {
+    const profileId = selectedProfileId();
+    const csvPath = document.getElementById("csv-path").value.trim();
+    const params = new URLSearchParams({
+      profileId,
+      csvPath,
+      executionModel: document.getElementById("strategy-model").value || "next_open",
+      priceBasis: document.getElementById("strategy-price-basis").value || "adjusted_close",
+    });
+    const payload = await ui.fetchJson(`/api/backtests/strategy-explorer?${params.toString()}`);
+    renderStrategyExplorer(payload);
+  }
+
+  async function loadLatestSweep() {
+    const profileId = selectedProfileId();
+    const csvPath = document.getElementById("csv-path").value.trim();
+    const params = new URLSearchParams({
+      profileId,
+      csvPath,
+      sweepId: "core6_v1",
+      executionModel: document.getElementById("sweep-model").value || "next_open",
+      priceBasis: document.getElementById("sweep-price-basis").value || "adjusted_close",
+    });
+    const artifact = await ui.fetchJson(`/api/backtests/sweeps/latest?${params.toString()}`);
+    renderSweepArtifact(artifact);
+  }
+
   async function bootstrap() {
     const [profiles, dataStatus, overview] = await Promise.all([
       ui.fetchJson("/api/profiles"),
@@ -504,37 +1270,124 @@
     if (overview.latestRun) {
       renderRunArtifact(overview.latestRun);
     }
-    await Promise.all([loadCompare(), loadRisk(), loadMentorMatrix()]);
+    await Promise.all([loadStrategyExplorer(), loadLatestSweep(), loadCompare(), loadRisk(), loadMentorMatrix()]);
   }
-
-  document.getElementById("backtest-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const payload = {
-      profileId: document.getElementById("profile-select").value,
-      csvPath: document.getElementById("csv-path").value.trim(),
-      initialCapital: Number(document.getElementById("initial-capital").value || 10000),
-      overrides: collectOverrides(),
-    };
-    const job = await ui.postJson("/api/backtests/jobs", payload);
-    renderJob(job);
-    await pollJob(job.jobId);
-  });
-
-  document.getElementById("compare-button").addEventListener("click", async () => {
-    await Promise.all([loadCompare(), loadRisk(), loadMentorMatrix()]);
-  });
-
-  document.getElementById("profile-select").addEventListener("change", async (event) => {
-    ui.setText("sb-profile", event.target.value);
-    syncControlsFromProfile(selectedProfile());
-    await Promise.all([loadCompare(), loadRisk(), loadMentorMatrix()]);
-  });
 
   document.addEventListener("DOMContentLoaded", () => {
     bootstrap().catch((error) => {
       const errorBox = document.getElementById("job-error");
       errorBox.textContent = error.message;
       errorBox.classList.add("visible");
+    });
+
+    document.getElementById("backtest-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const payload = {
+        profileId: selectedProfileId(),
+        csvPath: document.getElementById("csv-path").value.trim(),
+        initialCapital: Number(document.getElementById("initial-capital").value || 10000),
+        overrides: collectOverrides(),
+      };
+      const job = await ui.postJson("/api/backtests/jobs", payload);
+      renderJob(job);
+      await pollJob(job.jobId);
+    });
+
+    document.getElementById("compare-button").addEventListener("click", async () => {
+      await Promise.all([loadCompare(), loadRisk(), loadMentorMatrix()]);
+    });
+
+    document.getElementById("profile-select").addEventListener("change", async (event) => {
+      ui.setText("sb-profile", event.target.value);
+      syncControlsFromProfile(selectedProfile());
+      await Promise.all([loadStrategyExplorer(), loadLatestSweep(), loadCompare(), loadRisk(), loadMentorMatrix()]);
+    });
+
+    document.getElementById("strategy-apply-button").addEventListener("click", () => {
+      state.selectedStrategyPresetId = "custom";
+      renderStrategySlicePresets();
+      renderStrategyViews();
+    });
+
+    document.getElementById("strategy-reset-button").addEventListener("click", () => {
+      if (!state.strategyExplorer) {
+        return;
+      }
+      state.selectedStrategyPresetId = "all";
+      const allPreset = state.strategyExplorer.meta.slice_presets.find((preset) => preset.preset_id === "all");
+      if (allPreset) {
+        setStrategyDateInputs(allPreset.start, allPreset.end);
+      }
+      renderStrategySlicePresets();
+      renderStrategyViews();
+    });
+
+    document.getElementById("strategy-refresh-button").addEventListener("click", async () => {
+      await loadStrategyExplorer();
+    });
+
+    document.getElementById("strategy-roll-window").addEventListener("change", () => {
+      renderStrategyRollingChart();
+    });
+
+    document.getElementById("strategy-model").addEventListener("change", async () => {
+      await loadStrategyExplorer();
+    });
+
+    document.getElementById("strategy-price-basis").addEventListener("change", async () => {
+      await loadStrategyExplorer();
+    });
+
+    document.getElementById("sweep-run-button").addEventListener("click", async () => {
+      const payload = {
+        profileId: selectedProfileId(),
+        csvPath: document.getElementById("csv-path").value.trim(),
+        sweepId: "core6_v1",
+        executionModel: document.getElementById("sweep-model").value || "next_open",
+        priceBasis: document.getElementById("sweep-price-basis").value || "adjusted_close",
+      };
+      const job = await ui.postJson("/api/backtests/sweeps/jobs", payload);
+      renderSweepJob(job);
+      if (job.status === "COMPLETED" && job.artifactId) {
+        const artifact = await ui.fetchJson(`/api/backtests/sweeps/runs/${encodeURIComponent(job.artifactId)}`);
+        renderSweepArtifact(artifact);
+        return;
+      }
+      await pollSweepJob(job.jobId);
+    });
+
+    document.getElementById("sweep-refresh-button").addEventListener("click", async () => {
+      await loadLatestSweep();
+    });
+
+    document.getElementById("sweep-model").addEventListener("change", async () => {
+      await loadLatestSweep();
+    });
+
+    document.getElementById("sweep-price-basis").addEventListener("change", async () => {
+      await loadLatestSweep();
+    });
+
+    document.getElementById("sweep-box-axis").addEventListener("change", () => {
+      if (state.sweepArtifact) {
+        renderSweepArtifact(state.sweepArtifact);
+      }
+    });
+
+    document.getElementById("sweep-filter-apply").addEventListener("click", () => {
+      if (state.sweepArtifact) {
+        renderSweepArtifact(state.sweepArtifact);
+      }
+    });
+
+    document.getElementById("sweep-filter-reset").addEventListener("click", () => {
+      document.getElementById("sweep-filter-min-return").value = "0";
+      document.getElementById("sweep-filter-max-mdd").value = "-100";
+      document.getElementById("sweep-filter-max-std").value = "100";
+      document.getElementById("sweep-filter-pareto").value = "all";
+      if (state.sweepArtifact) {
+        renderSweepArtifact(state.sweepArtifact);
+      }
     });
   });
 })();

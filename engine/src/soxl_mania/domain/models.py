@@ -61,11 +61,14 @@ class DataImportReport:
 @dataclass
 class StrategyConfig:
     symbol: str = "SOXL"
-    thread_count: int = 5
+    thread_count: int = 7
     stop_sessions: int = 30
     entry_rule: str = "close_lt_previous_close"
     max_entries_per_session: int = 1
+    take_profit_pct: Decimal = D("0")
     take_profit_operator: str = "gt"
+    entry_drop_pct: Decimal = D("0")
+    stop_loss_pct: Decimal = D("0")
     profit_precedes_stop: bool = True
     event_order: EventOrder = EventOrder.EXITS_THEN_ENTRY
     allow_same_session_thread_reuse: bool = True
@@ -84,8 +87,12 @@ class StrategyConfig:
     @classmethod
     def from_mapping(cls, mapping: dict[str, Any]) -> "StrategyConfig":
         payload = dict(mapping)
-        payload["thread_count"] = int(payload.get("thread_count", 5))
+        payload["thread_count"] = int(payload.get("thread_count", 7))
         payload["stop_sessions"] = int(payload.get("stop_sessions", 30))
+        payload["max_entries_per_session"] = int(payload.get("max_entries_per_session", 1))
+        payload["take_profit_pct"] = D(payload.get("take_profit_pct", 0))
+        payload["entry_drop_pct"] = D(payload.get("entry_drop_pct", 0))
+        payload["stop_loss_pct"] = D(payload.get("stop_loss_pct", 0))
         payload["initial_capital"] = D(payload.get("initial_capital", "10000"))
         payload["commission_bps"] = D(payload.get("commission_bps", 0))
         payload["slippage_bps"] = D(payload.get("slippage_bps", 0))
@@ -109,6 +116,10 @@ class StrategyConfig:
                 "stop_sessions": self.stop_sessions,
                 "entry_rule": self.entry_rule,
                 "max_entries_per_session": self.max_entries_per_session,
+                "take_profit_pct": str(self.take_profit_pct),
+                "take_profit_operator": self.take_profit_operator,
+                "entry_drop_pct": str(self.entry_drop_pct),
+                "stop_loss_pct": str(self.stop_loss_pct),
                 "event_order": self.event_order.value,
                 "allow_same_session_thread_reuse": self.allow_same_session_thread_reuse,
                 "thread_selector": self.thread_selector.value,

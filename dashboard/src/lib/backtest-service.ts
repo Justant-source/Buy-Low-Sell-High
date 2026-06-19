@@ -1,30 +1,43 @@
+import { createHash } from "node:crypto";
+
 import { HttpError } from "./http.js";
 import { getDataStatus } from "./data-service.js";
 import { defaultCsvPath } from "./paths.js";
 import { getProfileDefinition } from "./profiles.js";
 import { runCliJson } from "./python.js";
+import { getResearchStore, newResearchArtifactId } from "./research-store.js";
 import {
   listJobs,
-  loadMentorMatrixArtifact,
   listRunArtifacts,
   loadJob,
+  loadMentorMatrixArtifact,
   loadRunArtifact,
   newJobId,
-  saveMentorMatrixArtifact,
   saveJob,
+  saveMentorMatrixArtifact,
   saveRunArtifact,
 } from "./runtime-store.js";
 import type {
+  BacktestDetailPayload,
   BacktestOverrides,
   BacktestRiskPayload,
-  BacktestDetailPayload,
   DashboardJobRecord,
   GridCellPayload,
   MentorMatrixPayload,
+  ParameterSweepPayload,
   PersistedRunArtifact,
   ProfilePayload,
   ProfileShowPayload,
+  ResearchArtifactRecord,
+  StrategyExplorerPayload,
 } from "./types.js";
+
+const STRATEGY_EXPLORER_VERSION = "strategy-explorer-v1";
+const PARAMETER_SWEEP_VERSION = "parameter-sweep-v1";
+const DEFAULT_RESEARCH_EXECUTION_MODEL = "next_open";
+const DEFAULT_RESEARCH_PRICE_BASIS = "adjusted_close";
+const DEFAULT_STRATEGY_CATALOG_ID = "core_profiles_v1";
+const DEFAULT_SWEEP_ID = "core6_v1";
 
 export interface BacktestJobInput {
   profileId: string;
@@ -49,6 +62,24 @@ export interface MentorMatrixInput {
   threads: number[];
   stops: number[];
   overrides?: BacktestOverrides;
+}
+
+export interface StrategyExplorerInput {
+  profileId: string;
+  csvPath?: string;
+  initialCapital?: number;
+  catalogId?: string;
+  executionModel?: string;
+  priceBasis?: string;
+}
+
+export interface SweepJobInput {
+  profileId: string;
+  csvPath?: string;
+  initialCapital?: number;
+  sweepId?: string;
+  executionModel?: string;
+  priceBasis?: string;
 }
 
 function buildOverrideArgs(
@@ -88,6 +119,24 @@ function buildOverrideArgs(
   if (overrides.priceBasis) {
     args.push("--price-basis", overrides.priceBasis);
   }
+  return args;
+}
+
+function buildResearchArgs(input: {
+  catalogId?: string;
+  sweepId?: string;
+  executionModel?: string;
+  priceBasis?: string;
+}): string[] {
+  const args: string[] = [];
+  if (input.catalogId) {
+    args.push("--catalog-id", input.catalogId);
+  }
+  if (input.sweepId) {
+    args.push("--sweep-id", input.sweepId);
+  }
+  args.push("--execution-model", input.executionModel ?? DEFAULT_RESEARCH_EXECUTION_MODEL);
+  args.push("--price-basis", input.priceBasis ?? DEFAULT_RESEARCH_PRICE_BASIS);
   return args;
 }
 
@@ -166,6 +215,114 @@ function summarizeArtifact(artifact: PersistedRunArtifact): Record<string, unkno
   };
 }
 
+function shortDigest(parts: Array<string | number | undefined | null>): string {
+  const raw = parts.map((part) => String(part ?? "")).join(":");
+  return createHash("sha256").update(raw).digest("hex");
+}
+
+function makeStrategyArtifactKey(input: {
+  profileId: string;
+  csvPath: string;
+  dataHash: string;
+  initialCapital: number;
+  executionModel: string;
+  priceBasis: string;
+  catalogId: string;
+}): string {
+  return shortDigest([
+    STRATEGY_EXPLORER_VERSION,
+    input.profileId,
+    input.csvPath,
+    input.dataHash,
+    input.initialCapital,
+    input.executionModel,
+    input.priceBasis,
+    input.catalogId,
+  ]);
+}
+
+function makeSweepArtifactKey(input: {
+  profileId: string;
+  csvPath: string;
+  dataHash: string;
+  initialCapital: number;
+  executionModel: string;
+  priceBasis: string;
+  sweepId: string;
+}): string {
+  return shortDigest([
+    PARAMETER_SWEEP_VERSION,
+    input.profileId,
+    input.csvPath,
+    input.dataHash,
+    input.initialCapital,
+    input.executionModel,
+    input.priceBasis,
+    input.sweepId,
+  ]);
+}
+
+async function saveStrategyArtifact(
+  payload: StrategyExplorerPayload,
+  input: {
+    artifactKey: string;
+    profileId: string;
+    symbol: string;
+    csvPath: string;
+  },
+): Promise<ResearchArtifactRecord<StrategyExplorerPayload>> {
+  const store = await getResearchStore();
+  return store.saveArtifact<StrategyExplorerPayload>({
+    artifactId: newResearchArtifactId(),
+    artifactKey: input.artifactKey,
+    kind: "STRATEGY_EXPLORER",
+    profileId: input.profileId,
+    symbol: input.symbol,
+    csvPath: input.csvPath,
+    executionModel: payload.meta.execution_model,
+    priceBasis: payload.meta.price_basis,
+    dataHash: payload.meta.data_hash,
+    codeCommit: payload.meta.code_commit,
+    createdAt: new Date().toISOString(),
+    catalogId: payload.meta.catalog_id,
+    catalogHash: payload.meta.catalog_hash,
+    payloadHash: payload.meta.catalog_hash,
+    payload,
+  });
+}
+
+async function saveSweepArtifact(
+  payload: ParameterSweepPayload,
+  input: {
+    artifactKey: string;
+    profileId: string;
+    symbol: string;
+    csvPath: string;
+  },
+): Promise<ResearchArtifactRecord<ParameterSweepPayload>> {
+  const store = await getResearchStore();
+  return store.saveArtifact<ParameterSweepPayload>(
+    {
+      artifactId: newResearchArtifactId(),
+      artifactKey: input.artifactKey,
+      kind: "PARAMETER_SWEEP",
+      profileId: input.profileId,
+      symbol: input.symbol,
+      csvPath: input.csvPath,
+      executionModel: payload.meta.execution_model,
+      priceBasis: payload.meta.price_basis,
+      dataHash: payload.meta.data_hash,
+      codeCommit: payload.meta.code_commit,
+      createdAt: new Date().toISOString(),
+      sweepId: payload.meta.sweep_id,
+      sweepHash: payload.meta.sweep_hash,
+      payloadHash: payload.payload_hash,
+      payload,
+    },
+    payload.rows,
+  );
+}
+
 export class BacktestService {
   private readonly queuedJobIds = new Set<string>();
   private running = false;
@@ -196,6 +353,7 @@ export class BacktestService {
       finishedAt: null,
       progress: 0,
       runId: null,
+      artifactId: null,
       error: null,
       overrides: input.overrides,
     };
@@ -203,6 +361,135 @@ export class BacktestService {
     this.queuedJobIds.add(job.jobId);
     void this.drainQueue();
     return job;
+  }
+
+  async createSweepJob(input: SweepJobInput): Promise<DashboardJobRecord> {
+    const initialCapital = input.initialCapital ?? 10000;
+    const profile = getProfileDefinition(input.profileId);
+    if (!profile) {
+      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
+    }
+    const csvPath = input.csvPath ?? defaultCsvPath;
+    const executionModel = input.executionModel ?? DEFAULT_RESEARCH_EXECUTION_MODEL;
+    const priceBasis = input.priceBasis ?? DEFAULT_RESEARCH_PRICE_BASIS;
+    const sweepId = input.sweepId ?? DEFAULT_SWEEP_ID;
+    const [profilePayload, dataStatus, store] = await Promise.all([
+      resolveProfilePayload(input.profileId, initialCapital),
+      getDataStatus(csvPath, profile.symbol),
+      getResearchStore(),
+    ]);
+    const artifactKey = makeSweepArtifactKey({
+      profileId: input.profileId,
+      csvPath,
+      dataHash: dataStatus.data_hash,
+      initialCapital,
+      executionModel,
+      priceBasis,
+      sweepId,
+    });
+    const cached = await store.findByKey<ParameterSweepPayload>(artifactKey);
+    const now = new Date().toISOString();
+    const job: DashboardJobRecord = {
+      jobId: newJobId(),
+      kind: "BACKTEST_SWEEP",
+      status: cached ? "COMPLETED" : "QUEUED",
+      profileId: input.profileId,
+      symbol: profile.symbol,
+      csvPath,
+      initialCapital,
+      configHash: profilePayload.configHash,
+      dataHash: dataStatus.data_hash,
+      requestedAt: now,
+      startedAt: cached ? now : null,
+      finishedAt: cached ? now : null,
+      progress: cached ? 100 : 0,
+      runId: null,
+      artifactId: cached?.artifactId ?? null,
+      error: null,
+      sweepId,
+      executionModel,
+      priceBasis,
+    };
+    await saveJob(job);
+    if (!cached) {
+      this.queuedJobIds.add(job.jobId);
+      void this.drainQueue();
+    }
+    return job;
+  }
+
+  async strategyExplorer(input: StrategyExplorerInput): Promise<StrategyExplorerPayload> {
+    const initialCapital = input.initialCapital ?? 10000;
+    const profile = getProfileDefinition(input.profileId);
+    if (!profile) {
+      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
+    }
+    const csvPath = input.csvPath ?? defaultCsvPath;
+    const catalogId = input.catalogId ?? DEFAULT_STRATEGY_CATALOG_ID;
+    const executionModel = input.executionModel ?? DEFAULT_RESEARCH_EXECUTION_MODEL;
+    const priceBasis = input.priceBasis ?? DEFAULT_RESEARCH_PRICE_BASIS;
+    const [dataStatus, store] = await Promise.all([getDataStatus(csvPath, profile.symbol), getResearchStore()]);
+    const artifactKey = makeStrategyArtifactKey({
+      profileId: input.profileId,
+      csvPath,
+      dataHash: dataStatus.data_hash,
+      initialCapital,
+      executionModel,
+      priceBasis,
+      catalogId,
+    });
+    const cached = await store.findByKey<StrategyExplorerPayload>(artifactKey);
+    if (cached) {
+      return cached.payload;
+    }
+    const payload = await runCliJson<StrategyExplorerPayload>([
+      "backtest",
+      "strategy-explorer",
+      "--profile",
+      profile.profilePath,
+      "--csv",
+      csvPath,
+      "--symbol",
+      profile.symbol,
+      "--initial-capital",
+      String(initialCapital),
+      ...buildResearchArgs({ catalogId, executionModel, priceBasis }),
+    ]);
+    await saveStrategyArtifact(payload, {
+      artifactKey,
+      profileId: input.profileId,
+      symbol: profile.symbol,
+      csvPath,
+    });
+    return payload;
+  }
+
+  async getLatestSweep(input: SweepJobInput): Promise<ResearchArtifactRecord<ParameterSweepPayload> | null> {
+    const profile = getProfileDefinition(input.profileId);
+    if (!profile) {
+      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
+    }
+    const csvPath = input.csvPath ?? defaultCsvPath;
+    const executionModel = input.executionModel ?? DEFAULT_RESEARCH_EXECUTION_MODEL;
+    const priceBasis = input.priceBasis ?? DEFAULT_RESEARCH_PRICE_BASIS;
+    const sweepId = input.sweepId ?? DEFAULT_SWEEP_ID;
+    const [dataStatus, store] = await Promise.all([getDataStatus(csvPath, profile.symbol), getResearchStore()]);
+    return store.loadLatestSweep<ParameterSweepPayload>({
+      sweepId,
+      csvPath,
+      executionModel,
+      priceBasis,
+      dataHash: dataStatus.data_hash,
+    });
+  }
+
+  async getSweepArtifact(artifactId: string): Promise<ResearchArtifactRecord<ParameterSweepPayload>> {
+    const store = await getResearchStore();
+    const artifact = await store.loadArtifact<ParameterSweepPayload>(artifactId);
+    if (!artifact) {
+      throw new HttpError(404, `Unknown sweep artifactId: ${artifactId}`);
+    }
+    return artifact;
   }
 
   async getJob(jobId: string): Promise<DashboardJobRecord> {
@@ -383,6 +670,14 @@ export class BacktestService {
     if (!job || job.status !== "QUEUED") {
       return;
     }
+    if (job.kind === "BACKTEST_SWEEP") {
+      await this.executeSweepJob(job);
+      return;
+    }
+    await this.executeBacktestJob(job);
+  }
+
+  private async executeBacktestJob(job: DashboardJobRecord): Promise<void> {
     const profile = getProfileDefinition(job.profileId);
     if (!profile) {
       job.status = "FAILED";
@@ -433,6 +728,69 @@ export class BacktestService {
       job.progress = 100;
       job.finishedAt = new Date().toISOString();
       job.error = error instanceof Error ? error.message : "Unknown backtest failure";
+      await saveJob(job);
+    }
+  }
+
+  private async executeSweepJob(job: DashboardJobRecord): Promise<void> {
+    const profile = getProfileDefinition(job.profileId);
+    if (!profile) {
+      job.status = "FAILED";
+      job.error = `Unknown profileId: ${job.profileId}`;
+      job.finishedAt = new Date().toISOString();
+      job.progress = 100;
+      await saveJob(job);
+      return;
+    }
+    const sweepId = job.sweepId ?? DEFAULT_SWEEP_ID;
+    const executionModel = job.executionModel ?? DEFAULT_RESEARCH_EXECUTION_MODEL;
+    const priceBasis = job.priceBasis ?? DEFAULT_RESEARCH_PRICE_BASIS;
+    job.status = "RUNNING";
+    job.startedAt = new Date().toISOString();
+    job.progress = 10;
+    await saveJob(job);
+
+    try {
+      const dataStatus = await getDataStatus(job.csvPath, profile.symbol);
+      const artifactKey = makeSweepArtifactKey({
+        profileId: job.profileId,
+        csvPath: job.csvPath,
+        dataHash: dataStatus.data_hash,
+        initialCapital: job.initialCapital,
+        executionModel,
+        priceBasis,
+        sweepId,
+      });
+      const payload = await runCliJson<ParameterSweepPayload>([
+        "backtest",
+        "parameter-sweep",
+        "--profile",
+        profile.profilePath,
+        "--csv",
+        job.csvPath,
+        "--symbol",
+        job.symbol,
+        "--initial-capital",
+        String(job.initialCapital),
+        ...buildResearchArgs({ sweepId, executionModel, priceBasis }),
+      ]);
+      const artifact = await saveSweepArtifact(payload, {
+        artifactKey,
+        profileId: job.profileId,
+        symbol: job.symbol,
+        csvPath: job.csvPath,
+      });
+      job.status = "COMPLETED";
+      job.progress = 100;
+      job.finishedAt = new Date().toISOString();
+      job.artifactId = artifact.artifactId;
+      job.error = null;
+      await saveJob(job);
+    } catch (error) {
+      job.status = "FAILED";
+      job.progress = 100;
+      job.finishedAt = new Date().toISOString();
+      job.error = error instanceof Error ? error.message : "Unknown sweep failure";
       await saveJob(job);
     }
   }

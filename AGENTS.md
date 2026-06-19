@@ -26,6 +26,6 @@
 ## Workflow
 - Work on one plan Phase at a time.
 - Do not implement later-phase features unless required by the current Phase.
+- Default to parallel execution for independent work. Use up to 8 parallel sub-agents/tool tasks when the work can be safely split.
 - Run the Phase Gate commands and report the results.
 - Never skip or weaken failing tests.
-

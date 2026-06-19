@@ -73,6 +73,33 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
   const router = Router();
 
   router.get(
+    "/strategy-explorer",
+    asyncHandler(async (req, res) => {
+      const profileId = typeof req.query.profileId === "string" ? req.query.profileId : defaultProfileId;
+      const csvPath = typeof req.query.csvPath === "string" && req.query.csvPath.trim() !== "" ? req.query.csvPath : undefined;
+      const initialCapital = parseNumber(req.query.initialCapital, 10000);
+      const executionModel = parseOptionalEnumField(req.query.executionModel, "executionModel", [
+        "ideal_same_close",
+        "next_open",
+        "next_close",
+      ]);
+      const priceBasis = parseOptionalEnumField(req.query.priceBasis, "priceBasis", [
+        "adjusted_close",
+        "raw_close_with_actions",
+      ]);
+      res.json(
+        await backtestService.strategyExplorer({
+          profileId,
+          csvPath,
+          initialCapital,
+          executionModel,
+          priceBasis,
+        }),
+      );
+    }),
+  );
+
+  router.get(
     "/",
     asyncHandler(async (_req, res) => {
       res.json(await backtestService.getOverview());
@@ -90,6 +117,74 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
         overrides: parseOverrides((body.overrides ?? {}) as Record<string, unknown>),
       });
       res.status(202).json(job);
+    }),
+  );
+
+  router.get(
+    "/sweeps/latest",
+    asyncHandler(async (req, res) => {
+      const profileId = typeof req.query.profileId === "string" ? req.query.profileId : defaultProfileId;
+      const csvPath = typeof req.query.csvPath === "string" && req.query.csvPath.trim() !== "" ? req.query.csvPath : undefined;
+      const initialCapital = parseNumber(req.query.initialCapital, 10000);
+      const executionModel = parseOptionalEnumField(req.query.executionModel, "executionModel", [
+        "ideal_same_close",
+        "next_open",
+        "next_close",
+      ]);
+      const priceBasis = parseOptionalEnumField(req.query.priceBasis, "priceBasis", [
+        "adjusted_close",
+        "raw_close_with_actions",
+      ]);
+      const sweepId = typeof req.query.sweepId === "string" && req.query.sweepId.trim() !== "" ? req.query.sweepId : undefined;
+      res.json(
+        await backtestService.getLatestSweep({
+          profileId,
+          csvPath,
+          initialCapital,
+          executionModel,
+          priceBasis,
+          sweepId,
+        }),
+      );
+    }),
+  );
+
+  router.post(
+    "/sweeps/jobs",
+    asyncHandler(async (req, res) => {
+      const body = req.body ?? {};
+      const executionModel = parseOptionalEnumField(body.executionModel, "executionModel", [
+        "ideal_same_close",
+        "next_open",
+        "next_close",
+      ]);
+      const priceBasis = parseOptionalEnumField(body.priceBasis, "priceBasis", [
+        "adjusted_close",
+        "raw_close_with_actions",
+      ]);
+      const job = await backtestService.createSweepJob({
+        profileId: requireString(body.profileId, "profileId"),
+        csvPath: typeof body.csvPath === "string" && body.csvPath.trim() !== "" ? body.csvPath : undefined,
+        initialCapital: parseNumber(body.initialCapital, 10000),
+        sweepId: typeof body.sweepId === "string" && body.sweepId.trim() !== "" ? body.sweepId : undefined,
+        executionModel,
+        priceBasis,
+      });
+      res.status(202).json(job);
+    }),
+  );
+
+  router.get(
+    "/sweeps/jobs/:jobId",
+    asyncHandler(async (req, res) => {
+      res.json(await backtestService.getJob(requireString(req.params.jobId, "jobId")));
+    }),
+  );
+
+  router.get(
+    "/sweeps/runs/:artifactId",
+    asyncHandler(async (req, res) => {
+      res.json(await backtestService.getSweepArtifact(requireString(req.params.artifactId, "artifactId")));
     }),
   );
 

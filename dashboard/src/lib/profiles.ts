@@ -5,6 +5,17 @@ import type { ProfileDefinition } from "./types.js";
 
 const PROFILES: ProfileDefinition[] = [
   {
+    profileId: "mentor_default_7x30",
+    name: "Mentor Default 7x30",
+    description: "Dashboard default profile for tunable SOXL daily-close research with 7 threads and 30-session stops.",
+    profilePath: path.join(configsRoot, "mentor_default_7x30.yaml"),
+    symbol: "SOXL",
+    threadCount: 7,
+    stopSessions: 30,
+    priceBasis: "adjusted_close",
+    executionModel: "ideal_same_close",
+  },
+  {
     profileId: "mentor_default_5x30",
     name: "Mentor Default 5x30",
     description: "Baseline mentor profile for SOXL daily-close research and manual operations.",

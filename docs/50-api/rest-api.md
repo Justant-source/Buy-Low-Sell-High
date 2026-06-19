@@ -19,6 +19,10 @@
 ## 백테스트
 - `GET /api/backtests`
   - 최근 작업, 경량 실행 요약, 최신 전체 실행 산출물을 반환한다.
+- `GET /api/backtests/strategy-explorer`
+  - `/home/justant/Data/Bit-Mania/backtest/dashboards/strategy_dashboard.html`을 계속 참조하는 고정 `core_profiles_v1` 9전략 비교 payload를 반환한다.
+  - 기본 실행 모델은 `next_open`, 기본 가격 기준은 `adjusted_close`다.
+  - 전체 기간 canonical 실행을 전략별로 1회만 수행한 뒤 일별 곡선, 연도별 요약, 월별 수익, 구간별 요약을 반환한다.
 - `POST /api/backtests/jobs`
   - 단일 상세 백테스트 실행을 위한 대기열 작업을 생성한다.
 - `GET /api/backtests/jobs/:jobId`
@@ -33,6 +37,15 @@
   - `meta`, 런타임 `actual` 백테스트 값, 비교용 고정 `reference` 값, parity 상태를 포함한 멘토 매트릭스 payload를 반환한다.
 - `GET /api/backtests/risk`
   - `ideal_same_close`, `next_open`, `next_close`를 비교하는 리스크 리포트와 비용 민감도, 회복 기간, 레버리지 ETF 경고 문구를 반환한다.
+- `POST /api/backtests/sweeps/jobs`
+  - `/home/justant/Data/Bit-Mania/backtest/dashboards/supertrend_sweep_dashboard.html`을 계속 참조하는 `core6_v1` 파라미터 스윕 작업을 생성한다.
+  - 작업 종류는 `BACKTEST_SWEEP`이며, 결과는 PostgreSQL 연구 산출물로 저장된다.
+- `GET /api/backtests/sweeps/jobs/:jobId`
+  - sweep 작업 상태와 완료 시 `artifactId`를 반환한다.
+- `GET /api/backtests/sweeps/latest`
+  - 동일 `csv_path`, `execution_model`, `price_basis`, `data_hash`, `sweep_id` 조합의 최신 sweep 산출물을 반환한다.
+- `GET /api/backtests/sweeps/runs/:artifactId`
+  - `combo_count`, Pareto 플래그, 구간 강건성 지표, 상위 100개 콤보용 정렬 가능한 row 목록을 포함한 저장된 sweep 산출물을 반환한다.
 
 ## 수동 운용
 - `GET /api/manual/comparison`

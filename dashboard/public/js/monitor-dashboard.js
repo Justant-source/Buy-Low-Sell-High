@@ -1,6 +1,6 @@
 (function () {
   const ui = window.SOXLDashboard;
-  const DEFAULT_PROFILE = "mentor_default_5x30";
+  const DEFAULT_PROFILE = "mentor_default_7x30";
 
   function renderDataStatus(status) {
     ui.setText("kpi-rows", ui.formatNumber(status.rows));

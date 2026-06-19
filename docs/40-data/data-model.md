@@ -8,7 +8,16 @@
 - 기본 연구용 가격 기준으로는 `adj_close`가 필요하다. 동기화된 스냅샷이 전체 구간에서 `close`를 그대로 `adj_close`에 복제했다면, 적재 요약에서 adjusted-close parity를 지원할 수 없다는 경고가 나와야 한다.
 - `db/migrations/0001_initial.sql`에 PostgreSQL 마이그레이션 스켈레톤이 존재한다.
 - 수동 체결 기록은 시뮬레이션 백테스트와 분리되어야 한다.
-- 모든 백테스트 실행은 이미 `config_hash`와 `data_hash`를 계산한다.
+- 모든 백테스트 실행과 연구 산출물은 `config_hash`, `data_hash`, `code_commit`를 함께 보관해야 한다.
+- `backtest_research_artifacts`는 `Strategy Explorer`와 `Sweep Explorer`의 정규화된 저장소다.
+  - 공통 메타데이터: `artifact_key`, `artifact_kind`, `profile_id`, `symbol`, `csv_path`, `execution_model`, `price_basis`, `data_hash`, `code_commit`, `created_at`
+  - 선택 메타데이터: `catalog_id`, `catalog_hash`, `sweep_id`, `sweep_hash`, `payload_hash`
+  - 본문: `payload JSONB`
+- `backtest_research_sweep_rows`는 `core6_v1` sweep 결과를 row 단위로 펼쳐 저장한다.
+  - 파라미터 컬럼: `thread_count`, `stop_sessions`, `take_profit_pct`, `entry_drop_pct`, `stop_loss_pct`, `max_entries_per_session`
+  - 강건성 컬럼: `mean_segment_return_pct`, `segment_stddev_pct`, `worst_segment_return_pct`, `positive_segment_ratio_pct`, `recent_segment_return_pct`
+  - Pareto 컬럼: `pareto_return_mdd`, `pareto_return_stability`
+- 대시보드가 `DATABASE_URL` 없이 로컬 프로세스로 실행될 때만 in-memory fallback을 사용할 수 있으며, 공유 저장소로 간주하지 않는다.
 - 고정된 멘토 레퍼런스 화면 fixture는 `engine/tests/fixtures/mentor_reference_matrix.yaml`에 위치한다.
 - 멘토 매트릭스는 두 가지 결과 계열을 구분한다.
   - 연도별 매트릭스 행과 연도별 카운트 행에 사용하는 연도 독립 실행

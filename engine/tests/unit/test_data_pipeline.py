@@ -11,6 +11,7 @@ from soxl_mania.data.providers.investing_provider import InvestingMarketDataProv
 from soxl_mania.data.providers.stooq_provider import StooqMarketDataProvider
 from soxl_mania.data.providers.yahoo_provider import YahooMarketDataProvider
 from soxl_mania.data.quality import apply_split_to_position, compute_data_hash, summarize_import, validate_bars
+from soxl_mania.domain.models import MarketBar
 from soxl_mania.domain.money import D
 
 
@@ -52,6 +53,25 @@ class DataPipelineTest(unittest.TestCase):
         report = summarize_import("SOXL", "csv", bars)
         self.assertEqual(report.rows, 5)
         self.assertTrue(report.data_hash)
+
+    def test_import_summary_warns_when_adjusted_close_is_raw_equivalent(self) -> None:
+        bars = []
+        for day in range(1, 202):
+            bars.append(
+                MarketBar(
+                    symbol="SOXL",
+                    session_date=__import__("datetime").date(2024, 1, 1) + __import__("datetime").timedelta(days=day),
+                    open=D("10"),
+                    high=D("11"),
+                    low=D("9"),
+                    close=D("10"),
+                    adj_close=D("10"),
+                    volume=100,
+                    source="investing",
+                )
+            )
+        report = summarize_import("SOXL", "investing", bars)
+        self.assertIn("Adjusted-close basis appears unavailable: adj_close mirrors close for all rows", report.warnings)
 
     def test_yahoo_provider_falls_back_to_query2(self) -> None:
         payload = {

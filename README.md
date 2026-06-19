@@ -7,7 +7,9 @@ SOXL-Mania is a clean-room research and manual decision-support stack for the SO
 - SOXL daily history can be synced from 2011-01-01 onward into the canonical local CSV snapshot at `data/raw/soxl_daily_2011_present.csv`.
 - Network sync currently falls back in the order `Yahoo chart -> Investing historical API -> Stooq`.
 - Strategy logic, parity fixtures, and manual ledger workflows are available in the Python CLI.
-- The Express dashboard now serves Bit-Mania-style `monitor`, `backtests`, and `manual` pages backed by CLI-driven API routes, file-backed dashboard jobs, and manual ledger export / restore flows.
+- The Express dashboard now serves Bit-Mania-style `monitor`, `backtests`, and `manual` pages backed by CLI-driven API routes, file-backed dashboard jobs, PostgreSQL-backed research artifacts, and manual ledger export / restore flows.
+- The `backtests` tab now includes `Strategy Explorer` and `Sweep Explorer` sections for full-period strategy comparison and 6-parameter sweep analysis.
+- Ongoing UI and methodology reference must continue to use `/home/justant/Data/Bit-Mania`, especially `/home/justant/Data/Bit-Mania/backtest/dashboards/strategy_dashboard.html` and `/home/justant/Data/Bit-Mania/backtest/dashboards/supertrend_sweep_dashboard.html`.
 
 ## 8 Workstreams
 1. Foundation and safety guardrails
@@ -22,7 +24,7 @@ SOXL-Mania is a clean-room research and manual decision-support stack for the SO
 ## Repository Layout
 - `engine/`: Python package for the strategy and backtest engine
 - `dashboard/`: TypeScript Express dashboard, static multi-page UI, and CLI-backed API routes
-- `db/`: migrations placeholder
+- `db/`: PostgreSQL migrations for runtime tables and backtest research artifacts
 - `docs/`: architecture, policy, and planning documents
 - `scripts/`: static verification and documentation checks
 
@@ -53,6 +55,8 @@ PYTHONPATH=engine/src python3 -m soxl_mania.cli backtest run --profile configs/s
 ```
 
 Docker helper containers use the `soxlmania-` prefix, including `soxlmania-postgres`, `soxlmania-dashboard`, `soxlmania-engine-sync`, and `soxlmania-engine-backtest`.
+
+The dashboard container expects `DATABASE_URL` so `Strategy Explorer` and `Sweep Explorer` artifacts can be persisted in PostgreSQL.
 
 In the current Codex snap environment, the Docker CLI can be installed locally, but daemon access may still be blocked at `/var/run/docker.sock` by confinement rules.
 

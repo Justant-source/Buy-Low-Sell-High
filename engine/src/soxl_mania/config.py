@@ -33,11 +33,14 @@ def _parse_scalar(value: str) -> Any:
 
 
 def load_strategy_config(path: str | Path, *, initial_capital: float = 10_000.0) -> StrategyConfig:
+    return StrategyConfig.from_mapping(load_strategy_mapping(path, initial_capital=initial_capital))
+
+
+def load_strategy_mapping(path: str | Path, *, initial_capital: float = 10_000.0) -> dict[str, Any]:
     payload = load_simple_yaml(path)
     payload["initial_capital"] = payload.get("initial_capital", initial_capital)
-    return StrategyConfig.from_mapping(payload)
+    return payload
 
 
 def strategy_config_to_dict(config: StrategyConfig) -> dict[str, Any]:
     return asdict(config)
-

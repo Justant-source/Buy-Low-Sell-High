@@ -8,6 +8,18 @@ from ..domain.models import DataImportReport, MarketBar, utc_now
 from ..domain.money import D
 
 
+def _adjusted_close_warnings(bars: list[MarketBar]) -> list[str]:
+    if len(bars) < 200:
+        return []
+    if any(bar.adj_close != bar.close for bar in bars):
+        return []
+    if any(bar.dividend != D("0") for bar in bars):
+        return []
+    if any(bar.split_ratio != D("1") for bar in bars):
+        return []
+    return ["Adjusted-close basis appears unavailable: adj_close mirrors close for all rows"]
+
+
 def validate_bars(bars: list[MarketBar]) -> list[str]:
     warnings: list[str] = []
     seen_dates: set[object] = set()
@@ -48,7 +60,7 @@ def compute_data_hash(bars: list[MarketBar]) -> str:
 
 
 def summarize_import(symbol: str, source: str, bars: list[MarketBar]) -> DataImportReport:
-    warnings = validate_bars(bars)
+    warnings = validate_bars(bars) + _adjusted_close_warnings(bars)
     return DataImportReport(
         symbol=symbol,
         source=source,

@@ -50,6 +50,7 @@ services:
     command: ["node", "--experimental-strip-types", "src/server.ts"]
     environment:
       PORT: ${DASHBOARD_PORT:-3000}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-soxl_mania}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-soxl_mania}
     ports:
       - "${DASHBOARD_PORT:-3000}:3000"
     volumes:

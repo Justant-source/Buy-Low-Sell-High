@@ -2,7 +2,7 @@
   const ui = window.SOXLDashboard;
   const state = {
     profiles: [],
-    currentProfileId: "mentor_default_5x30",
+    currentProfileId: "mentor_default_7x30",
   };
 
   function currentProfileId() {

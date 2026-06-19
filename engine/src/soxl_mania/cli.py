@@ -21,7 +21,9 @@ from .manual.reconciliation import reconcile_ledger
 from .persistence.repositories import InMemoryJobRepository
 from .persistence.worker import run_once
 from .reporting.mentor_matrix import build_mentor_matrix, load_reference_fixture as load_mentor_matrix_reference
+from .reporting.parameter_sweep import build_parameter_sweep
 from .reporting.risk_report import build_risk_report
+from .reporting.strategy_explorer import build_strategy_explorer
 from .backtest.parity import ParityResult
 
 
@@ -345,6 +347,36 @@ def _parse_combo_csv(raw: str) -> tuple[int, ...]:
     return tuple(int(item.strip()) for item in raw.split(",") if item.strip())
 
 
+def _backtest_strategy_explorer(args: argparse.Namespace) -> int:
+    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    return _print_json(
+        build_strategy_explorer(
+            bars,
+            config,
+            data_hash=data_hash,
+            catalog_id=args.catalog_id,
+            execution_model=args.execution_model,
+            price_basis=args.price_basis,
+        )
+    )
+
+
+def _backtest_parameter_sweep(args: argparse.Namespace) -> int:
+    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    return _print_json(
+        build_parameter_sweep(
+            bars,
+            config,
+            data_hash=data_hash,
+            sweep_id=args.sweep_id,
+            execution_model=args.execution_model,
+            price_basis=args.price_basis,
+        )
+    )
+
+
 def _backtest_mentor_matrix(args: argparse.Namespace) -> int:
     config = _load_strategy_config_with_overrides(args)
     bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
@@ -547,6 +579,40 @@ def main() -> int:
     backtest_risk_parser.add_argument("--initial-capital", type=float, default=10000.0)
     _add_strategy_override_arguments(backtest_risk_parser)
     backtest_risk_parser.set_defaults(handler=_backtest_risk_report)
+    backtest_strategy_explorer_parser = backtest_subparsers.add_parser("strategy-explorer")
+    backtest_strategy_explorer_parser.add_argument("--profile", required=True)
+    _add_csv_argument(backtest_strategy_explorer_parser)
+    backtest_strategy_explorer_parser.add_argument("--symbol")
+    backtest_strategy_explorer_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    backtest_strategy_explorer_parser.add_argument("--catalog-id", default="core_profiles_v1")
+    backtest_strategy_explorer_parser.add_argument(
+        "--execution-model",
+        default="next_open",
+        choices=["ideal_same_close", "next_open", "next_close"],
+    )
+    backtest_strategy_explorer_parser.add_argument(
+        "--price-basis",
+        default="adjusted_close",
+        choices=["adjusted_close", "raw_close_with_actions"],
+    )
+    backtest_strategy_explorer_parser.set_defaults(handler=_backtest_strategy_explorer)
+    backtest_parameter_sweep_parser = backtest_subparsers.add_parser("parameter-sweep")
+    backtest_parameter_sweep_parser.add_argument("--profile", required=True)
+    _add_csv_argument(backtest_parameter_sweep_parser)
+    backtest_parameter_sweep_parser.add_argument("--symbol")
+    backtest_parameter_sweep_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    backtest_parameter_sweep_parser.add_argument("--sweep-id", default="core6_v1")
+    backtest_parameter_sweep_parser.add_argument(
+        "--execution-model",
+        default="next_open",
+        choices=["ideal_same_close", "next_open", "next_close"],
+    )
+    backtest_parameter_sweep_parser.add_argument(
+        "--price-basis",
+        default="adjusted_close",
+        choices=["adjusted_close", "raw_close_with_actions"],
+    )
+    backtest_parameter_sweep_parser.set_defaults(handler=_backtest_parameter_sweep)
     backtest_mentor_matrix_parser = backtest_subparsers.add_parser("mentor-matrix")
     backtest_mentor_matrix_parser.add_argument("--profile", required=True)
     _add_csv_argument(backtest_mentor_matrix_parser)

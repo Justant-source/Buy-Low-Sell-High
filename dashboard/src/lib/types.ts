@@ -235,6 +235,128 @@ export interface BacktestRiskPayload {
   warnings: string[];
 }
 
+export interface StrategySlicePresetPayload {
+  preset_id: string;
+  label: string;
+  start: string;
+  end: string;
+}
+
+export interface StrategyMonthlyRowPayload {
+  month: string;
+  start: string;
+  end: string;
+  start_equity: string;
+  end_equity: string;
+  pnl: string;
+  return_pct: string;
+  max_drawdown_pct: string;
+  session_count: number;
+}
+
+export interface StrategySegmentRowPayload {
+  segment_id: string;
+  label: string;
+  start: string;
+  end: string;
+  start_equity: string;
+  end_equity: string;
+  pnl: string;
+  return_pct: string;
+  max_drawdown_pct: string;
+  session_count: number;
+}
+
+export interface StrategyExplorerStrategyPayload {
+  strategy_id: string;
+  label: string;
+  thread_count: number;
+  stop_sessions: number;
+  mentor_profiles: string[];
+  config_hash: string;
+  metrics: Record<string, string | number>;
+  yearly: Record<string, Record<string, string | number>>;
+  monthly: StrategyMonthlyRowPayload[];
+  segments: StrategySegmentRowPayload[];
+  daily: DailyPointPayload[];
+}
+
+export interface StrategyExplorerPayload {
+  meta: {
+    catalog_id: string;
+    catalog_hash: string;
+    symbol: string;
+    initial_capital: string;
+    price_basis: string;
+    execution_model: string;
+    period_start: string;
+    period_end: string;
+    data_hash: string;
+    code_commit: string;
+    slice_presets: StrategySlicePresetPayload[];
+    segment_presets: StrategySlicePresetPayload[];
+  };
+  strategies: StrategyExplorerStrategyPayload[];
+}
+
+export interface ParameterSweepRowPayload {
+  combo_key: string;
+  config_hash: string;
+  params: {
+    thread_count: number;
+    stop_sessions: number;
+    take_profit_pct: number;
+    entry_drop_pct: number;
+    stop_loss_pct: number;
+    max_entries_per_session: number;
+  };
+  metrics: {
+    full_return_pct: number;
+    max_drawdown_pct: number;
+    volatility_pct: number;
+    trade_count: number;
+    mean_segment_return_pct: number;
+    segment_stddev_pct: number;
+    worst_segment_return_pct: number;
+    positive_segment_ratio_pct: number;
+    recent_segment_return_pct: number;
+  };
+  yearly_returns_pct: Record<string, number>;
+  segment_returns_pct: Record<string, number>;
+  flags: {
+    pareto_return_mdd: boolean;
+    pareto_return_stability: boolean;
+  };
+}
+
+export interface ParameterSweepPayload {
+  meta: {
+    sweep_id: string;
+    sweep_hash: string;
+    symbol: string;
+    initial_capital: string;
+    execution_model: string;
+    price_basis: string;
+    period_start: string;
+    period_end: string;
+    data_hash: string;
+    code_commit: string;
+    combo_count: number;
+    segment_presets: StrategySlicePresetPayload[];
+    parameter_values: Record<string, number[]>;
+  };
+  summary: {
+    best_full_return_combo: string;
+    best_robust_combo: string;
+    pareto_return_mdd_count: number;
+    pareto_return_stability_count: number;
+    ranking_basis: string;
+  };
+  warnings: string[];
+  rows: ParameterSweepRowPayload[];
+  payload_hash: string;
+}
+
 export interface ManualRecommendationPayload {
   thread_id: number;
   action: string;
@@ -290,10 +412,11 @@ export interface ManualLedgerPayload {
 }
 
 export type DashboardJobStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
+export type DashboardJobKind = "BACKTEST" | "BACKTEST_SWEEP";
 
 export interface DashboardJobRecord {
   jobId: string;
-  kind: "BACKTEST";
+  kind: DashboardJobKind;
   status: DashboardJobStatus;
   profileId: string;
   symbol: string;
@@ -306,7 +429,12 @@ export interface DashboardJobRecord {
   finishedAt: string | null;
   progress: number;
   runId: string | null;
+  artifactId?: string | null;
   error: string | null;
+  sweepId?: string;
+  catalogId?: string;
+  executionModel?: string;
+  priceBasis?: string;
   overrides?: BacktestOverrides;
 }
 
@@ -319,4 +447,26 @@ export interface PersistedRunArtifact {
   dataHash: string;
   configHash: string;
   payload: BacktestDetailPayload;
+}
+
+export type ResearchArtifactKind = "STRATEGY_EXPLORER" | "PARAMETER_SWEEP";
+
+export interface ResearchArtifactRecord<TPayload> {
+  artifactId: string;
+  artifactKey: string;
+  kind: ResearchArtifactKind;
+  profileId: string;
+  symbol: string;
+  csvPath: string;
+  executionModel: string;
+  priceBasis: string;
+  dataHash: string;
+  codeCommit: string;
+  createdAt: string;
+  catalogId?: string | null;
+  sweepId?: string | null;
+  catalogHash?: string | null;
+  sweepHash?: string | null;
+  payloadHash?: string | null;
+  payload: TPayload;
 }

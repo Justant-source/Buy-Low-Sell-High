@@ -8,6 +8,12 @@ from ..domain.models import BacktestRun, DailySnapshot, Trade
 from ..domain.money import D, ZERO, quantize_money
 
 
+def _is_stop(trade: Trade) -> bool:
+    if not trade.close_reason:
+        return False
+    return trade.close_reason.value in {"TIME_STOP", "PRICE_STOP"}
+
+
 def _series_returns(daily: list[DailySnapshot]) -> list[float]:
     if len(daily) < 2:
         return []
@@ -38,7 +44,7 @@ def compute_metrics(run: BacktestRun) -> dict[str, Decimal | int | str]:
     returns = _series_returns(daily)
     volatility = _stddev(returns)
     tp = sum(1 for trade in run.trades if trade.close_reason and trade.close_reason.value == "TAKE_PROFIT")
-    ts = sum(1 for trade in run.trades if trade.close_reason and trade.close_reason.value == "TIME_STOP")
+    ts = sum(1 for trade in run.trades if _is_stop(trade))
     return {
         "total_return_pct": total_return_pct,
         "max_drawdown_pct": quantize_money(max_drawdown * D("100")),
@@ -64,7 +70,6 @@ def yearly_summary(run: BacktestRun) -> dict[int, dict[str, Decimal | int | str]
             "return_pct": return_pct,
             "mdd_pct": quantize_money(min(snapshot.drawdown for snapshot in snapshots) * D("100")),
             "take_profit_count": sum(1 for trade in run.trades if trade.fill_exit_date and trade.fill_exit_date.year == year and trade.close_reason and trade.close_reason.value == "TAKE_PROFIT"),
-            "time_stop_count": sum(1 for trade in run.trades if trade.fill_exit_date and trade.fill_exit_date.year == year and trade.close_reason and trade.close_reason.value == "TIME_STOP"),
+            "time_stop_count": sum(1 for trade in run.trades if trade.fill_exit_date and trade.fill_exit_date.year == year and _is_stop(trade)),
         }
     return summary
-

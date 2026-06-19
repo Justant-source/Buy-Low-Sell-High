@@ -22,6 +22,7 @@ class PriceBasis(str, Enum):
 
 class CloseReason(str, Enum):
     TAKE_PROFIT = "TAKE_PROFIT"
+    PRICE_STOP = "PRICE_STOP"
     TIME_STOP = "TIME_STOP"
     END_OF_TEST = "END_OF_TEST"
 
@@ -60,4 +61,3 @@ class RecommendationAction(str, Enum):
     TIME_STOP = "TIME_STOP"
     HOLD = "HOLD"
     NO_ACTION = "NO_ACTION"
-
