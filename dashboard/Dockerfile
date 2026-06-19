@@ -14,6 +14,6 @@ COPY data /app/data
 RUN npm ci --no-fund --no-audit
 RUN npm run build
 
-EXPOSE 3000
+EXPOSE 3232
 
 CMD ["node", "dist/server.js"]

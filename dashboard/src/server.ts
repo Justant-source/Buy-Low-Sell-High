@@ -11,7 +11,7 @@ import { createManualRouter } from "./routes/manual.js";
 import { createProfilesRouter } from "./routes/profiles.js";
 
 const app = express();
-const port = Number(process.env.PORT ?? process.env.DASHBOARD_PORT ?? 3000);
+const port = Number(process.env.PORT ?? process.env.DASHBOARD_PORT ?? 3232);
 const backtestService = new BacktestService();
 const startedAt = Date.now();
 

@@ -61,9 +61,10 @@ The dashboard container expects `DATABASE_URL` so `Strategy Explorer` and `Sweep
 In the current Codex snap environment, the Docker CLI can be installed locally, but daemon access may still be blocked at `/var/run/docker.sock` by confinement rules.
 
 ## Dashboard Routes
-- `http://localhost:3000/monitor`
-- `http://localhost:3000/backtests`
-- `http://localhost:3000/manual`
+- Default dashboard port: `3232`
+- `http://localhost:3232/monitor`
+- `http://localhost:3232/backtests`
+- `http://localhost:3232/manual`
 
 The default landing page is `/backtests`.
 

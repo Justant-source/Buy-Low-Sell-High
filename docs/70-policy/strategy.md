@@ -13,6 +13,7 @@
 - `ideal_same_close` 연구용 출력과 현실적인 수동 체결 출력은 분리한다.
 
 ## 현재 전략 참조 문서
+- **전략 SSOT (매매 로직·파라미터·백테스트 준거)**: `docs/70-policy/ddeolsao-pal-ssot.md`
 - 실행 가능한 기준 의미론: `docs/90-adr/0001-mentor-semantics.md`
 - 멘토 화면 및 parity 의미론: `docs/90-adr/0002-mentor-reference-screen.md`
 - 멘토 전략과 구현 전략 비교: `docs/70-policy/mentor-vs-implemented-strategy.md`
