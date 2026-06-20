@@ -18,7 +18,7 @@ from ..domain.models import (
     compute_trade_pnl,
     new_run_id,
 )
-from ..domain.money import D, ZERO, quantize_money, quantize_shares
+from ..domain.money import D, ZERO, quantize_entry_shares, quantize_money, quantize_shares
 
 
 @dataclass
@@ -79,6 +79,13 @@ def _apply_split(thread: CapitalThread, split_ratio: Decimal) -> None:
     thread.entry_price = thread.entry_price / split_ratio
 
 
+def _entry_shares(budget: Decimal, executed_price: Decimal) -> Decimal:
+    shares = quantize_entry_shares(D(budget) / D(executed_price))
+    if shares <= ZERO:
+        raise ValueError("Entry budget is insufficient to buy one whole share")
+    return shares
+
+
 def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: str = "adhoc") -> BacktestRun:
     if not bars:
         raise ValueError("No bars provided")
@@ -120,7 +127,7 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                         is_buy=True,
                     )
                     budget = entry_budget(config, thread, _equity(threads, session_price), initial_thread_principal)
-                    shares = quantize_shares(D(budget) / D(executed_price))
+                    shares = _entry_shares(D(budget), D(executed_price))
                     thread.state = ThreadState.OPEN
                     thread.entry_price = D(executed_price)
                     thread.shares = shares
@@ -279,7 +286,7 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                     is_buy=True,
                 )
                 budget = entry_budget(config, thread, _equity(threads, session_price), initial_thread_principal)
-                shares = quantize_shares(D(budget) / D(executed_price))
+                shares = _entry_shares(D(budget), D(executed_price))
                 thread.state = ThreadState.OPEN
                 thread.entry_price = D(executed_price)
                 thread.shares = shares

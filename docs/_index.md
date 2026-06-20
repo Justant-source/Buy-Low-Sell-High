@@ -8,18 +8,19 @@
 
 ## 권장 읽기 순서
 1. `docs/70-policy/strategy.md`
-2. `docs/70-policy/mentor-vs-implemented-strategy.md`
-3. `docs/10-context/system-context.md`
-4. `docs/20-containers/containers.md`
-5. `docs/30-components/components.md`
-6. `docs/40-data/data-model.md`
-7. `docs/50-api/rest-api.md`
-8. `docs/60-runtime/state-machines.md`
-9. `docs/00-planning/workstreams.md`
-10. `docs/70-policy/manual-operations.md`
-11. `docs/90-adr/0001-mentor-semantics.md`
-12. `docs/90-adr/0002-mentor-reference-screen.md`
-13. `docs/70-policy/backup-restore.md`
+2. `docs/90-adr/0003-official-research-baseline.md`
+3. `docs/70-policy/mentor-vs-implemented-strategy.md`
+4. `docs/10-context/system-context.md`
+5. `docs/20-containers/containers.md`
+6. `docs/30-components/components.md`
+7. `docs/40-data/data-model.md`
+8. `docs/50-api/rest-api.md`
+9. `docs/60-runtime/state-machines.md`
+10. `docs/00-planning/workstreams.md`
+11. `docs/70-policy/manual-operations.md`
+12. `docs/90-adr/0001-mentor-semantics.md`
+13. `docs/90-adr/0002-mentor-reference-screen.md`
+14. `docs/70-policy/backup-restore.md`
 
 ## Phase 매핑
 - `Phase 0`: `docs/00-planning/workstreams.md`, `docs/70-policy/strategy.md`

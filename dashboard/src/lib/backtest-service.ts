@@ -11,14 +11,18 @@ import {
   listRunArtifacts,
   loadJob,
   loadMentorMatrixArtifact,
+  loadOfficialMatrixArtifact,
   loadRunArtifact,
   newJobId,
   saveJob,
   saveMentorMatrixArtifact,
+  saveOfficialMatrixArtifact,
   saveRunArtifact,
 } from "./runtime-store.js";
 import type {
   BacktestDetailPayload,
+  OfficialExplorerPayload,
+  OfficialMatrixPayload,
   BacktestOverrides,
   BacktestRiskPayload,
   DashboardJobRecord,
@@ -30,6 +34,7 @@ import type {
   ProfileShowPayload,
   ResearchArtifactRecord,
   StrategyExplorerPayload,
+  ThreadTimelinePayload,
 } from "./types.js";
 
 const STRATEGY_EXPLORER_VERSION = "strategy-explorer-v1";
@@ -73,6 +78,21 @@ export interface StrategyExplorerInput {
   priceBasis?: string;
 }
 
+export interface OfficialExplorerInput {
+  profileId: string;
+  csvPath?: string;
+  initialCapital?: number;
+}
+
+export interface ThreadTimelineInput {
+  profileId: string;
+  csvPath?: string;
+  initialCapital?: number;
+  strategyId: string;
+  executionModel?: string;
+  priceBasis?: string;
+}
+
 export interface SweepJobInput {
   profileId: string;
   csvPath?: string;
@@ -80,6 +100,15 @@ export interface SweepJobInput {
   sweepId?: string;
   executionModel?: string;
   priceBasis?: string;
+}
+
+export interface OfficialMatrixInput {
+  profileId: string;
+  csvPath?: string;
+  initialCapital?: number;
+  threads: number[];
+  stops: number[];
+  overrides?: BacktestOverrides;
 }
 
 function buildOverrideArgs(
@@ -464,6 +493,56 @@ export class BacktestService {
     return payload;
   }
 
+  async officialExplorer(input: OfficialExplorerInput): Promise<OfficialExplorerPayload> {
+    const initialCapital = input.initialCapital ?? 10000;
+    const profile = getProfileDefinition(input.profileId);
+    if (!profile) {
+      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
+    }
+    const csvPath = input.csvPath ?? defaultCsvPath;
+    return runCliJson<OfficialExplorerPayload>([
+      "backtest",
+      "official-explorer",
+      "--profile",
+      profile.profilePath,
+      "--csv",
+      csvPath,
+      "--symbol",
+      profile.symbol,
+      "--initial-capital",
+      String(initialCapital),
+    ]);
+  }
+
+  async threadTimeline(input: ThreadTimelineInput): Promise<ThreadTimelinePayload> {
+    const initialCapital = input.initialCapital ?? 10000;
+    const profile = getProfileDefinition(input.profileId);
+    if (!profile) {
+      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
+    }
+    const csvPath = input.csvPath ?? defaultCsvPath;
+    const executionModel = input.executionModel ?? "ideal_same_close";
+    const priceBasis = input.priceBasis ?? "adjusted_close";
+    return runCliJson<ThreadTimelinePayload>([
+      "backtest",
+      "thread-timeline",
+      "--profile",
+      profile.profilePath,
+      "--csv",
+      csvPath,
+      "--symbol",
+      profile.symbol,
+      "--strategy-id",
+      input.strategyId,
+      "--initial-capital",
+      String(initialCapital),
+      "--execution-model",
+      executionModel,
+      "--price-basis",
+      priceBasis,
+    ]);
+  }
+
   async getLatestSweep(input: SweepJobInput): Promise<ResearchArtifactRecord<ParameterSweepPayload> | null> {
     const profile = getProfileDefinition(input.profileId);
     if (!profile) {
@@ -616,6 +695,50 @@ export class BacktestService {
       ...buildOverrideArgs(input.overrides, { includeThreadCount: false, includeStopSessions: false }),
     ]);
     await saveMentorMatrixArtifact(cacheKey, payload);
+    return payload;
+  }
+
+  async officialMatrix(input: OfficialMatrixInput): Promise<OfficialMatrixPayload> {
+    const initialCapital = input.initialCapital ?? 10000;
+    const profile = getProfileDefinition(input.profileId);
+    if (!profile) {
+      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
+    }
+    const csvPath = input.csvPath ?? defaultCsvPath;
+    const [profilePayload, dataStatus] = await Promise.all([
+      resolveProfilePayload(input.profileId, initialCapital, input.overrides),
+      getDataStatus(csvPath, profile.symbol),
+    ]);
+    const cacheKey = [
+      "official-matrix",
+      input.profileId,
+      profilePayload.configHash,
+      dataStatus.data_hash,
+      input.threads.join(","),
+      input.stops.join(","),
+    ].join(":");
+    const cached = await loadOfficialMatrixArtifact<OfficialMatrixPayload>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+    const payload = await runCliJson<OfficialMatrixPayload>([
+      "backtest",
+      "official-matrix",
+      "--profile",
+      profile.profilePath,
+      "--csv",
+      csvPath,
+      "--symbol",
+      profile.symbol,
+      "--threads",
+      input.threads.join(","),
+      "--stops",
+      input.stops.join(","),
+      "--initial-capital",
+      String(initialCapital),
+      ...buildOverrideArgs(input.overrides, { includeThreadCount: false, includeStopSessions: false }),
+    ]);
+    await saveOfficialMatrixArtifact(cacheKey, payload);
     return payload;
   }
 

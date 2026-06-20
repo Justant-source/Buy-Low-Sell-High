@@ -57,13 +57,14 @@ else:
 html = get(f"http://127.0.0.1:{port}/backtests")
 required_markers = [
     "백테스트 워크벤치",
-    "Strategy Explorer",
-    "Sweep Explorer",
-    "비교 매트릭스",
-    "실행 모델 리스크 비교",
-    "리스크 경고",
-    "/home/justant/Data/Bit-Mania/backtest/dashboards/strategy_dashboard.html",
-    "/home/justant/Data/Bit-Mania/backtest/dashboards/supertrend_sweep_dashboard.html",
+    "전략",
+    "파라미터 테스트",
+    "멘토 래퍼런스",
+    "콤보 랭킹",
+    "Thread Timeline",
+    "Thread Drilldown",
+    "Parameter Sweep Explorer",
+    "멘토 원본 자료",
 ]
 for marker in required_markers:
     if marker not in html:

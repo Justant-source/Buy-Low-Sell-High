@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { BacktestService } from "./lib/backtest-service.js";
 import { HttpError } from "./lib/http.js";
-import { publicRoot } from "./lib/paths.js";
+import { publicRoot, repoRoot } from "./lib/paths.js";
 import { createBacktestsRouter } from "./routes/backtests.js";
 import { createDataRouter } from "./routes/data.js";
 import { createManualRouter } from "./routes/manual.js";
@@ -46,6 +46,10 @@ app.get("/backtests", (_req, res) => {
 
 app.get("/manual", (_req, res) => {
   res.sendFile(path.join(publicRoot, "manual.html"));
+});
+
+app.get("/assets/mentor-reference.jpg", (_req, res) => {
+  res.sendFile(path.join(repoRoot, ".request", "멘토_떨사오팔_백테스트결과.jpg"));
 });
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {

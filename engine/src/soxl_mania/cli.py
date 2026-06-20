@@ -12,7 +12,7 @@ from .config import load_strategy_config, load_strategy_mapping
 from .data.normalize import normalize_bars
 from .data.providers.csv_provider import CsvMarketDataProvider
 from .data.quality import compute_data_hash, summarize_import
-from .data.sync import sync_soxl_history
+from .data.sync import snapshot_manifest_path, sync_soxl_history
 from .domain.models import BacktestJob, ManualLedger, StrategyConfig, new_run_id
 from .domain.money import ZERO
 from .manual.ledger import create_ledger, export_ledger, import_ledger, load_ledger, record_fill, reverse_fill, save_ledger, summarize_ledger
@@ -21,9 +21,12 @@ from .manual.reconciliation import reconcile_ledger
 from .persistence.repositories import InMemoryJobRepository
 from .persistence.worker import run_once
 from .reporting.mentor_matrix import build_mentor_matrix, load_reference_fixture as load_mentor_matrix_reference
+from .reporting.official_explorer import build_official_explorer
+from .reporting.official_matrix import build_official_matrix
 from .reporting.parameter_sweep import build_parameter_sweep
 from .reporting.risk_report import build_risk_report
 from .reporting.strategy_explorer import build_strategy_explorer
+from .reporting.thread_timeline import build_thread_timeline
 from .backtest.parity import ParityResult
 
 
@@ -257,6 +260,7 @@ def _data_validate(args: argparse.Namespace) -> int:
 def _data_status(args: argparse.Namespace) -> int:
     bars, data_hash = _load_bars(args.csv, args.symbol)
     report = summarize_import(args.symbol, "csv", bars)
+    manifest_path = snapshot_manifest_path(args.csv)
     return _print_json(
         {
             "symbol": args.symbol,
@@ -267,6 +271,7 @@ def _data_status(args: argparse.Namespace) -> int:
             "source": bars[-1].source,
             "warnings": report.warnings,
             "snapshot_path": str(Path(args.csv).resolve()),
+            "manifest_path": str(manifest_path.resolve()) if manifest_path.exists() else None,
         }
     )
 
@@ -371,6 +376,39 @@ def _backtest_parameter_sweep(args: argparse.Namespace) -> int:
             config,
             data_hash=data_hash,
             sweep_id=args.sweep_id,
+            execution_model=args.execution_model,
+            price_basis=args.price_basis,
+        )
+    )
+
+
+def _backtest_official_explorer(args: argparse.Namespace) -> int:
+    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    return _print_json(build_official_explorer(bars, config, data_hash=data_hash))
+
+
+def _backtest_official_matrix(args: argparse.Namespace) -> int:
+    config = _load_strategy_config_with_overrides(args)
+    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    combos = tuple(
+        (thread_count, stop_sessions)
+        for thread_count in _parse_combo_csv(args.threads)
+        for stop_sessions in _parse_combo_csv(args.stops)
+    )
+    return _print_json(build_official_matrix(bars, config, data_hash=data_hash, combos=combos))
+
+
+def _backtest_thread_timeline(args: argparse.Namespace) -> int:
+    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    return _print_json(
+        build_thread_timeline(
+            bars,
+            config,
+            strategy_id=args.strategy_id,
+            data_hash=data_hash,
+            catalog_id=args.catalog_id,
             execution_model=args.execution_model,
             price_basis=args.price_basis,
         )
@@ -625,6 +663,39 @@ def main() -> int:
         choices=["adjusted_close", "raw_close_with_actions"],
     )
     backtest_parameter_sweep_parser.set_defaults(handler=_backtest_parameter_sweep)
+    backtest_official_explorer_parser = backtest_subparsers.add_parser("official-explorer")
+    backtest_official_explorer_parser.add_argument("--profile", required=True)
+    _add_csv_argument(backtest_official_explorer_parser)
+    backtest_official_explorer_parser.add_argument("--symbol")
+    backtest_official_explorer_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    backtest_official_explorer_parser.set_defaults(handler=_backtest_official_explorer)
+    backtest_official_matrix_parser = backtest_subparsers.add_parser("official-matrix")
+    backtest_official_matrix_parser.add_argument("--profile", required=True)
+    _add_csv_argument(backtest_official_matrix_parser)
+    backtest_official_matrix_parser.add_argument("--symbol")
+    backtest_official_matrix_parser.add_argument("--threads", default="5,6,7")
+    backtest_official_matrix_parser.add_argument("--stops", default="10,30,40")
+    backtest_official_matrix_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    _add_strategy_override_arguments(backtest_official_matrix_parser, include_thread_count=False, include_stop_sessions=False)
+    backtest_official_matrix_parser.set_defaults(handler=_backtest_official_matrix)
+    backtest_thread_timeline_parser = backtest_subparsers.add_parser("thread-timeline")
+    backtest_thread_timeline_parser.add_argument("--profile", required=True)
+    _add_csv_argument(backtest_thread_timeline_parser)
+    backtest_thread_timeline_parser.add_argument("--symbol")
+    backtest_thread_timeline_parser.add_argument("--strategy-id", required=True)
+    backtest_thread_timeline_parser.add_argument("--catalog-id", default="core_profiles_v1")
+    backtest_thread_timeline_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    backtest_thread_timeline_parser.add_argument(
+        "--execution-model",
+        default="ideal_same_close",
+        choices=["ideal_same_close", "next_open", "next_close"],
+    )
+    backtest_thread_timeline_parser.add_argument(
+        "--price-basis",
+        default="adjusted_close",
+        choices=["adjusted_close", "raw_close_with_actions"],
+    )
+    backtest_thread_timeline_parser.set_defaults(handler=_backtest_thread_timeline)
     backtest_mentor_matrix_parser = backtest_subparsers.add_parser("mentor-matrix")
     backtest_mentor_matrix_parser.add_argument("--profile", required=True)
     _add_csv_argument(backtest_mentor_matrix_parser)

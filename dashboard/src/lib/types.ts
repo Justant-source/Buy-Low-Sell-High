@@ -7,6 +7,7 @@ export interface DataStatusPayload {
   source: string;
   warnings: string[];
   snapshot_path: string;
+  manifest_path: string | null;
 }
 
 export interface ProfileDefinition {
@@ -192,6 +193,72 @@ export interface MentorMatrixPayload {
   };
 }
 
+export interface OfficialExplorerRankingPayload {
+  rank: number;
+  combo_key: string;
+  strategy_id: string;
+  label: string;
+  thread_count: number;
+  stop_sessions: number;
+  full_return_pct: number;
+  mean_segment_return_pct: number;
+  segment_stddev_pct: number;
+  worst_segment_return_pct: number;
+  positive_segment_ratio_pct: number;
+  recent_segment_return_pct: number;
+}
+
+export interface OfficialExplorerPayload {
+  meta: {
+    catalog_id: string;
+    symbol: string;
+    initial_capital: string;
+    price_basis: string;
+    execution_model: string;
+    period_start: string;
+    period_end: string;
+    data_hash: string;
+    code_commit: string;
+    selection_basis: string;
+    official_profile_id: string;
+    official_combo_key: string;
+  };
+  official_profile: {
+    profile_id: string;
+    combo_key: string;
+    thread_count: number;
+    stop_sessions: number;
+    config_hash: string;
+  };
+  current_catalog_top: OfficialExplorerRankingPayload | null;
+  matches_current_catalog_top: boolean;
+  rankings: OfficialExplorerRankingPayload[];
+}
+
+export interface OfficialMatrixPayload {
+  meta: {
+    symbol: string;
+    period_start: string;
+    period_end: string;
+    initial_capital: string;
+    price_basis: string;
+    execution_model: string;
+    config_hash: string;
+    data_hash: string;
+    code_commit: string;
+    windows: Record<string, { start_year: number; end_year: number }>;
+    official_profile_id: string;
+    official_combo_key: string;
+  };
+  benchmark: {
+    yearly: Array<{ year: number; price_change: string; return_pct: number }>;
+    aggregate_rows: Record<string, number>;
+  };
+  combos: Record<string, MentorMatrixActualComboPayload>;
+  selected_count_combos: Record<string, MentorMatrixReferenceCountComboPayload>;
+  selection: OfficialExplorerPayload;
+}
+
 export interface RiskScenarioRowPayload {
   label: string;
   execution_model: string;
@@ -297,6 +364,102 @@ export interface StrategyExplorerPayload {
     segment_presets: StrategySlicePresetPayload[];
   };
   strategies: StrategyExplorerStrategyPayload[];
+}
+
+export interface ThreadTimelineLaneIntervalPayload {
+  trade_id: string;
+  thread_id: number;
+  start_date: string;
+  end_date: string | null;
+  visible_end_date: string;
+  entry_price: string;
+  exit_price: string | null;
+  shares: string;
+  invested_amount: string;
+  close_reason: string | null;
+  pnl: string | null;
+  return_pct: string | null;
+  holding_sessions: number | null;
+  status: "OPEN" | "CLOSED";
+}
+
+export interface ThreadTimelineLanePayload {
+  thread_id: number;
+  label: string;
+  intervals: ThreadTimelineLaneIntervalPayload[];
+}
+
+export interface ThreadTimelineEntryPayload {
+  trade_id: string;
+  thread_id: number;
+  entry_price: string;
+  shares: string;
+  invested_amount: string;
+}
+
+export interface ThreadTimelineExitPayload {
+  trade_id: string;
+  thread_id: number;
+  close_reason: string;
+  entry_price: string;
+  exit_price: string;
+  pnl: string;
+  return_pct: string;
+  holding_sessions: number | null;
+}
+
+export interface ThreadTimelineOpenPositionPayload {
+  trade_id: string;
+  thread_id: number;
+  entry_price: string;
+  shares: string;
+  invested_amount: string;
+  mark_price: string;
+  marked_value: string;
+  unrealized_pnl: string;
+  age_sessions: number;
+}
+
+export interface ThreadTimelineSessionPayload {
+  session_date: string;
+  session_index: number;
+  close_price: string;
+  open_threads: number;
+  entries: number;
+  exit_count: number;
+  skipped_entries: number;
+  entry_batch: ThreadTimelineEntryPayload[];
+  exit_batch: ThreadTimelineExitPayload[];
+  open_positions: ThreadTimelineOpenPositionPayload[];
+}
+
+export interface ThreadTimelinePayload {
+  meta: {
+    catalog_id: string;
+    catalog_hash: string;
+    strategy_id: string;
+    label: string;
+    symbol: string;
+    thread_count: number;
+    stop_sessions: number;
+    period_start: string;
+    period_end: string;
+    data_hash: string;
+    config_hash: string;
+    code_commit: string;
+    execution_model: string;
+    price_basis: string;
+  };
+  lanes: ThreadTimelineLanePayload[];
+  sessions: ThreadTimelineSessionPayload[];
+  summary: {
+    max_open_threads: number;
+    entry_sessions: number;
+    exit_sessions: number;
+    total_entries: number;
+    total_exits: number;
+    latest_open_threads: number;
+  };
 }
 
 export interface ParameterSweepRowPayload {

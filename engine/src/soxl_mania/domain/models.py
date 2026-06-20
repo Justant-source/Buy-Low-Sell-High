@@ -79,7 +79,7 @@ class StrategyConfig:
     price_basis: PriceBasis = PriceBasis.ADJUSTED_CLOSE
     execution_model: ExecutionModel = ExecutionModel.IDEAL_SAME_CLOSE
     initial_capital: Decimal = D("10000")
-    allow_fractional_shares: bool = True
+    allow_fractional_shares: bool = False
     commission_bps: Decimal = ZERO
     slippage_bps: Decimal = ZERO
     profile_id: str = "custom"
@@ -105,7 +105,7 @@ class StrategyConfig:
         payload["execution_model"] = ExecutionModel(payload.get("execution_model", ExecutionModel.IDEAL_SAME_CLOSE))
         payload["allow_same_session_thread_reuse"] = bool(payload.get("allow_same_session_thread_reuse", True))
         payload["profit_precedes_stop"] = bool(payload.get("profit_precedes_stop", True))
-        payload["allow_fractional_shares"] = bool(payload.get("allow_fractional_shares", True))
+        payload["allow_fractional_shares"] = bool(payload.get("allow_fractional_shares", False))
         return cls(**payload)
 
     def config_hash(self) -> str:
@@ -129,6 +129,7 @@ class StrategyConfig:
                 "price_basis": self.price_basis.value,
                 "execution_model": self.execution_model.value,
                 "initial_capital": str(self.initial_capital),
+                "allow_fractional_shares": self.allow_fractional_shares,
                 "commission_bps": str(self.commission_bps),
                 "slippage_bps": str(self.slippage_bps),
             },

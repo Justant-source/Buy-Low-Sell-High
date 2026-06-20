@@ -5,6 +5,17 @@ import type { ProfileDefinition } from "./types.js";
 
 const PROFILES: ProfileDefinition[] = [
   {
+    profileId: "ddeolsao_pal_official_v1",
+    name: "Official DdeolsaoPal v1",
+    description: "Official Yahoo adjusted-close research baseline for the in-house DdeolsaoPal SOXL strategy.",
+    profilePath: path.join(configsRoot, "ddeolsao_pal_official_v1.yaml"),
+    symbol: "SOXL",
+    threadCount: 5,
+    stopSessions: 40,
+    priceBasis: "adjusted_close",
+    executionModel: "ideal_same_close",
+  },
+  {
     profileId: "mentor_default_7x30",
     name: "Mentor Default 7x30",
     description: "Dashboard default profile for tunable SOXL daily-close research with 7 threads and 30-session stops.",

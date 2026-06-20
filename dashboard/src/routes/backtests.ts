@@ -100,6 +100,51 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
   );
 
   router.get(
+    "/official-explorer",
+    asyncHandler(async (req, res) => {
+      const profileId = typeof req.query.profileId === "string" ? req.query.profileId : defaultProfileId;
+      const csvPath = typeof req.query.csvPath === "string" && req.query.csvPath.trim() !== "" ? req.query.csvPath : undefined;
+      const initialCapital = parseNumber(req.query.initialCapital, 10000);
+      res.json(
+        await backtestService.officialExplorer({
+          profileId,
+          csvPath,
+          initialCapital,
+        }),
+      );
+    }),
+  );
+
+  router.get(
+    "/thread-timeline",
+    asyncHandler(async (req, res) => {
+      const profileId = typeof req.query.profileId === "string" ? req.query.profileId : defaultProfileId;
+      const csvPath = typeof req.query.csvPath === "string" && req.query.csvPath.trim() !== "" ? req.query.csvPath : undefined;
+      const initialCapital = parseNumber(req.query.initialCapital, 10000);
+      const strategyId = requireString(req.query.strategyId, "strategyId");
+      const executionModel = parseOptionalEnumField(req.query.executionModel, "executionModel", [
+        "ideal_same_close",
+        "next_open",
+        "next_close",
+      ]);
+      const priceBasis = parseOptionalEnumField(req.query.priceBasis, "priceBasis", [
+        "adjusted_close",
+        "raw_close_with_actions",
+      ]);
+      res.json(
+        await backtestService.threadTimeline({
+          profileId,
+          csvPath,
+          initialCapital,
+          strategyId,
+          executionModel,
+          priceBasis,
+        }),
+      );
+    }),
+  );
+
+  router.get(
     "/",
     asyncHandler(async (_req, res) => {
       res.json(await backtestService.getOverview());
@@ -225,6 +270,28 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
       const overrides = parseOverrides(req.query as Record<string, unknown>);
       res.json(
         await backtestService.compare({
+          profileId,
+          csvPath,
+          initialCapital,
+          threads,
+          stops,
+          overrides,
+        }),
+      );
+    }),
+  );
+
+  router.get(
+    "/official-matrix",
+    asyncHandler(async (req, res) => {
+      const profileId = typeof req.query.profileId === "string" ? req.query.profileId : defaultProfileId;
+      const csvPath = typeof req.query.csvPath === "string" && req.query.csvPath.trim() !== "" ? req.query.csvPath : undefined;
+      const initialCapital = parseNumber(req.query.initialCapital, 10000);
+      const threads = parseCsvList(req.query.threads, [5, 6, 7]);
+      const stops = parseCsvList(req.query.stops, [10, 30, 40]);
+      const overrides = parseOverrides(req.query as Record<string, unknown>);
+      res.json(
+        await backtestService.officialMatrix({
           profileId,
           csvPath,
           initialCapital,

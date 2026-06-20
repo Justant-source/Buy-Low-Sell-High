@@ -128,6 +128,14 @@ function executionQuality(expectedSide: string, basisPrice: number, actualPrice:
   return actualPrice > basisPrice ? "BETTER" : "WORSE";
 }
 
+function requirePositiveIntegerString(value: string, fieldName: string): string {
+  const trimmed = value.trim();
+  if (!/^[1-9]\d*$/.test(trimmed)) {
+    throw new HttpError(400, `${fieldName} must be a positive integer`);
+  }
+  return trimmed;
+}
+
 export async function getManualLedger(
   profileId = defaultProfileId,
   initialCapital = 10000,
@@ -333,6 +341,7 @@ export async function recordManualFill(input: FillInput): Promise<{
   if (!profile) {
     throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
   }
+  const quantity = requirePositiveIntegerString(input.quantity, "quantity");
   const targetPath = await ensureLedger(input.profileId, input.initialCapital ?? 10000);
   const args = [
     "manual",
@@ -345,7 +354,7 @@ export async function recordManualFill(input: FillInput): Promise<{
     "--side",
     input.side.toUpperCase(),
     "--quantity",
-    input.quantity,
+    quantity,
     "--price",
     input.price,
     "--fee",

@@ -8,7 +8,7 @@
 
 ## 데이터
 - `GET /api/data/status`
-  - `symbol`, `rows`, `start`, `end`, `data_hash`, `source`, `warnings`, `snapshot_path`를 반환한다.
+  - `symbol`, `rows`, `start`, `end`, `data_hash`, `source`, `warnings`, `snapshot_path`, `manifest_path`를 반환한다.
 
 ## 프로필
 - `GET /api/profiles`
@@ -23,6 +23,17 @@
   - `/home/justant/Data/Bit-Mania/backtest/dashboards/strategy_dashboard.html`을 계속 참조하는 고정 `core_profiles_v1` 9전략 비교 payload를 반환한다.
   - 기본 실행 모델은 `next_open`, 기본 가격 기준은 `adjusted_close`다.
   - 전체 기간 canonical 실행을 전략별로 1회만 수행한 뒤 일별 곡선, 연도별 요약, 월별 수익, 구간별 요약을 반환한다.
+- `GET /api/backtests/official-explorer`
+  - 공식 Yahoo 연구 기준선의 9조합 랭킹 payload를 반환한다.
+  - 기준 프로필은 `ddeolsao_pal_official_v1`, 실행 모델은 `ideal_same_close`, 가격 기준은 `adjusted_close`다.
+- `GET /api/backtests/official-matrix`
+  - 공식 Yahoo 연구 기준선의 연간 수익률, 단리/복리 집계, 카운트, 선택 프로필 메타데이터를 포함한 canonical matrix payload를 반환한다.
+- `GET /api/backtests/thread-timeline`
+  - 전략 탭의 `focus` 콤보 1개에 대한 swimlane/Gantt payload를 반환한다.
+  - `lanes`, `sessions`, `summary`를 포함하며, 세션 상태는 `end-of-session` 기준이다.
+  - `entry_batch`는 Total 레인의 매수 상세 drill-down 원본이며 `Thread`, `배정 자본금`, `진입 날짜`, `진입 가격`, `진입 수량`을 보여줄 수 있는 필드를 담는다.
+  - `exit_batch`는 Total 레인의 당일 매도 수 drill-down 원본이며 thread별 `익절 상세`/`손절 상세`, `return`, `holding_sessions`, 합산 PnL 표시를 지원한다.
+  - `open_positions`는 세션 종료 시점에 살아 있는 thread만 담는다.
 - `POST /api/backtests/jobs`
   - 단일 상세 백테스트 실행을 위한 대기열 작업을 생성한다.
 - `GET /api/backtests/jobs/:jobId`
@@ -35,6 +46,7 @@
   - 선택한 프로필과 데이터셋에 대한 9셀 thread/stop 비교 매트릭스 payload를 반환한다.
 - `GET /api/backtests/mentor-matrix`
   - `meta`, 런타임 `actual` 백테스트 값, 비교용 고정 `reference` 값, parity 상태를 포함한 멘토 매트릭스 payload를 반환한다.
+  - 이 경로는 `legacy comparison` 전용이며 제품 CI 게이트가 아니다.
 - `GET /api/backtests/risk`
   - `ideal_same_close`, `next_open`, `next_close`를 비교하는 리스크 리포트와 비용 민감도, 회복 기간, 레버리지 ETF 경고 문구를 반환한다.
 - `POST /api/backtests/sweeps/jobs`
@@ -62,6 +74,7 @@
   - 현재 append-only 장부에 대한 정합성 이슈와 선택한 프로필 장부 경로를 반환한다.
 - `POST /api/manual/fills`
   - 장부에 수동 체결을 추가한다.
+  - `quantity`는 항상 양의 정수여야 한다.
 - `POST /api/manual/fills/:fillId/reverse`
   - 되돌리기 체결을 추가하고 원본 체결과 연결한다.
 - `GET /api/manual/export`

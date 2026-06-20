@@ -390,6 +390,7 @@
   grid-template-columns: 240px 1fr;
   background: var(--bg);
   min-height: 100vh;
+  position: relative;
 }
 
 .sidebar {
@@ -504,7 +505,7 @@
 }
 
 .theme-toggle {
-  position: fixed;
+  position: absolute;
   top: 12px;
   right: 16px;
   display: inline-flex;
@@ -581,6 +582,11 @@
 @media (max-width: 768px) {
   .app-shell {
     grid-template-columns: 1fr;
+  }
+
+  .theme-toggle {
+    top: 14px;
+    right: 14px;
   }
 
   .sidebar {

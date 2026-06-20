@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from ..domain.models import ManualFill, ManualLedger, ManualThreadState, new_fill_id
-from ..domain.money import D, ZERO
+from ..domain.money import D, ZERO, require_non_negative_integer_quantity, require_positive_integer_quantity
 
 
 def utc_now() -> datetime:
@@ -32,7 +32,7 @@ def record_fill(
     filled_at: datetime | None = None,
 ) -> ManualFill:
     thread = ledger.threads[thread_id]
-    quantity_d = D(quantity)
+    quantity_d = require_positive_integer_quantity(quantity)
     price_d = D(price)
     fee_d = D(fee)
     if side == "BUY":
@@ -41,6 +41,8 @@ def record_fill(
         thread.entry_price = price_d
         thread.entry_date = (filled_at or utc_now()).date()
     elif side == "SELL":
+        if quantity_d > thread.quantity:
+            raise ValueError(f"SELL quantity exceeds open quantity for thread {thread_id}")
         thread.cash += (quantity_d * price_d) - fee_d
         thread.quantity -= quantity_d
         if thread.quantity == ZERO:
@@ -116,7 +118,7 @@ def import_ledger(payload: str) -> ManualLedger:
             int(thread_id): ManualThreadState(
                 thread_id=int(thread_id),
                 cash=D(thread["cash"]),
-                quantity=D(thread["quantity"]),
+                quantity=require_non_negative_integer_quantity(thread["quantity"], field_name=f"thread {thread_id} quantity"),
                 entry_price=D(thread["entry_price"]),
                 entry_date=datetime.fromisoformat(thread["entry_date"]).date() if thread["entry_date"] else None,
             )
@@ -127,7 +129,7 @@ def import_ledger(payload: str) -> ManualLedger:
                 fill_id=fill["fill_id"],
                 thread_id=int(fill["thread_id"]),
                 side=fill["side"],
-                quantity=D(fill["quantity"]),
+                quantity=require_positive_integer_quantity(fill["quantity"], field_name=f"fill {fill['fill_id']} quantity"),
                 price=D(fill["price"]),
                 fee=D(fill["fee"]),
                 filled_at=datetime.fromisoformat(fill["filled_at"]),

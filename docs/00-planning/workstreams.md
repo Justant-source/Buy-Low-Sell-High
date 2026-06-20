@@ -26,6 +26,7 @@
 - Phase 9 백업 및 종합 게이트는 `make backup`, `make backup-restore-test`, `make clean-room`, `make ci`로 실행 가능하다.
 - 현재 환경에서는 Docker CLI를 설치할 수 있지만, snap 세션이 `/var/run/docker.sock`에 접근하지 못하면 Docker 기반 검증은 여전히 막힐 수 있다.
 - 멘토 레퍼런스 매트릭스 작업은 현재 다음을 포함한다.
+  - `official-explorer`, `official-matrix`, 공식 golden fixture, Yahoo snapshot manifest를 포함하는 제품 기준선
   - 고정된 fixture와 ADR 0002
   - `reference`, `actual`, `parity` 섹션을 포함하는 `backtest mentor-matrix` CLI 출력
   - 캐시된 대시보드 렌더링을 포함한 `GET /api/backtests/mentor-matrix`

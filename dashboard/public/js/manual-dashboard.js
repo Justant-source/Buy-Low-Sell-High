@@ -25,6 +25,14 @@
     box.classList.remove("visible");
   }
 
+  function readPositiveIntegerQuantity() {
+    const value = document.getElementById("qty-input").value.trim();
+    if (!/^[1-9]\d*$/.test(value)) {
+      throw new Error("Quantity는 1 이상의 정수여야 합니다.");
+    }
+    return value;
+  }
+
   function populateProfiles(payload) {
     state.profiles = payload.profiles || [];
     const select = document.getElementById("profile-select");
@@ -202,7 +210,7 @@
         profileId: currentProfileId(),
         threadId: Number(document.getElementById("thread-select").value),
         side: document.getElementById("side-select").value,
-        quantity: document.getElementById("qty-input").value.trim(),
+        quantity: readPositiveIntegerQuantity(),
         price: document.getElementById("price-input").value.trim(),
         fee: document.getElementById("fee-input").value.trim() || "0",
         filledAt: document.getElementById("filled-at-input").value.trim() || undefined,

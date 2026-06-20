@@ -2,66 +2,41 @@
   const ui = window.SOXLDashboard;
   const MAX_STRATEGY_SELECTION = 6;
   const STRATEGY_COLORS = ["#d78a4b", "#2f7ed8", "#2fb344", "#d63939", "#7b5cff", "#1f9d8b"];
+  const THREAD_SESSION_PX_BASE = 14;
+  const THREAD_TRACK_MIN_WIDTH = 0;
+  const THREAD_TIMELINE_ZOOM_MIN = 20;
+  const THREAD_TIMELINE_ZOOM_MAX = 780;
+  const THREAD_TIMELINE_ZOOM_DEFAULT = 160;
   const SWEEP_PARETO_LABELS = {
     all: "all",
     return_mdd: "return / MDD",
     return_stability: "return / stability",
   };
   const state = {
-    latestRun: null,
+    activeTab: "strategy",
+    profileId: "ddeolsao_pal_official_v1",
     profiles: [],
     dataStatus: null,
-    mentorMatrix: null,
+    officialExplorer: null,
+    officialMatrix: null,
     strategyExplorer: null,
+    focusedStrategyId: null,
+    threadTimeline: null,
+    threadTimelineCache: {},
+    threadDrawer: { sessionDate: null, tradeId: null, kind: null },
+    threadTimelineScrollLeft: 0,
+    threadTimelineScrollRatio: 0,
+    threadTimelineZoom: THREAD_TIMELINE_ZOOM_DEFAULT,
+    threadExpanded: false,
+    threadHistoryPage: 1,
+    threadHistoryPageSize: 20,
+    sweepArtifact: null,
     selectedStrategyIds: [],
     selectedStrategyPresetId: "all",
-    sweepArtifact: null,
   };
 
-  function profilePathToLabel(profile) {
-    return `${profile.profileId} · ${profile.threadCount}T/${profile.stopSessions}S`;
-  }
-
-  function selectedProfile() {
-    return state.profiles.find((profile) => profile.profileId === document.getElementById("profile-select").value) || null;
-  }
-
-  function selectedProfileId() {
-    return document.getElementById("profile-select").value;
-  }
-
-  function syncControlsFromProfile(profile) {
-    if (!profile) {
-      return;
-    }
-    document.getElementById("thread-count").value = String(profile.threadCount);
-    document.getElementById("stop-sessions").value = String(profile.stopSessions);
-    document.getElementById("price-basis").value = profile.priceBasis || "adjusted_close";
-    document.getElementById("sizing-mode").value = "fixed_principal";
-    document.getElementById("take-profit-pct").value = "0";
-    document.getElementById("take-profit-operator").value = "gt";
-    document.getElementById("stop-loss-pct").value = "0";
-    document.getElementById("entry-drop-pct").value = "0";
-    document.getElementById("max-entries-per-session").value = "1";
-  }
-
-  function numericValue(id, fallback) {
-    const value = Number(document.getElementById(id).value);
-    return Number.isFinite(value) ? value : fallback;
-  }
-
-  function collectOverrides() {
-    return {
-      threadCount: numericValue("thread-count", 7),
-      stopSessions: numericValue("stop-sessions", 30),
-      takeProfitPct: numericValue("take-profit-pct", 0),
-      takeProfitOperator: document.getElementById("take-profit-operator").value || "gt",
-      entryDropPct: numericValue("entry-drop-pct", 0),
-      stopLossPct: numericValue("stop-loss-pct", 0),
-      maxEntriesPerSession: numericValue("max-entries-per-session", 1),
-      sizingMode: document.getElementById("sizing-mode").value || "fixed_principal",
-      priceBasis: document.getElementById("price-basis").value || "adjusted_close",
-    };
+  function resetThreadHistoryPage() {
+    state.threadHistoryPage = 1;
   }
 
   function setEmptyChart(id, message) {
@@ -99,141 +74,54 @@
     return `${start} → ${end}`;
   }
 
-  function populateProfiles(payload) {
-    state.profiles = payload.profiles || [];
-    const select = document.getElementById("profile-select");
-    select.innerHTML = state.profiles
-      .map((profile) => `<option value="${ui.escapeHtml(profile.profileId)}">${ui.escapeHtml(profilePathToLabel(profile))}</option>`)
-      .join("");
-    select.value = payload.defaultProfileId || "mentor_default_7x30";
-    syncControlsFromProfile(selectedProfile());
-    document.getElementById("sb-profile").textContent = select.value;
+  function parseDateValue(value) {
+    return new Date(`${value}T00:00:00Z`).getTime();
   }
 
-  function renderDataStatus(status) {
-    state.dataStatus = status;
-    ui.setText("hero-rows", ui.formatNumber(status.rows));
-    ui.setText("hero-period", `${status.start} - ${status.end}`);
-    ui.setText("hero-hash", ui.shortHash(status.data_hash));
-    ui.setText("sb-range", `${status.start} - ${status.end}`);
-  }
-
-  function renderJob(job) {
-    ui.setText("job-id", job.jobId || "-");
-    ui.setText("job-status", job.status || "-");
-    ui.setText("job-progress", `${job.progress || 0}%`);
-    ui.setText("job-run-id", job.runId || "-");
-    ui.setText("job-requested", ui.formatDateTime(job.requestedAt));
-    ui.setText("job-finished", ui.formatDateTime(job.finishedAt));
-    const errorBox = document.getElementById("job-error");
-    if (job.error) {
-      errorBox.textContent = job.error;
-      errorBox.classList.add("visible");
-    } else {
-      errorBox.textContent = "";
-      errorBox.classList.remove("visible");
-    }
-  }
-
-  function renderYearly(yearly) {
-    const tbody = document.getElementById("yearly-tbody");
-    const years = Object.keys(yearly || {}).sort();
-    if (!years.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center">결과 없음</td></tr>';
+  function setNotice(id, message) {
+    const element = document.getElementById(id);
+    if (!element) {
       return;
     }
-    tbody.innerHTML = years
-      .map((year) => {
-        const row = yearly[year];
-        return `<tr>
-          <td>${ui.escapeHtml(year)}</td>
-          <td class="num">${ui.escapeHtml(row.start_equity)}</td>
-          <td class="num">${ui.escapeHtml(row.end_equity)}</td>
-          <td class="num">${ui.escapeHtml(ui.formatPercent(row.return_pct))}</td>
-          <td class="num">${ui.escapeHtml(ui.formatPercent(row.mdd_pct))}</td>
-          <td class="num">${ui.escapeHtml(String(row.take_profit_count))}</td>
-          <td class="num">${ui.escapeHtml(String(row.time_stop_count))}</td>
-        </tr>`;
-      })
-      .join("");
+    element.textContent = message || "";
+    element.style.display = message ? "" : "none";
   }
 
-  function renderRunCharts(run) {
-    if (!window.Plotly || !run || !run.daily || !run.daily.length) {
-      return;
+  function threadReasonClass(interval) {
+    if (interval.status === "OPEN") {
+      return "open";
     }
-    const x = run.daily.map((point) => point.session_date);
-    const equity = run.daily.map((point) => Number(point.total_equity));
-    const drawdown = run.daily.map((point) => Number(point.drawdown) * 100);
-    const commonLayout = chartLayoutBase();
-    window.Plotly.newPlot(
-      "equity-chart",
-      [{ x, y: equity, type: "scatter", mode: "lines", line: { color: "#d78a4b", width: 2.5 } }],
-      { ...commonLayout, yaxis: { ...commonLayout.yaxis, tickprefix: "$" } },
-      { displayModeBar: false, responsive: true },
-    );
-    window.Plotly.newPlot(
-      "drawdown-chart",
-      [{ x, y: drawdown, type: "scatter", mode: "lines", line: { color: "#d63939", width: 2.2 } }],
-      { ...commonLayout, yaxis: { ...commonLayout.yaxis, ticksuffix: "%" } },
-      { displayModeBar: false, responsive: true },
-    );
-  }
-
-  function renderRunArtifact(artifact) {
-    if (!artifact || !artifact.payload) {
-      return;
+    if (interval.close_reason === "TAKE_PROFIT") {
+      return "tp";
     }
-    state.latestRun = artifact;
-    const run = artifact.payload;
-    ui.setText("kpi-return", ui.formatPercent(run.metrics.total_return_pct));
-    ui.setText("kpi-mdd", ui.formatPercent(run.metrics.max_drawdown_pct));
-    ui.setText("kpi-trades", ui.formatNumber(run.metrics.trade_count));
-    ui.setText("kpi-volatility", ui.formatPercent(run.metrics.volatility_pct));
-    ui.setText("kpi-config", ui.shortHash(run.config_hash));
-    ui.setText("kpi-commit", ui.shortHash(run.code_commit));
-    ui.setText("sb-model", String(run.config.execution_model || "-"));
-    document.getElementById("trades-download").href = `/api/backtests/runs/${encodeURIComponent(artifact.runId)}/trades.csv`;
-    renderYearly(run.yearly);
-    renderRunCharts(run);
+    return "stop";
   }
 
-  function renderCompare(payload) {
-    const head = document.getElementById("compare-head");
-    const body = document.getElementById("compare-body");
-    const stops = payload.stopSessions || [];
-    const threads = payload.threadCounts || [];
-    head.innerHTML = `<tr><th>Thread \\ Stop</th>${stops.map((stop) => `<th>${stop}</th>`).join("")}</tr>`;
-    const cellMap = new Map(payload.cells.map((cell) => [`${cell.thread_count}:${cell.stop_sessions}`, cell]));
-    body.innerHTML = threads
-      .map((threadCount) => {
-        const columns = stops
-          .map((stopSessions) => {
-            const cell = cellMap.get(`${threadCount}:${stopSessions}`);
-            if (!cell) {
-              return '<td class="muted">-</td>';
-            }
-            return `<td>
-              <strong>${ui.escapeHtml(ui.formatPercent(cell.total_return_pct))}</strong>
-              <small>MDD ${ui.escapeHtml(ui.formatPercent(cell.max_drawdown_pct))}</small>
-              <small>Trades ${ui.escapeHtml(ui.formatNumber(cell.trade_count))}</small>
-            </td>`;
-          })
-          .join("");
-        return `<tr><td class="mono">${threadCount}</td>${columns}</tr>`;
-      })
-      .join("");
+  function threadReasonLabel(reason) {
+    if (reason === "TAKE_PROFIT") {
+      return "익절";
+    }
+    if (reason === "PRICE_STOP") {
+      return "가격 손절";
+    }
+    if (reason === "TIME_STOP") {
+      return "손절";
+    }
+    if (reason === "END_OF_TEST") {
+      return "종료 정산";
+    }
+    return reason || "보유";
   }
 
-  function matrixPercent(value) {
+  function formatPriceValue(value) {
     const number = Number(value);
     if (!Number.isFinite(number)) {
       return "-";
     }
-    if (Math.abs(number) >= 1e9) {
-      return `${number.toExponential(2)}%`;
-    }
-    return `${number.toLocaleString("en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%`;
+    return `$${number.toLocaleString("en-US", {
+      minimumFractionDigits: number < 10 ? 4 : 2,
+      maximumFractionDigits: 4,
+    })}`;
   }
 
   function comboOrder(combos) {
@@ -247,202 +135,111 @@
     });
   }
 
-  function mentorBadgeClass(status) {
-    if (status === "PASS") {
-      return "badge success";
+  function matrixPercent(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return "-";
     }
-    if (status === "DATA_MISMATCH") {
-      return "badge warning";
+    if (Math.abs(number) >= 1e9) {
+      return `${number.toExponential(2)}%`;
     }
-    return "badge danger";
+    return `${number.toLocaleString("en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%`;
   }
 
-  function renderMentorMatrix(payload) {
-    state.mentorMatrix = payload;
-    const actual = payload.actual;
-    const comboKeys = comboOrder(actual.combos);
-    const body = document.getElementById("mentor-matrix-body");
-    const badge = document.getElementById("mentor-matrix-status");
-    const hash = document.getElementById("mentor-matrix-hash");
-    const note = document.getElementById("mentor-matrix-note");
-    badge.className = mentorBadgeClass(payload.parity.status);
-    badge.textContent = payload.parity.status;
-    hash.textContent = ui.shortHash(payload.meta.data_hash);
-    if (payload.parity.first_mismatch) {
-      const mismatch = payload.parity.first_mismatch;
-      note.textContent = `현재 표는 실제 백테스트 값입니다. 참고용 멘토 전사값과의 첫 차이: ${mismatch.section} · ${mismatch.row} · ${mismatch.column} · mentor ${mismatch.expected} / actual ${mismatch.actual}`;
-    } else {
-      note.textContent = "현재 표는 실제 백테스트 값이며, 참고용 멘토 전사값과 현재 기준에서 정렬되어 있습니다.";
+  function formatHoldingSessions(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number) || number < 0) {
+      return "-";
     }
-
-    const header = `<tr>
-      <th class="sticky-1">연도</th>
-      <th class="sticky-2 benchmark-col">연간 주가 변화</th>
-      <th class="sticky-3 benchmark-col">물빵</th>
-      ${comboKeys
-        .map((comboKey) => {
-          const representative = comboKey === "5x40" ? " representative-col" : "";
-          return `<th class="num${representative}">${comboKey.replace("x", "/")}</th>`;
-        })
-        .join("")}
-    </tr>`;
-
-    const benchmarkRows = actual.benchmark.yearly;
-    const yearlyRows = benchmarkRows
-      .map((benchmarkRow) => {
-        const values = comboKeys.map((comboKey) => Number(actual.combos[comboKey].yearly_returns_pct[String(benchmarkRow.year)]));
-        const maxValue = Math.max(...values);
-        const comboColumns = comboKeys
-          .map((comboKey) => {
-            const value = Number(actual.combos[comboKey].yearly_returns_pct[String(benchmarkRow.year)]);
-            const representative = comboKey === "5x40" ? " representative-col" : "";
-            const highlight = value === maxValue ? " max-cell" : "";
-            return `<td class="num${representative}${highlight}">${ui.escapeHtml(matrixPercent(value))}</td>`;
-          })
-          .join("");
-        return `<tr>
-          <td class="sticky-1 mono">${benchmarkRow.year}</td>
-          <td class="sticky-2 benchmark-col mono">${ui.escapeHtml(benchmarkRow.price_change)}</td>
-          <td class="sticky-3 benchmark-col num">${ui.escapeHtml(matrixPercent(benchmarkRow.return_pct))}</td>
-          ${comboColumns}
-        </tr>`;
-      })
-      .join("");
-
-    const aggregateRows = [
-      { label: "표준편차", family: "per-year", benchmark: "", comboSection: "stats_pct", comboField: "stddev" },
-      { label: "전체평균", family: "2011-24", benchmark: "", comboSection: "stats_pct", comboField: "avg_all" },
-      { label: "평균5년", family: "2020-24", benchmark: actual.benchmark.aggregate_rows.average_5y, comboSection: "stats_pct", comboField: "avg_5y" },
-      { label: "단리전체", family: "2011-24", benchmark: "", comboSection: "simple_returns_pct", comboField: "total" },
-      { label: "단리5년", family: "2020-24", benchmark: actual.benchmark.aggregate_rows.simple_5y, comboSection: "simple_returns_pct", comboField: "y5" },
-      { label: "단리3년", family: "2022-24", benchmark: "", comboSection: "simple_returns_pct", comboField: "y3" },
-      { label: "복리전체", family: "2011-24", benchmark: actual.benchmark.aggregate_rows.compound_total, comboSection: "compound_returns_pct", comboField: "total" },
-      { label: "복리5년", family: "2020-24", benchmark: actual.benchmark.aggregate_rows.compound_5y, comboSection: "compound_returns_pct", comboField: "y5" },
-      { label: "복리3년", family: "2022-24", benchmark: actual.benchmark.aggregate_rows.compound_3y, comboSection: "compound_returns_pct", comboField: "y3" },
-      { label: "복리1년", family: "2024", benchmark: actual.benchmark.aggregate_rows.compound_1y, comboSection: "compound_returns_pct", comboField: "y1" },
-    ]
-      .map((row) => {
-        const comboColumns = comboKeys
-          .map((comboKey) => {
-            const representative = comboKey === "5x40" ? " representative-col" : "";
-            const value = actual.combos[comboKey][row.comboSection][row.comboField];
-            return `<td class="num${representative}">${ui.escapeHtml(matrixPercent(value))}</td>`;
-          })
-          .join("");
-        const benchmarkValue = row.benchmark === "" || row.benchmark == null ? "-" : matrixPercent(row.benchmark);
-        return `<tr>
-          <td class="sticky-1 aggregate-label">${ui.escapeHtml(row.label)}</td>
-          <td class="sticky-2 aggregate-label">${ui.escapeHtml(row.family)}</td>
-          <td class="sticky-3 benchmark-col num">${ui.escapeHtml(benchmarkValue)}</td>
-          ${comboColumns}
-        </tr>`;
-      })
-      .join("");
-
-    body.innerHTML = `${header}${yearlyRows}<tr class="section-row"><td colspan="${3 + comboKeys.length}">aggregate rows</td></tr>${aggregateRows}`;
+    return `${number.toLocaleString("en-US", { maximumFractionDigits: 0 })}일`;
   }
 
-  function countPair(cell) {
-    return `${ui.formatNumber(cell.take_profit)} / ${ui.formatNumber(cell.time_stop)}`;
+  function threadLabel(threadId) {
+    if (threadId === 0) {
+      return "Total";
+    }
+    return `#${threadId}`;
   }
 
-  function renderMentorCounts(payload) {
-    const actual = payload.actual;
-    const body = document.getElementById("mentor-counts-body");
-    const comboKeys = ["5x30", "6x10", "6x30", "7x30"].filter((comboKey) => actual.selected_count_combos[comboKey]);
-    const years = Object.keys(actual.selected_count_combos[comboKeys[0]]?.yearly_counts || {});
-    const header = `<tr>
-      <th class="sticky-1">행</th>
-      <th class="sticky-2">구분</th>
-      ${comboKeys.map((comboKey) => `<th class="num">${comboKey.replace("x", "/")}</th>`).join("")}
-    </tr>`;
-    const yearlyRows = years
-      .map((year) => `<tr>
-        <td class="sticky-1 mono">${ui.escapeHtml(year)}</td>
-        <td class="sticky-2">익절 / 손절</td>
-        ${comboKeys
-          .map((comboKey) => `<td class="pair-cell">${ui.escapeHtml(countPair(actual.selected_count_combos[comboKey].yearly_counts[year]))}</td>`)
-          .join("")}
-      </tr>`)
-      .join("");
-    const aggregateOrder = [
-      ["전체평균", "avg_all"],
-      ["평균5년", "avg_5y"],
-      ["단리전체", "simple_total"],
-      ["단리5년", "simple_y5"],
-      ["단리3년", "simple_y3"],
-      ["복리전체", "compound_total"],
-      ["복리5년", "compound_y5"],
-      ["복리3년", "compound_y3"],
-      ["복리1년", "compound_y1"],
-    ];
-    const aggregateRows = aggregateOrder
-      .map(
-        ([label, key]) => `<tr>
-          <td class="sticky-1 aggregate-label">${ui.escapeHtml(label)}</td>
-          <td class="sticky-2">익절 / 손절</td>
-          ${comboKeys
-            .map((comboKey) => `<td class="pair-cell">${ui.escapeHtml(countPair(actual.selected_count_combos[comboKey].aggregate_rows[key]))}</td>`)
-            .join("")}
-        </tr>`,
-      )
-      .join("");
-    body.innerHTML = `${header}${yearlyRows}<tr class="section-row"><td colspan="${2 + comboKeys.length}">aggregate rows</td></tr>${aggregateRows}`;
+  function laneDisplayLabel(lane) {
+    return threadLabel(Number(lane?.thread_id || 0));
   }
 
-  function formatRecovery(value) {
-    return Number.isInteger(value) ? `${value} sessions` : "open";
+  function joinedMoney(values) {
+    const items = (values || []).map((value) => ui.formatMoney(value));
+    return items.length ? items.join(", ") : "-";
   }
 
-  function renderRisk(payload) {
-    ui.setText("risk-gap-drift", ui.formatPercent(payload.summary.ideal_to_next_open_return_drag_pct));
-    ui.setText("risk-delay-drift", ui.formatPercent(payload.summary.next_open_to_next_close_return_drag_pct));
-    ui.setText("risk-cost-drift", ui.formatPercent(payload.summary.stress_cost_drag_pct));
-    ui.setText("risk-recovery", payload.summary.worst_recovery_sessions == null ? "open" : `${payload.summary.worst_recovery_sessions} sessions`);
+  function joinedPrice(values) {
+    const items = (values || []).map((value) => formatPriceValue(value));
+    return items.length ? items.join(", ") : "-";
+  }
 
-    const modelsBody = document.getElementById("risk-models-tbody");
-    modelsBody.innerHTML = (payload.model_comparison || [])
-      .map(
-        (row) => `<tr>
-          <td>${ui.escapeHtml(row.label)}</td>
-          <td class="mono">${ui.escapeHtml(row.execution_model)}</td>
-          <td class="num">${ui.escapeHtml(ui.formatPercent(row.total_return_pct))}</td>
-          <td class="num">${ui.escapeHtml(ui.formatPercent(row.max_drawdown_pct))}</td>
-          <td class="num">${ui.escapeHtml(ui.formatPercent(row.volatility_pct))}</td>
-          <td class="num">${ui.escapeHtml(ui.formatNumber(row.trade_count))}</td>
-          <td class="num">${ui.escapeHtml(formatRecovery(row.peak_to_recovery_sessions))}</td>
-        </tr>`,
-      )
-      .join("");
+  function entryMarkerTitle(session) {
+    const capitalValues = (session.entry_batch || []).map((row) => row.invested_amount);
+    const entryPrices = (session.entry_batch || []).map((row) => row.entry_price);
+    return `매수 | 날짜 ${session.session_date} | 자본금 ${joinedMoney(capitalValues)} | 진입 가격 ${joinedPrice(entryPrices)}`;
+  }
 
-    const costsBody = document.getElementById("risk-costs-tbody");
-    costsBody.innerHTML = (payload.cost_sensitivity || [])
-      .map(
-        (row) => `<tr>
-          <td>${ui.escapeHtml(row.label)}</td>
-          <td class="num">${ui.escapeHtml(row.commission_bps)}</td>
-          <td class="num">${ui.escapeHtml(row.slippage_bps)}</td>
-          <td class="num">${ui.escapeHtml(ui.formatPercent(row.total_return_pct))}</td>
-          <td class="num">${ui.escapeHtml(ui.formatPercent(row.max_drawdown_pct))}</td>
-          <td class="num">${ui.escapeHtml(formatRecovery(row.peak_to_recovery_sessions))}</td>
-        </tr>`,
-      )
-      .join("");
+  function exitMarkerTitle(session) {
+    const exitPrices = (session.exit_batch || []).map((row) => row.exit_price);
+    const totalPnl = (session.exit_batch || []).reduce((sum, row) => sum + parseMoney(row.pnl), 0);
+    return `매도 | 날짜 ${session.session_date} | 종료 가격 ${joinedPrice(exitPrices)} | 총 벌어들인 금액 ${ui.formatMoney(totalPnl)}`;
+  }
 
-    const summaryList = document.getElementById("risk-summary-list");
-    summaryList.innerHTML = `
-      <div class="stack-row"><span class="title">Best Next Open Return</span><span>${ui.escapeHtml(`${payload.sensitivity_summary.best_next_open_return_cell.thread_count}T / ${payload.sensitivity_summary.best_next_open_return_cell.stop_sessions}S · ${ui.formatPercent(payload.sensitivity_summary.best_next_open_return_cell.total_return_pct)}`)}</span></div>
-      <div class="stack-row"><span class="title">Lowest Next Open MDD</span><span>${ui.escapeHtml(`${payload.sensitivity_summary.lowest_next_open_mdd_cell.thread_count}T / ${payload.sensitivity_summary.lowest_next_open_mdd_cell.stop_sessions}S · ${ui.formatPercent(payload.sensitivity_summary.lowest_next_open_mdd_cell.max_drawdown_pct)}`)}</span></div>
-    `;
+  function currentProfile() {
+    return state.profiles.find((profile) => profile.profileId === state.profileId) || null;
+  }
 
-    const warningList = document.getElementById("risk-warning-list");
-    warningList.innerHTML = (payload.warnings || [])
-      .map((warning) => `<div class="stack-row"><span class="title">${ui.escapeHtml(warning)}</span><span class="badge danger">risk</span></div>`)
-      .join("");
+  function renderDataStatus(status) {
+    state.dataStatus = status;
+    ui.setText("hero-rows", ui.formatNumber(status.rows));
+    ui.setText("hero-period", `${status.start} - ${status.end}`);
+    ui.setText("hero-hash", ui.shortHash(status.data_hash));
+    ui.setText("sb-range", `${status.start} - ${status.end}`);
+  }
+
+  function renderProfileSummary(profile) {
+    if (!profile) {
+      return;
+    }
+    state.profileId = profile.profileId;
+    ui.setText("sb-profile", profile.profileId);
+    ui.setText("sb-model", profile.executionModel || "ideal_same_close");
+    ui.setText("official-profile-badge", profile.profileId);
+  }
+
+  function activateTab(tabId) {
+    state.activeTab = tabId;
+    document.querySelectorAll("[data-tab]").forEach((button) => {
+      const active = button.getAttribute("data-tab") === tabId;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    document.querySelectorAll("[data-tab-panel]").forEach((panel) => {
+      panel.classList.toggle("active", panel.getAttribute("data-tab-panel") === tabId);
+    });
   }
 
   function getStrategyById(strategyId) {
     return state.strategyExplorer?.strategies.find((strategy) => strategy.strategy_id === strategyId) || null;
+  }
+
+  function ensureFocusedStrategy() {
+    if (!state.strategyExplorer) {
+      state.focusedStrategyId = null;
+      return;
+    }
+    const validIds = new Set(state.strategyExplorer.strategies.map((strategy) => strategy.strategy_id));
+    if (state.focusedStrategyId && validIds.has(state.focusedStrategyId)) {
+      return;
+    }
+    const officialId = state.officialExplorer?.official_profile?.combo_key;
+    if (officialId && validIds.has(officialId)) {
+      state.focusedStrategyId = officialId;
+      return;
+    }
+    state.focusedStrategyId = state.selectedStrategyIds[0] || state.strategyExplorer.strategies[0]?.strategy_id || null;
   }
 
   function ensureStrategySelection() {
@@ -451,16 +248,16 @@
     }
     const validIds = new Set(state.strategyExplorer.strategies.map((strategy) => strategy.strategy_id));
     state.selectedStrategyIds = state.selectedStrategyIds.filter((strategyId) => validIds.has(strategyId)).slice(0, MAX_STRATEGY_SELECTION);
-    if (!state.selectedStrategyIds.length) {
-      state.selectedStrategyIds = state.strategyExplorer.strategies
-        .slice()
-        .sort((left, right) => Number(right.metrics.total_return_pct) - Number(left.metrics.total_return_pct))
-        .slice(0, 3)
-        .map((strategy) => strategy.strategy_id);
+    if (state.selectedStrategyIds.length) {
+      ensureFocusedStrategy();
+      return;
     }
-    if (!state.selectedStrategyPresetId) {
-      state.selectedStrategyPresetId = "all";
-    }
+    const defaults = (state.officialExplorer?.rankings || [])
+      .slice(0, 3)
+      .map((row) => row.strategy_id)
+      .filter((strategyId) => validIds.has(strategyId));
+    state.selectedStrategyIds = defaults.length ? defaults : state.strategyExplorer.strategies.slice(0, 3).map((strategy) => strategy.strategy_id);
+    ensureFocusedStrategy();
   }
 
   function setStrategyDateInputs(start, end) {
@@ -518,12 +315,20 @@
     }
     const start = series[0].equity;
     const end = series[series.length - 1].equity;
-    const maxDrawdown = Math.min(...series.map((point) => point.drawdownPct));
     return {
       returnPct: start === 0 ? 0 : ((end - start) / start) * 100,
-      maxDrawdownPct: maxDrawdown,
       start: series[0].date,
       end: series[series.length - 1].date,
+    };
+  }
+
+  function summarizeSliceDrawdown(series) {
+    if (!series.length) {
+      return null;
+    }
+    const maxDrawdownPct = series.reduce((worst, point) => Math.min(worst, Number(point.drawdownPct) || 0), 0);
+    return {
+      maxDrawdownPct,
     };
   }
 
@@ -559,38 +364,68 @@
       }));
   }
 
-  function renderStrategySelector() {
-    if (!state.strategyExplorer) {
+  function toggleStrategySelection(strategyId) {
+    const current = new Set(state.selectedStrategyIds);
+    if (current.has(strategyId)) {
+      current.delete(strategyId);
+    } else if (current.size < MAX_STRATEGY_SELECTION) {
+      current.add(strategyId);
+    }
+    state.selectedStrategyIds = [...current];
+    renderStrategyRanking();
+    renderStrategyViews();
+  }
+
+  function setFocusedStrategy(strategyId) {
+    if (!strategyId || strategyId === state.focusedStrategyId) {
       return;
     }
-    const target = document.getElementById("strategy-selector");
-    target.innerHTML = state.strategyExplorer.strategies
-      .map((strategy) => {
-        const active = state.selectedStrategyIds.includes(strategy.strategy_id) ? " active" : "";
-        const badges = (strategy.mentor_profiles || [])
-          .map((profileId) => `<span class="badge info mono">${ui.escapeHtml(profileId)}</span>`)
-          .join("");
-        return `<button type="button" class="strategy-toggle${active}" data-strategy-id="${ui.escapeHtml(strategy.strategy_id)}">
-          <strong>${ui.escapeHtml(strategy.label)}</strong>
-          <span class="meta">${ui.escapeHtml(`${strategy.thread_count}T / ${strategy.stop_sessions}S · total ${ui.formatPercent(strategy.metrics.total_return_pct)}`)}</span>
-          <span class="badges">${badges || '<span class="badge neutral">catalog</span>'}</span>
-        </button>`;
+    state.focusedStrategyId = strategyId;
+    resetThreadHistoryPage();
+    renderStrategyRanking();
+    void loadThreadTimeline();
+  }
+
+  function renderStrategyRanking() {
+    const body = document.getElementById("strategy-ranking-body");
+    const rows = state.officialExplorer?.rankings || [];
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center">전략 랭킹을 불러오지 못했습니다.</td></tr>';
+      return;
+    }
+    body.innerHTML = rows
+      .map((row) => {
+        const active = state.selectedStrategyIds.includes(row.strategy_id);
+        const focused = row.strategy_id === state.focusedStrategyId;
+        return `<tr class="click-row${active ? " selected-row" : ""}" data-strategy-id="${ui.escapeHtml(row.strategy_id)}">
+          <td><button type="button" class="focus-toggle${focused ? " active" : ""}" data-focus-strategy-id="${ui.escapeHtml(row.strategy_id)}">${focused ? "Focus" : "Set"}</button></td>
+          <td>${active ? '<span class="badge info">선택</span>' : '<span class="badge neutral">대기</span>'}</td>
+          <td class="num">${ui.escapeHtml(String(row.rank))}</td>
+          <td>${ui.escapeHtml(row.combo_key)}</td>
+          <td class="num">${ui.escapeHtml(ui.formatPercent(row.full_return_pct))}</td>
+          <td class="num">${ui.escapeHtml(ui.formatPercent(row.mean_segment_return_pct))}</td>
+          <td class="num">${ui.escapeHtml(ui.formatPercent(row.segment_stddev_pct))}</td>
+          <td class="num">${ui.escapeHtml(ui.formatPercent(row.recent_segment_return_pct))}</td>
+        </tr>`;
       })
       .join("");
-    target.querySelectorAll("[data-strategy-id]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const strategyId = button.getAttribute("data-strategy-id");
+    body.querySelectorAll("[data-strategy-id]").forEach((row) => {
+      row.addEventListener("click", () => {
+        const strategyId = row.getAttribute("data-strategy-id");
         if (!strategyId) {
           return;
         }
-        const alreadySelected = state.selectedStrategyIds.includes(strategyId);
-        if (alreadySelected) {
-          state.selectedStrategyIds = state.selectedStrategyIds.filter((value) => value !== strategyId);
-        } else if (state.selectedStrategyIds.length < MAX_STRATEGY_SELECTION) {
-          state.selectedStrategyIds = [...state.selectedStrategyIds, strategyId];
+        toggleStrategySelection(strategyId);
+      });
+    });
+    body.querySelectorAll("[data-focus-strategy-id]").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const strategyId = button.getAttribute("data-focus-strategy-id");
+        if (!strategyId) {
+          return;
         }
-        renderStrategySelector();
-        renderStrategyViews();
+        setFocusedStrategy(strategyId);
       });
     });
     document.getElementById("strategy-selector-note").textContent = `선택 ${state.selectedStrategyIds.length} / ${MAX_STRATEGY_SELECTION}`;
@@ -616,6 +451,7 @@
         }
         state.selectedStrategyPresetId = preset.preset_id;
         setStrategyDateInputs(preset.start, preset.end);
+        resetThreadHistoryPage();
         renderStrategySlicePresets();
         renderStrategyViews();
       });
@@ -640,15 +476,13 @@
     if (!summaries.length) {
       ui.setText("strategy-kpi-count", "0");
       ui.setText("strategy-kpi-best-return", "-");
-      ui.setText("strategy-kpi-best-mdd", "-");
       ui.setText("strategy-kpi-period", "-");
       return;
     }
     const bestReturn = summaries.reduce((best, current) => (current.summary.returnPct > best.summary.returnPct ? current : best));
-    const bestMdd = summaries.reduce((best, current) => (current.summary.maxDrawdownPct > best.summary.maxDrawdownPct ? current : best));
     ui.setText("strategy-kpi-count", String(summaries.length));
+    ui.setText("strategy-kpi-official", state.officialExplorer?.official_profile?.combo_key || "-");
     ui.setText("strategy-kpi-best-return", `${bestReturn.strategy.label} · ${ui.formatPercent(bestReturn.summary.returnPct)}`);
-    ui.setText("strategy-kpi-best-mdd", `${bestMdd.strategy.label} · ${ui.formatPercent(bestMdd.summary.maxDrawdownPct)}`);
     ui.setText("strategy-kpi-period", formatSessionPeriod(slice.start, slice.end));
   }
 
@@ -730,9 +564,784 @@
     );
   }
 
+  function currentThreadSliceData() {
+    if (!state.threadTimeline) {
+      return null;
+    }
+    const slice = currentStrategySlice();
+    if (!slice) {
+      return null;
+    }
+    const sessions = state.threadTimeline.sessions.filter(
+      (session) => session.session_date >= slice.start && session.session_date <= slice.end,
+    );
+    const sessionIndexByDate = new Map(sessions.map((session, index) => [session.session_date, index]));
+    return {
+      slice,
+      sessions,
+      sessionIndexByDate,
+      totalSessions: sessions.length,
+      actualStart: sessions[0]?.session_date || null,
+      actualEnd: sessions[sessions.length - 1]?.session_date || null,
+    };
+  }
+
+  function buildThreadTicks(sessions) {
+    if (!sessions.length) {
+      return [];
+    }
+    const maxTickCount = 8;
+    const targetCount = Math.min(maxTickCount, sessions.length);
+    const step = Math.max(1, Math.floor((sessions.length - 1) / Math.max(targetCount - 1, 1)));
+    const tickIndexes = [];
+    for (let index = 0; index < sessions.length; index += step) {
+      tickIndexes.push(index);
+    }
+    if (tickIndexes[tickIndexes.length - 1] !== sessions.length - 1) {
+      tickIndexes.push(sessions.length - 1);
+    }
+    return [...new Set(tickIndexes)].map((index) => ({
+      date: sessions[index].session_date,
+      leftPct: sessions.length <= 1 ? 0 : (index / (sessions.length - 1)) * 100,
+    }));
+  }
+
+  function buildThreadCanvas(sessions) {
+    const count = Math.max(sessions.length, 1);
+    const sessionPx = threadSessionPxForZoom(state.threadTimelineZoom);
+    const width = Math.max(THREAD_TRACK_MIN_WIDTH, count * sessionPx);
+    return {
+      width,
+      sessionPx,
+      positionForIndex(index) {
+        return (index * sessionPx) + (sessionPx / 2);
+      },
+      widthForRange(startIndex, endIndex) {
+        return Math.max(4, ((endIndex - startIndex) + 1) * sessionPx - 2);
+      },
+    };
+  }
+
+  function threadSessionPxForZoom(zoom) {
+    return Math.max(2, Math.round((THREAD_SESSION_PX_BASE * zoom) / 100));
+  }
+
+  function clampThreadTimelineZoom(nextZoom) {
+    return Math.min(THREAD_TIMELINE_ZOOM_MAX, Math.max(THREAD_TIMELINE_ZOOM_MIN, nextZoom));
+  }
+
+  function setThreadTimelineZoom(nextZoom) {
+    const clamped = clampThreadTimelineZoom(nextZoom);
+    if (Math.abs(clamped - state.threadTimelineZoom) < 0.01) {
+      return;
+    }
+    state.threadTimelineZoom = clamped;
+    renderThreadTimeline();
+  }
+
+  function currentThreadViewportWindow(scrollPanel) {
+    const contentWidth = scrollPanel.scrollWidth || 1;
+    const viewportWidth = scrollPanel.clientWidth || 1;
+    const widthRatio = Math.min(1, viewportWidth / contentWidth);
+    const leftRatio = contentWidth > 0 ? scrollPanel.scrollLeft / contentWidth : 0;
+    return {
+      leftRatio,
+      widthRatio,
+      contentWidth,
+      viewportWidth,
+    };
+  }
+
+  function updateThreadZoomViewport(scrollPanel, target) {
+    const viewport = target.querySelector(".thread-zoom-viewport");
+    if (!(viewport instanceof HTMLElement)) {
+      return;
+    }
+    const { leftRatio, widthRatio } = currentThreadViewportWindow(scrollPanel);
+    paintThreadZoomViewport(viewport, { leftRatio, widthRatio });
+  }
+
+  function paintThreadZoomViewport(viewport, { leftRatio, widthRatio }) {
+    viewport.style.left = `${Math.max(0, Math.min(100, leftRatio * 100))}%`;
+    viewport.style.width = `${Math.max(0, Math.min(100, widthRatio * 100))}%`;
+  }
+
+  function applyThreadViewportRatios({ leftRatio, widthRatio, viewportWidth, sessionCount }) {
+    const desiredWidthRatio = Math.max(0.01, Math.min(1, widthRatio));
+    const desiredContentWidth = viewportWidth / desiredWidthRatio;
+    const desiredSessionPx = desiredContentWidth / Math.max(sessionCount, 1);
+    state.threadTimelineZoom = clampThreadTimelineZoom((desiredSessionPx / THREAD_SESSION_PX_BASE) * 100);
+
+    const actualContentWidth = Math.max(THREAD_TRACK_MIN_WIDTH, Math.max(sessionCount, 1) * threadSessionPxForZoom(state.threadTimelineZoom));
+    const actualWidthRatio = Math.min(1, viewportWidth / actualContentWidth);
+    const maxLeftRatio = Math.max(0, 1 - actualWidthRatio);
+    const normalizedLeftRatio = Math.max(0, Math.min(maxLeftRatio, leftRatio));
+    const maxScrollable = Math.max(0, actualContentWidth - viewportWidth);
+    const nextScrollLeft = normalizedLeftRatio * actualContentWidth;
+    state.threadTimelineScrollLeft = nextScrollLeft;
+    state.threadTimelineScrollRatio = maxScrollable > 0 ? nextScrollLeft / maxScrollable : 0;
+    renderThreadTimeline();
+  }
+
+  function attachThreadZoomBar(target, scrollPanel, sessions) {
+    const track = target.querySelector(".thread-zoom-track");
+    const viewport = target.querySelector(".thread-zoom-viewport");
+    const leftHandle = target.querySelector(".thread-zoom-handle.left");
+    const rightHandle = target.querySelector(".thread-zoom-handle.right");
+    if (!(track instanceof HTMLElement) || !(viewport instanceof HTMLElement)) {
+      return;
+    }
+
+    updateThreadZoomViewport(scrollPanel, target);
+
+    const startDrag = (mode, startClientX) => {
+      const trackRect = track.getBoundingClientRect();
+      const startWindow = currentThreadViewportWindow(scrollPanel);
+      const startRightRatio = startWindow.leftRatio + startWindow.widthRatio;
+      let pendingWindow = null;
+      const minWidthRatio = (() => {
+        const maxContentWidth = Math.max(
+          THREAD_TRACK_MIN_WIDTH,
+          Math.max(sessions.length, 1) * threadSessionPxForZoom(THREAD_TIMELINE_ZOOM_MAX),
+        );
+        return Math.min(1, startWindow.viewportWidth / maxContentWidth);
+      })();
+      const maxWidthRatio = (() => {
+        const minContentWidth = Math.max(
+          THREAD_TRACK_MIN_WIDTH,
+          Math.max(sessions.length, 1) * threadSessionPxForZoom(THREAD_TIMELINE_ZOOM_MIN),
+        );
+        return Math.min(1, startWindow.viewportWidth / minContentWidth);
+      })();
+
+      const onMove = (event) => {
+        const deltaRatio = trackRect.width > 0 ? (event.clientX - startClientX) / trackRect.width : 0;
+        if (mode === "move") {
+          const nextLeftRatio = Math.max(0, Math.min(1 - startWindow.widthRatio, startWindow.leftRatio + deltaRatio));
+          const nextScrollLeft = nextLeftRatio * startWindow.contentWidth;
+          scrollPanel.scrollLeft = nextScrollLeft;
+          state.threadTimelineScrollLeft = nextScrollLeft;
+          const maxScrollable = scrollPanel.scrollWidth - scrollPanel.clientWidth;
+          state.threadTimelineScrollRatio = maxScrollable > 0 ? nextScrollLeft / maxScrollable : 0;
+          updateThreadZoomViewport(scrollPanel, target);
+          return;
+        }
+
+        if (mode === "resize-left") {
+          const nextLeftRatio = Math.max(0, Math.min(startRightRatio - minWidthRatio, startWindow.leftRatio + deltaRatio));
+          const nextWidthRatio = Math.max(minWidthRatio, Math.min(maxWidthRatio, startRightRatio - nextLeftRatio));
+          pendingWindow = { leftRatio: nextLeftRatio, widthRatio: nextWidthRatio };
+          paintThreadZoomViewport(viewport, pendingWindow);
+          return;
+        }
+
+        const nextRightRatio = Math.max(startWindow.leftRatio + minWidthRatio, Math.min(1, startRightRatio + deltaRatio));
+        const nextWidthRatio = Math.max(minWidthRatio, Math.min(maxWidthRatio, nextRightRatio - startWindow.leftRatio));
+        pendingWindow = { leftRatio: startWindow.leftRatio, widthRatio: nextWidthRatio };
+        paintThreadZoomViewport(viewport, pendingWindow);
+      };
+
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        if (pendingWindow) {
+          applyThreadViewportRatios({
+            leftRatio: pendingWindow.leftRatio,
+            widthRatio: pendingWindow.widthRatio,
+            viewportWidth: startWindow.viewportWidth,
+            sessionCount: sessions.length,
+          });
+        }
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    };
+
+    track.addEventListener("pointerdown", (event) => {
+      if (!(event.target instanceof Element) || event.target.closest(".thread-zoom-viewport")) {
+        return;
+      }
+      event.preventDefault();
+      const trackRect = track.getBoundingClientRect();
+      const currentWindow = currentThreadViewportWindow(scrollPanel);
+      const pointerRatio = trackRect.width > 0 ? (event.clientX - trackRect.left) / trackRect.width : 0;
+      const centeredLeftRatio = Math.max(
+        0,
+        Math.min(1 - currentWindow.widthRatio, pointerRatio - (currentWindow.widthRatio / 2)),
+      );
+      const nextScrollLeft = centeredLeftRatio * currentWindow.contentWidth;
+      scrollPanel.scrollLeft = nextScrollLeft;
+      state.threadTimelineScrollLeft = nextScrollLeft;
+      const maxScrollable = scrollPanel.scrollWidth - scrollPanel.clientWidth;
+      state.threadTimelineScrollRatio = maxScrollable > 0 ? nextScrollLeft / maxScrollable : 0;
+      updateThreadZoomViewport(scrollPanel, target);
+      startDrag("move", event.clientX);
+    });
+
+    viewport.addEventListener("pointerdown", (event) => {
+      if (event.target instanceof Element && event.target.closest(".thread-zoom-handle")) {
+        return;
+      }
+      event.preventDefault();
+      startDrag("move", event.clientX);
+    });
+
+    if (leftHandle instanceof HTMLElement) {
+      leftHandle.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        startDrag("resize-left", event.clientX);
+      });
+    }
+
+    if (rightHandle instanceof HTMLElement) {
+      rightHandle.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        startDrag("resize-right", event.clientX);
+      });
+    }
+  }
+
+  function buildThreadAxis(sessions, canvas, { compact = false } = {}) {
+    if (!sessions.length) {
+      return "";
+    }
+    const monthStarts = [];
+    const yearSpans = [];
+    let currentMonth = null;
+    let currentYear = null;
+    let currentYearStart = 0;
+
+    sessions.forEach((session, index) => {
+      const year = session.session_date.slice(0, 4);
+      const month = session.session_date.slice(5, 7);
+      const monthKey = `${year}-${month}`;
+      if (monthKey !== currentMonth) {
+        monthStarts.push({ year, month, index });
+        currentMonth = monthKey;
+      }
+      if (year !== currentYear) {
+        if (currentYear !== null) {
+          yearSpans.push({ year: currentYear, startIndex: currentYearStart, endIndex: index - 1 });
+        }
+        currentYear = year;
+        currentYearStart = index;
+      }
+    });
+    if (currentYear !== null) {
+      yearSpans.push({ year: currentYear, startIndex: currentYearStart, endIndex: sessions.length - 1 });
+    }
+
+    const yearHtml = yearSpans
+      .map((span) => {
+        const leftPx = span.startIndex * canvas.sessionPx;
+        const widthPx = ((span.endIndex - span.startIndex) + 1) * canvas.sessionPx;
+        return `<div class="thread-axis-year" style="left:${leftPx}px;width:${widthPx}px;">${ui.escapeHtml(span.year)}</div>`;
+      })
+      .join("");
+
+    const monthHtml = monthStarts
+      .map((month) => {
+        const leftPx = month.index * canvas.sessionPx;
+        const centerPx = canvas.positionForIndex(month.index);
+        return `<div class="thread-axis-month-line" style="left:${leftPx}px;"></div>
+          <div class="thread-axis-month-label" style="left:${centerPx}px;">${ui.escapeHtml(month.month)}</div>`;
+      })
+      .join("");
+
+    return `<div class="thread-axis${compact ? " compact" : ""}" style="width:${canvas.width}px;">
+      <div class="thread-axis-years">${yearHtml}</div>
+      <div class="thread-axis-months">${monthHtml}</div>
+    </div>`;
+  }
+
+  function findThreadInterval(tradeId) {
+    if (!state.threadTimeline || !tradeId) {
+      return null;
+    }
+    for (const lane of state.threadTimeline.lanes) {
+      const interval = lane.intervals.find((item) => item.trade_id === tradeId);
+      if (interval) {
+        return { lane, interval };
+      }
+    }
+    return null;
+  }
+
+  function findThreadSession(sessionDate) {
+    if (!state.threadTimeline || !sessionDate) {
+      return null;
+    }
+    return state.threadTimeline.sessions.find((session) => session.session_date === sessionDate) || null;
+  }
+
+  function renderThreadSummary() {
+    const payload = state.threadTimeline;
+    if (!payload) {
+      ui.setText("thread-kpi-working-days", "-");
+      ui.setText("thread-kpi-entry-sessions", "-");
+      ui.setText("thread-kpi-exit-sessions", "-");
+      ui.setText("thread-kpi-free-days", "-");
+      ui.setText("thread-kpi-full-days", "-");
+      return;
+    }
+    const sliceData = currentThreadSliceData();
+    const sessions = sliceData?.sessions || [];
+    const workingDays = sessions.length;
+    const entrySessions = sessions.filter((session) => session.entries > 0).length;
+    const exitSessions = sessions.filter((session) => session.exit_count > 0).length;
+    const freeDays = sessions.filter((session) => session.open_threads === 0).length;
+    const fullDays = sessions.filter((session) => session.open_threads === payload.meta.thread_count).length;
+    ui.setText("thread-kpi-working-days", String(workingDays));
+    ui.setText("thread-kpi-entry-sessions", String(entrySessions));
+    ui.setText("thread-kpi-exit-sessions", String(exitSessions));
+    ui.setText("thread-kpi-free-days", String(freeDays));
+    ui.setText("thread-kpi-full-days", String(fullDays));
+  }
+
+  function aggregateTimelineIntervals(payload) {
+    return payload.lanes
+      .flatMap((lane) => lane.intervals.map((interval) => ({ ...interval, laneLabel: threadLabel(lane.thread_id) })))
+      .sort((left, right) => {
+        if (left.start_date !== right.start_date) {
+          return left.start_date.localeCompare(right.start_date);
+        }
+        const leftEnd = left.end_date || "9999-12-31";
+        const rightEnd = right.end_date || "9999-12-31";
+        if (leftEnd !== rightEnd) {
+          return leftEnd.localeCompare(rightEnd);
+        }
+        return left.thread_id - right.thread_id;
+      });
+  }
+
+  function currentThreadTradeRows() {
+    if (!state.threadTimeline) {
+      return [];
+    }
+    const sliceData = currentThreadSliceData();
+    if (!sliceData || !sliceData.actualStart || !sliceData.actualEnd) {
+      return [];
+    }
+    return state.threadTimeline.lanes
+      .flatMap((lane) =>
+        lane.intervals
+          .filter((interval) => {
+            const rawEnd = interval.end_date || state.threadTimeline.meta.period_end;
+            return interval.start_date <= sliceData.actualEnd && rawEnd >= sliceData.actualStart;
+          })
+          .map((interval) => ({
+            lane,
+            interval,
+            activityDate: interval.end_date || interval.visible_end_date || interval.start_date,
+          })),
+      )
+      .sort((left, right) => {
+        if (left.activityDate !== right.activityDate) {
+          return right.activityDate.localeCompare(left.activityDate);
+        }
+        if (left.interval.start_date !== right.interval.start_date) {
+          return right.interval.start_date.localeCompare(left.interval.start_date);
+        }
+        return left.interval.thread_id - right.interval.thread_id;
+      });
+  }
+
+  function threadTradeStatusLabel(interval) {
+    if (interval.status === "OPEN") {
+      return "보유중";
+    }
+    return threadReasonLabel(interval.close_reason);
+  }
+
+  function threadTradeStatusBadge(interval) {
+    if (interval.status === "OPEN") {
+      return "warning";
+    }
+    if (interval.close_reason === "TAKE_PROFIT") {
+      return "success";
+    }
+    return "danger";
+  }
+
+  function renderThreadTimeline() {
+    const target = document.getElementById("thread-timeline-card");
+    const payload = state.threadTimeline;
+    const sliceData = currentThreadSliceData();
+    const existingScrollPanel = target.querySelector(".thread-scroll-panel");
+    if (existingScrollPanel) {
+      state.threadTimelineScrollLeft = existingScrollPanel.scrollLeft;
+      const maxScrollable = existingScrollPanel.scrollWidth - existingScrollPanel.clientWidth;
+      state.threadTimelineScrollRatio = maxScrollable > 0 ? existingScrollPanel.scrollLeft / maxScrollable : 0;
+    }
+    if (!payload || !sliceData || !sliceData.sessions.length) {
+      state.threadTimelineScrollLeft = 0;
+      state.threadTimelineScrollRatio = 0;
+      target.innerHTML = '<div class="thread-empty">선택 구간에 thread timeline 데이터가 없습니다.</div>';
+      return;
+    }
+    const canvas = buildThreadCanvas(sliceData.sessions);
+    const actualStart = sliceData.actualStart;
+    const actualEnd = sliceData.actualEnd;
+    const sourceLanes = state.threadExpanded
+      ? [
+          { thread_id: 0, label: "Total", intervals: aggregateTimelineIntervals(payload), controlOnly: false },
+          ...payload.lanes,
+        ]
+      : [{ thread_id: 0, label: "Total", intervals: aggregateTimelineIntervals(payload), controlOnly: false }];
+    const labelRowsHtml = sourceLanes
+      .map((lane) => {
+        const controlMarkup =
+          lane.thread_id === 0
+            ? `<button type="button" class="thread-toggle-inline" id="thread-inline-toggle" aria-expanded="${state.threadExpanded ? "true" : "false"}">${state.threadExpanded ? "▲" : "▼"}</button>`
+            : "";
+        return `<div class="thread-label-row"><span>${ui.escapeHtml(laneDisplayLabel(lane))}</span>${controlMarkup}</div>`;
+      })
+      .join("");
+    const trackRowsHtml = sourceLanes
+      .map((lane) => {
+        const allowTradeDrilldown = lane.thread_id !== 0;
+        const trackItems = lane.intervals
+          .map((interval) => {
+            const rawEnd = interval.end_date || payload.meta.period_end;
+            if (interval.start_date > actualEnd || rawEnd < actualStart) {
+              return "";
+            }
+            const visibleStart = interval.start_date < actualStart ? actualStart : interval.start_date;
+            const visibleEnd = rawEnd > actualEnd ? actualEnd : rawEnd;
+            const startIndex = sliceData.sessionIndexByDate.get(visibleStart);
+            const endIndex = sliceData.sessionIndexByDate.get(visibleEnd);
+            if (startIndex == null || endIndex == null) {
+              return "";
+            }
+            const leftPx = startIndex * canvas.sessionPx;
+            const widthPx = canvas.widthForRange(startIndex, endIndex);
+            const drawerDate =
+              interval.end_date && interval.end_date >= actualStart && interval.end_date <= actualEnd ? interval.end_date : visibleEnd;
+            const laneLabel = interval.laneLabel || laneDisplayLabel(lane);
+            const title = intervalHoverTitle(laneLabel, interval);
+            if (!allowTradeDrilldown) {
+              return `<div class="thread-box thread-box-static ${threadReasonClass(interval)}" style="left:${leftPx}px;width:${widthPx}px;" title="${ui.escapeHtml(title)}"></div>`;
+            }
+            return `<button type="button" class="thread-box ${threadReasonClass(interval)}" style="left:${leftPx}px;width:${widthPx}px;" data-thread-session-date="${ui.escapeHtml(drawerDate)}" data-thread-trade-id="${ui.escapeHtml(interval.trade_id)}" data-thread-drawer-kind="trade" title="${ui.escapeHtml(title)}"></button>`;
+          })
+          .join("");
+        const showEventMarkers = lane.thread_id === 0;
+        const sessionMarkers = showEventMarkers
+          ? sliceData.sessions
+              .filter((session) => session.entries > 0 || session.exit_count > 0)
+              .map((session) => {
+                const markerIndex = sliceData.sessionIndexByDate.get(session.session_date);
+                const markerLeftPx = canvas.positionForIndex(markerIndex);
+                return `${session.entries > 0 ? `<button type="button" class="thread-entry-marker timeline-entry" style="left:${markerLeftPx}px" data-thread-session-date="${ui.escapeHtml(session.session_date)}" data-thread-drawer-kind="entry-session" title="${ui.escapeHtml(entryMarkerTitle(session))}">▲</button>` : ""}
+                  ${session.exit_count > 0 ? `<button type="button" class="thread-exit-marker timeline-exit" style="left:${markerLeftPx}px" data-thread-session-date="${ui.escapeHtml(session.session_date)}" data-thread-drawer-kind="exit-session" title="${ui.escapeHtml(exitMarkerTitle(session))}">${ui.escapeHtml(String(session.exit_count))}</button>` : ""}`;
+              })
+              .join("")
+          : "";
+        return `<div class="thread-track-row">
+          <div class="thread-lane-track${showEventMarkers ? " collapsed-track" : ""}${lane.controlOnly ? " control-only-track" : ""}" style="width:${canvas.width}px;">${trackItems}${sessionMarkers}</div>
+        </div>`;
+      })
+      .join("");
+    target.innerHTML = `<div class="thread-shell">
+      <div class="thread-fixed-column">
+        <div class="thread-fixed-spacer"></div>
+        ${labelRowsHtml}
+      </div>
+      <div class="thread-scroll-region">
+        <div class="thread-scroll-panel">
+          ${buildThreadAxis(sliceData.sessions, canvas, { compact: true })}
+          <div class="thread-track-column">
+            ${trackRowsHtml}
+          </div>
+        </div>
+        <div class="thread-zoom-strip" aria-label="Thread timeline zoom bar">
+          <div class="thread-zoom-track">
+            <div class="thread-zoom-viewport">
+              <button type="button" class="thread-zoom-handle left" aria-label="Zoom left handle"></button>
+              <div class="thread-zoom-body">
+                <span class="thread-zoom-grip"></span>
+              </div>
+              <button type="button" class="thread-zoom-handle right" aria-label="Zoom right handle"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+    const scrollPanel = target.querySelector(".thread-scroll-panel");
+    if (scrollPanel) {
+      const maxScrollable = scrollPanel.scrollWidth - scrollPanel.clientWidth;
+      scrollPanel.scrollLeft = maxScrollable > 0
+        ? maxScrollable * state.threadTimelineScrollRatio
+        : state.threadTimelineScrollLeft;
+      scrollPanel.addEventListener("scroll", () => {
+        state.threadTimelineScrollLeft = scrollPanel.scrollLeft;
+        const currentMaxScrollable = scrollPanel.scrollWidth - scrollPanel.clientWidth;
+        state.threadTimelineScrollRatio = currentMaxScrollable > 0 ? scrollPanel.scrollLeft / currentMaxScrollable : 0;
+        updateThreadZoomViewport(scrollPanel, target);
+      }, { passive: true });
+      updateThreadZoomViewport(scrollPanel, target);
+      attachThreadZoomBar(target, scrollPanel, sliceData.sessions);
+    }
+    const inlineToggle = document.getElementById("thread-inline-toggle");
+    if (inlineToggle) {
+      inlineToggle.addEventListener("click", (event) => {
+        event.stopPropagation();
+        state.threadExpanded = !state.threadExpanded;
+        renderThreadViews();
+      });
+    }
+    target.querySelectorAll("[data-thread-session-date]").forEach((button) => {
+      button.addEventListener("click", () => {
+        openThreadDrawer({
+          sessionDate: button.getAttribute("data-thread-session-date"),
+          tradeId: button.getAttribute("data-thread-trade-id"),
+          kind: button.getAttribute("data-thread-drawer-kind"),
+        });
+      });
+    });
+  }
+
+  function renderThreadHistory() {
+    const body = document.getElementById("thread-history-body");
+    const meta = document.getElementById("thread-history-meta");
+    const pageStatus = document.getElementById("thread-history-page-status");
+    const pageSizeSelect = document.getElementById("thread-history-page-size");
+    const prevButton = document.getElementById("thread-history-prev");
+    const nextButton = document.getElementById("thread-history-next");
+    if (!body || !meta || !pageStatus || !pageSizeSelect || !prevButton || !nextButton) {
+      return;
+    }
+
+    const rows = currentThreadTradeRows();
+    const pageSize = Number(pageSizeSelect.value || state.threadHistoryPageSize || 20);
+    state.threadHistoryPageSize = Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 20;
+    const totalPages = Math.max(1, Math.ceil(rows.length / state.threadHistoryPageSize));
+    state.threadHistoryPage = Math.max(1, Math.min(totalPages, state.threadHistoryPage));
+    const startIndex = (state.threadHistoryPage - 1) * state.threadHistoryPageSize;
+    const pageRows = rows.slice(startIndex, startIndex + state.threadHistoryPageSize);
+
+    if (!rows.length) {
+      meta.textContent = "총 0건";
+      body.innerHTML = '<tr><td colspan="12" class="muted" style="text-align:center">선택 구간에 표시할 거래 이력이 없습니다.</td></tr>';
+    } else {
+      meta.textContent = `총 ${ui.formatNumber(rows.length)}건`;
+      body.innerHTML = pageRows
+        .map(({ lane, interval }, pageIndex) => {
+          const drawerDate = interval.end_date || interval.start_date;
+          const rowNumber = startIndex + pageIndex + 1;
+          return `<tr>
+            <td class="mono thread-history-index-col">${ui.escapeHtml(String(rowNumber))}</td>
+            <td class="mono thread-history-thread-col">${ui.escapeHtml(laneDisplayLabel(lane))}</td>
+            <td class="thread-history-status-col"><span class="badge ${threadTradeStatusBadge(interval)}">${ui.escapeHtml(threadTradeStatusLabel(interval))}</span></td>
+            <td class="mono">${ui.escapeHtml(interval.start_date)}</td>
+            <td class="mono">${ui.escapeHtml(interval.end_date || "-")}</td>
+            <td class="num">${ui.escapeHtml(formatPriceValue(interval.entry_price))}</td>
+            <td class="num">${ui.escapeHtml(interval.exit_price ? formatPriceValue(interval.exit_price) : "-")}</td>
+            <td class="num mono">${ui.escapeHtml(interval.shares || "-")}</td>
+            <td class="num">${ui.escapeHtml(interval.pnl ? ui.formatMoney(interval.pnl) : "-")}</td>
+            <td class="num">${ui.escapeHtml(interval.return_pct ? ui.formatPercent(interval.return_pct) : "-")}</td>
+            <td class="num">${ui.escapeHtml(formatHoldingSessions(interval.holding_sessions))}</td>
+            <td><button class="thread-history-detail-btn" type="button" aria-label="상세 보기" title="상세 보기" data-thread-session-date="${ui.escapeHtml(drawerDate)}" data-thread-trade-id="${ui.escapeHtml(interval.trade_id)}" data-thread-drawer-kind="trade"><svg class="thread-history-detail-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="6.5" cy="6.5" r="4.25"></circle><path d="M9.8 9.8L14.2 14.2"></path></svg></button></td>
+          </tr>`;
+        })
+        .join("");
+    }
+
+    pageSizeSelect.value = String(state.threadHistoryPageSize);
+    pageStatus.textContent = `${state.threadHistoryPage} / ${totalPages}`;
+    prevButton.disabled = state.threadHistoryPage <= 1;
+    nextButton.disabled = state.threadHistoryPage >= totalPages;
+
+    pageSizeSelect.onchange = () => {
+      state.threadHistoryPageSize = Number(pageSizeSelect.value || 20);
+      resetThreadHistoryPage();
+      renderThreadHistory();
+    };
+    prevButton.onclick = () => {
+      if (state.threadHistoryPage <= 1) {
+        return;
+      }
+      state.threadHistoryPage -= 1;
+      renderThreadHistory();
+    };
+    nextButton.onclick = () => {
+      if (state.threadHistoryPage >= totalPages) {
+        return;
+      }
+      state.threadHistoryPage += 1;
+      renderThreadHistory();
+    };
+    body.querySelectorAll("[data-thread-session-date]").forEach((button) => {
+      button.addEventListener("click", () => {
+        openThreadDrawer({
+          sessionDate: button.getAttribute("data-thread-session-date"),
+          tradeId: button.getAttribute("data-thread-trade-id"),
+          kind: button.getAttribute("data-thread-drawer-kind"),
+        });
+      });
+    });
+  }
+
+  function findThreadIntervalSummary(tradeId) {
+    const selectedTrade = findThreadInterval(tradeId);
+    return selectedTrade ? selectedTrade.interval : null;
+  }
+
+  function threadExitDetailTitle(reason) {
+    return reason === "TAKE_PROFIT" ? "익절 상세" : "손절 상세";
+  }
+
+  function intervalHoverTitle(laneLabel, interval) {
+    const dateRange = `${interval.start_date} ~ ${interval.end_date || "OPEN"}`;
+    if (interval.status === "OPEN") {
+      return `${laneLabel} · ${dateRange} · 보유중`;
+    }
+    const pnl = parseMoney(interval.pnl);
+    if (interval.close_reason === "TAKE_PROFIT") {
+      return `${laneLabel} · ${dateRange} · 벌어들인 수익 ${ui.formatMoney(pnl)}`;
+    }
+    return `${laneLabel} · ${dateRange} · 손실 총액 ${ui.formatMoney(Math.abs(pnl))}`;
+  }
+
+  function renderThreadTradeDetail(lane, interval) {
+    return `<section class="thread-detail-card">
+      <h4>${ui.escapeHtml(threadReasonLabel(interval.close_reason))} 상세</h4>
+      <div class="thread-detail-grid">
+        <div class="meta-item"><span>Thread</span><strong>${ui.escapeHtml(laneDisplayLabel(lane))}</strong></div>
+        <div class="meta-item"><span>배정 자본금</span><strong>${ui.escapeHtml(ui.formatMoney(interval.invested_amount))}</strong></div>
+        <div class="meta-item"><span>진입 날짜</span><strong class="mono">${ui.escapeHtml(interval.start_date)}</strong></div>
+        <div class="meta-item"><span>진입 가격</span><strong>${ui.escapeHtml(formatPriceValue(interval.entry_price))}</strong></div>
+        <div class="meta-item"><span>진입 수량</span><strong class="mono">${ui.escapeHtml(interval.shares)}</strong></div>
+        <div class="meta-item"><span>종료 날짜</span><strong class="mono">${ui.escapeHtml(interval.end_date || "-")}</strong></div>
+        <div class="meta-item"><span>종료 가격</span><strong>${ui.escapeHtml(interval.exit_price ? formatPriceValue(interval.exit_price) : "-")}</strong></div>
+        <div class="meta-item"><span>PNL</span><strong>${ui.escapeHtml(interval.pnl ? ui.formatMoney(interval.pnl) : "-")}</strong></div>
+        <div class="meta-item"><span>Return</span><strong>${ui.escapeHtml(interval.return_pct ? ui.formatPercent(interval.return_pct) : "-")}</strong></div>
+        <div class="meta-item"><span>보유 기간</span><strong>${ui.escapeHtml(formatHoldingSessions(interval.holding_sessions))}</strong></div>
+      </div>
+    </section>`;
+  }
+
+  function renderThreadEntrySessionDetail(session) {
+    const cards = (session.entry_batch || [])
+      .map(
+        (row) => `<section class="thread-detail-card thread-batch-card">
+          <h4>매수 상세</h4>
+          <div class="thread-detail-grid">
+            <div class="meta-item"><span>Thread</span><strong>${ui.escapeHtml(threadLabel(row.thread_id))}</strong></div>
+            <div class="meta-item"><span>배정 자본금</span><strong>${ui.escapeHtml(ui.formatMoney(row.invested_amount))}</strong></div>
+            <div class="meta-item"><span>진입 날짜</span><strong class="mono">${ui.escapeHtml(session.session_date)}</strong></div>
+            <div class="meta-item"><span>진입 가격</span><strong>${ui.escapeHtml(formatPriceValue(row.entry_price))}</strong></div>
+            <div class="meta-item"><span>진입 수량</span><strong class="mono">${ui.escapeHtml(row.shares)}</strong></div>
+          </div>
+        </section>`,
+      )
+      .join("");
+    return `<section class="thread-detail-stack">
+      <div class="thread-batch-cards">${cards}</div>
+    </section>`;
+  }
+
+  function renderThreadExitSessionDetail(session) {
+    const totalPnl = (session.exit_batch || []).reduce((sum, row) => sum + parseMoney(row.pnl), 0);
+    const cards = (session.exit_batch || [])
+      .map((row) => {
+        const interval = findThreadIntervalSummary(row.trade_id);
+        return `<section class="thread-detail-card thread-batch-card">
+          <h4>${ui.escapeHtml(threadExitDetailTitle(row.close_reason))}</h4>
+          <div class="thread-detail-grid">
+            <div class="meta-item"><span>Thread</span><strong>${ui.escapeHtml(threadLabel(row.thread_id))}</strong></div>
+            <div class="meta-item"><span>배정 자본금</span><strong>${ui.escapeHtml(interval ? ui.formatMoney(interval.invested_amount) : "-")}</strong></div>
+            <div class="meta-item"><span>진입 날짜</span><strong class="mono">${ui.escapeHtml(interval?.start_date || "-")}</strong></div>
+            <div class="meta-item"><span>진입 가격</span><strong>${ui.escapeHtml(formatPriceValue(row.entry_price))}</strong></div>
+            <div class="meta-item"><span>진입 수량</span><strong class="mono">${ui.escapeHtml(interval?.shares || "-")}</strong></div>
+            <div class="meta-item"><span>종료 가격</span><strong>${ui.escapeHtml(formatPriceValue(row.exit_price))}</strong></div>
+            <div class="meta-item"><span>PNL</span><strong>${ui.escapeHtml(ui.formatMoney(row.pnl))}</strong></div>
+            <div class="meta-item"><span>Return</span><strong>${ui.escapeHtml(ui.formatPercent(row.return_pct))}</strong></div>
+            <div class="meta-item"><span>보유 기간</span><strong>${ui.escapeHtml(formatHoldingSessions(row.holding_sessions))}</strong></div>
+          </div>
+        </section>`;
+      })
+      .join("");
+    return `<section class="thread-detail-stack">
+      <section class="thread-detail-card thread-session-card">
+        <h4>매도</h4>
+        <div class="thread-detail-grid">
+          <div class="meta-item"><span>세션 날짜</span><strong class="mono">${ui.escapeHtml(session.session_date)}</strong></div>
+          <div class="meta-item"><span>종가</span><strong>${ui.escapeHtml(formatPriceValue(session.close_price))}</strong></div>
+          <div class="meta-item"><span>매도 수</span><strong>${ui.escapeHtml(String(session.exit_count))}</strong></div>
+        </div>
+      </section>
+      <div class="thread-batch-cards">${cards}</div>
+      <div class="thread-detail-total">
+        <span>총 벌어들인 금액</span>
+        <strong>${ui.escapeHtml(ui.formatMoney(totalPnl))}</strong>
+      </div>
+    </section>`;
+  }
+
+  function renderThreadDrawer() {
+    const subtitle = document.getElementById("thread-drawer-subtitle");
+    const body = document.getElementById("thread-drawer-body");
+    if (!state.threadTimeline) {
+      subtitle.textContent = "세션 또는 trade를 선택하면 상세가 표시됩니다.";
+      body.innerHTML = '<div class="stack-row"><span class="title">상세 대기</span><span class="badge neutral">idle</span></div>';
+      return;
+    }
+    const selectedTrade = state.threadDrawer.tradeId ? findThreadInterval(state.threadDrawer.tradeId) : null;
+    const selectedSession = state.threadDrawer.sessionDate ? findThreadSession(state.threadDrawer.sessionDate) : null;
+    if (selectedTrade) {
+      const { lane, interval } = selectedTrade;
+      subtitle.textContent = `${state.threadTimeline.meta.strategy_id} · ${interval.end_date || interval.start_date}`;
+      body.innerHTML = renderThreadTradeDetail(lane, interval);
+      return;
+    }
+    if (selectedSession && state.threadDrawer.kind === "entry-session") {
+      subtitle.textContent = `${state.threadTimeline.meta.strategy_id} · ${selectedSession.session_date} · 매수`;
+      body.innerHTML = renderThreadEntrySessionDetail(selectedSession);
+      return;
+    }
+    if (selectedSession && state.threadDrawer.kind === "exit-session") {
+      subtitle.textContent = `${state.threadTimeline.meta.strategy_id} · ${selectedSession.session_date} · 매도`;
+      body.innerHTML = renderThreadExitSessionDetail(selectedSession);
+      return;
+    }
+    if (!selectedTrade && !selectedSession) {
+      subtitle.textContent = `${state.threadTimeline.meta.strategy_id} detail`;
+      body.innerHTML = '<div class="stack-row"><span class="title">매수 마커, 매도 마커, 또는 trade를 선택하면 상세가 표시됩니다.</span><span class="badge neutral">idle</span></div>';
+      return;
+    }
+    subtitle.textContent = `${state.threadTimeline.meta.strategy_id} detail`;
+    body.innerHTML = '<div class="stack-row"><span class="title">선택한 세션에 표시할 상세 데이터가 없습니다.</span><span class="badge neutral">idle</span></div>';
+  }
+
+  function openThreadDrawer({ sessionDate = null, tradeId = null, kind = null }) {
+    state.threadDrawer = { sessionDate, tradeId, kind };
+    renderThreadDrawer();
+    const drawer = document.getElementById("thread-drawer");
+    drawer.classList.add("visible");
+    drawer.setAttribute("aria-hidden", "false");
+  }
+
+  function closeThreadDrawer() {
+    const drawer = document.getElementById("thread-drawer");
+    drawer.classList.remove("visible");
+    drawer.setAttribute("aria-hidden", "true");
+  }
+
+  function renderThreadViews() {
+    renderThreadSummary();
+    renderThreadTimeline();
+    renderThreadHistory();
+    renderThreadDrawer();
+  }
+
   function renderStrategyRollingChart() {
     const slice = currentStrategySlice();
-    const windowSize = Number(document.getElementById("strategy-roll-window").value || 252);
+    const rollWindow = document.getElementById("strategy-roll-window");
+    const windowSize = Number((rollWindow && rollWindow.value) || 252);
     if (!slice || !window.Plotly || !state.selectedStrategyIds.length) {
       setEmptyChart("strategy-rolling-chart", "선택 전략이 없습니다.");
       return;
@@ -758,7 +1367,7 @@
       })
       .filter(Boolean);
     if (!traces.length) {
-      setEmptyChart("strategy-rolling-chart", "선택 구간이 롤링 윈도보다 짧습니다.");
+      setEmptyChart("strategy-rolling-chart", "");
       return;
     }
     const layout = chartLayoutBase();
@@ -830,30 +1439,63 @@
         '<tr><td colspan="3" class="muted" style="text-align:center">선택 전략이 없습니다.</td></tr>';
       return;
     }
-    const presets = state.strategyExplorer.meta.segment_presets || [];
+    const slice = currentStrategySlice();
     const strategies = state.selectedStrategyIds.map((strategyId) => getStrategyById(strategyId)).filter(Boolean);
     document.getElementById("strategy-segment-head").innerHTML = `<tr>
-      <th>Segment</th>
+      <th>구간</th>
       ${strategies.map((strategy) => `<th class="num">${ui.escapeHtml(strategy.label)}</th>`).join("")}
     </tr>`;
-    document.getElementById("strategy-segment-body").innerHTML = presets
-      .map((preset) => {
+    const rows = [
+      {
+        label: "전체 구간",
+        period: formatSessionPeriod(state.strategyExplorer.meta.period_start, state.strategyExplorer.meta.period_end),
+        resolve(strategy) {
+          const returnPct = Number(strategy.metrics?.total_return_pct);
+          const maxDrawdownPct = Number(strategy.metrics?.max_drawdown_pct);
+          if (!Number.isFinite(returnPct) || !Number.isFinite(maxDrawdownPct)) {
+            return null;
+          }
+          return { returnPct, maxDrawdownPct };
+        },
+      },
+      {
+        label: "선택 구간",
+        period: slice ? formatSessionPeriod(slice.start, slice.end) : "-",
+        resolve(strategy) {
+          if (!slice) {
+            return null;
+          }
+          const series = rebaseDaily(strategyDailySlice(strategy, slice.start, slice.end));
+          const summary = summarizeRebasedSlice(series);
+          const drawdown = summarizeSliceDrawdown(series);
+          if (!summary || !drawdown) {
+            return null;
+          }
+          return {
+            returnPct: summary.returnPct,
+            maxDrawdownPct: drawdown.maxDrawdownPct,
+          };
+        },
+      },
+    ];
+    document.getElementById("strategy-segment-body").innerHTML = rows
+      .map((row) => {
         const cells = strategies
           .map((strategy) => {
-            const row = (strategy.segments || []).find((segment) => segment.segment_id === preset.preset_id);
-            if (!row) {
+            const result = row.resolve(strategy);
+            if (!result) {
               return '<td class="num muted">-</td>';
             }
             return `<td>
-              <strong>${ui.escapeHtml(ui.formatPercent(row.return_pct))}</strong>
-              <small>MDD ${ui.escapeHtml(ui.formatPercent(row.max_drawdown_pct))}</small>
+              <strong>${ui.escapeHtml(ui.formatPercent(result.returnPct))}</strong>
+              <small>(${ui.escapeHtml(`MDD ${ui.formatPercent(result.maxDrawdownPct)}`)})</small>
             </td>`;
           })
           .join("");
         return `<tr>
           <td>
-            <strong>${ui.escapeHtml(preset.label)}</strong>
-            <small>${ui.escapeHtml(formatSessionPeriod(preset.start, preset.end))}</small>
+            <strong>${ui.escapeHtml(row.label)}</strong>
+            <small>${ui.escapeHtml(row.period)}</small>
           </td>
           ${cells}
         </tr>`;
@@ -862,43 +1504,98 @@
   }
 
   function renderStrategyViews() {
-    renderStrategyKpis();
     renderStrategyEquityChart();
     renderStrategyDrawdownChart();
-    renderStrategyRollingChart();
-    renderStrategyMonthlyChart();
-    renderStrategySegmentTable();
+    renderThreadViews();
+  }
+
+  function renderOfficialMeta() {
+    if (!state.officialExplorer) {
+      return;
+    }
+    const selection = state.officialExplorer;
+    ui.setText("official-combo", selection.official_profile.combo_key);
+    ui.setText("official-ranking-basis", selection.meta.selection_basis);
+  }
+
+  function renderOfficialMatrix() {
+    const body = document.getElementById("official-matrix-body");
+    if (!body) {
+      return;
+    }
+    const payload = state.officialMatrix;
+    if (!payload) {
+      body.innerHTML = '<tr><td class="muted" style="text-align:center">공식 매트릭스를 불러오지 못했습니다.</td></tr>';
+      return;
+    }
+    const comboKeys = comboOrder(payload.combos);
+    const officialCombo = payload.meta.official_combo_key;
+    const header = `<tr>
+      <th class="sticky-1">연도</th>
+      <th class="sticky-2 benchmark-col">연간 주가 변화</th>
+      <th class="sticky-3 benchmark-col">SOXL</th>
+      ${comboKeys
+        .map((comboKey) => `<th class="num${comboKey === officialCombo ? " representative-col" : ""}">${comboKey.replace("x", "/")}</th>`)
+        .join("")}
+    </tr>`;
+    const yearlyRows = payload.benchmark.yearly
+      .map((benchmarkRow) => {
+        const values = comboKeys.map((comboKey) => Number(payload.combos[comboKey].yearly_returns_pct[String(benchmarkRow.year)]));
+        const rowMax = Math.max(...values);
+        return `<tr>
+          <td class="sticky-1 mono">${benchmarkRow.year}</td>
+          <td class="sticky-2 benchmark-col mono">${ui.escapeHtml(benchmarkRow.price_change)}</td>
+          <td class="sticky-3 benchmark-col num">${ui.escapeHtml(matrixPercent(benchmarkRow.return_pct))}</td>
+          ${comboKeys
+            .map((comboKey) => {
+              const value = Number(payload.combos[comboKey].yearly_returns_pct[String(benchmarkRow.year)]);
+              const representative = comboKey === officialCombo ? " representative-col" : "";
+              const highlight = value === rowMax ? " max-cell" : "";
+              return `<td class="num${representative}${highlight}">${ui.escapeHtml(matrixPercent(value))}</td>`;
+            })
+            .join("")}
+        </tr>`;
+      })
+      .join("");
+    const aggregateRows = [
+      { label: "표준편차", family: "per-year", benchmark: "", comboSection: "stats_pct", comboField: "stddev" },
+      { label: "전체평균", family: "all years", benchmark: "", comboSection: "stats_pct", comboField: "avg_all" },
+      { label: "평균5년", family: "last 5y", benchmark: "", comboSection: "stats_pct", comboField: "avg_5y" },
+      { label: "단리전체", family: "total", benchmark: "", comboSection: "simple_returns_pct", comboField: "total" },
+      { label: "단리5년", family: "y5", benchmark: "", comboSection: "simple_returns_pct", comboField: "y5" },
+      { label: "단리3년", family: "y3", benchmark: "", comboSection: "simple_returns_pct", comboField: "y3" },
+      { label: "복리전체", family: "total", benchmark: "", comboSection: "compound_returns_pct", comboField: "total" },
+      { label: "복리5년", family: "y5", benchmark: "", comboSection: "compound_returns_pct", comboField: "y5" },
+      { label: "복리3년", family: "y3", benchmark: "", comboSection: "compound_returns_pct", comboField: "y3" },
+      { label: "복리1년", family: "y1", benchmark: "", comboSection: "compound_returns_pct", comboField: "y1" },
+    ]
+      .map((row) => `<tr>
+        <td class="sticky-1 aggregate-label">${ui.escapeHtml(row.label)}</td>
+        <td class="sticky-2 aggregate-label">${ui.escapeHtml(row.family)}</td>
+        <td class="sticky-3 benchmark-col num">${row.benchmark === "" ? "-" : ui.escapeHtml(matrixPercent(row.benchmark))}</td>
+        ${comboKeys
+          .map((comboKey) => {
+            const representative = comboKey === officialCombo ? " representative-col" : "";
+            const value = payload.combos[comboKey][row.comboSection][row.comboField];
+            return `<td class="num${representative}">${ui.escapeHtml(matrixPercent(value))}</td>`;
+          })
+          .join("")}
+      </tr>`)
+      .join("");
+    body.innerHTML = `${header}${yearlyRows}<tr class="section-row"><td colspan="${3 + comboKeys.length}">aggregate rows</td></tr>${aggregateRows}`;
   }
 
   function renderStrategyExplorer(payload) {
     state.strategyExplorer = payload;
     ensureStrategySelection();
-    const allPreset = payload.meta.slice_presets.find((preset) => preset.preset_id === state.selectedStrategyPresetId) || payload.meta.slice_presets[0];
-    if (allPreset) {
-      setStrategyDateInputs(allPreset.start, allPreset.end);
+    const activePreset = payload.meta.slice_presets.find((preset) => preset.preset_id === state.selectedStrategyPresetId) || payload.meta.slice_presets[0];
+    if (activePreset) {
+      setStrategyDateInputs(activePreset.start, activePreset.end);
     }
-    renderStrategySelector();
     renderStrategySlicePresets();
-    document.getElementById("strategy-meta-note").textContent =
-      `참조: /home/justant/Data/Bit-Mania/backtest/dashboards/strategy_dashboard.html · catalog ${payload.meta.catalog_id} · data ${ui.shortHash(payload.meta.data_hash)} · model ${payload.meta.execution_model}`;
+    setNotice("strategy-meta-note", "");
+    renderStrategyRanking();
     renderStrategyViews();
-  }
-
-  function renderSweepJob(job) {
-    ui.setText("sweep-job-id", job.jobId || "-");
-    ui.setText("sweep-job-status", job.status || "-");
-    ui.setText("sweep-job-progress", `${job.progress || 0}%`);
-    ui.setText("sweep-artifact-id", job.artifactId || "-");
-    ui.setText("sweep-job-requested", ui.formatDateTime(job.requestedAt));
-    ui.setText("sweep-job-finished", ui.formatDateTime(job.finishedAt));
-    const errorBox = document.getElementById("sweep-job-error");
-    if (job.error) {
-      errorBox.textContent = job.error;
-      errorBox.classList.add("visible");
-    } else {
-      errorBox.textContent = "";
-      errorBox.classList.remove("visible");
-    }
   }
 
   function currentSweepRows() {
@@ -934,11 +1631,8 @@
     ui.setText("sweep-kpi-count", ui.formatNumber(payload.meta.combo_count));
     ui.setText("sweep-kpi-best-full", payload.summary.best_full_return_combo);
     ui.setText("sweep-kpi-best-robust", payload.summary.best_robust_combo);
-    ui.setText(
-      "sweep-kpi-pareto",
-      `${payload.summary.pareto_return_mdd_count} / ${payload.summary.pareto_return_stability_count}`,
-    );
-    ui.setText("sweep-latest-state", `${filteredRows.length} rows · ${SWEEP_PARETO_LABELS[document.getElementById("sweep-filter-pareto").value || "all"]}`);
+    ui.setText("sweep-kpi-pareto", `${payload.summary.pareto_return_mdd_count} / ${payload.summary.pareto_return_stability_count}`);
+    document.getElementById("sweep-meta-note").textContent = "";
   }
 
   function renderSweepWarnings(payload, filteredRows) {
@@ -955,12 +1649,10 @@
     }
     const target = document.getElementById("sweep-warning-list");
     if (!rows.length) {
-      target.innerHTML = '<div class="stack-row"><span class="title">현재 필터에서 추가 경고 없음</span><span class="badge success">ok</span></div>';
+      target.innerHTML = '<div class="stack-row"><span class="title">현재 필터에서 추가 메모 없음</span><span class="badge success">ok</span></div>';
       return;
     }
-    target.innerHTML = rows
-      .map((warning) => `<div class="warning-row"><span class="title">${ui.escapeHtml(warning)}</span></div>`)
-      .join("");
+    target.innerHTML = rows.map((warning) => `<div class="warning-row"><span class="title">${ui.escapeHtml(warning)}</span></div>`).join("");
   }
 
   function renderSweepScatter(filteredRows) {
@@ -1100,6 +1792,8 @@
       ui.setText("sweep-kpi-best-full", "-");
       ui.setText("sweep-kpi-best-robust", "-");
       ui.setText("sweep-kpi-pareto", "-");
+      ui.setText("sweep-artifact-id", "-");
+      document.getElementById("sweep-meta-note").textContent = "최신 스윕 산출물이 없습니다. Codex에서 생성한 뒤 다시 읽어오세요.";
       setEmptyChart("sweep-scatter-chart", "최신 스윕 산출물이 없습니다.");
       setEmptyChart("sweep-box-chart", "최신 스윕 산출물이 없습니다.");
       setEmptyChart("sweep-parcoords-chart", "최신 스윕 산출물이 없습니다.");
@@ -1111,8 +1805,6 @@
     }
     const payload = artifactRecord.payload;
     ui.setText("sweep-artifact-id", artifactRecord.artifactId || "-");
-    document.getElementById("sweep-meta-note").textContent =
-      `참조: /home/justant/Data/Bit-Mania/backtest/dashboards/supertrend_sweep_dashboard.html · ${payload.meta.sweep_id} · data ${ui.shortHash(payload.meta.data_hash)} · hash ${ui.shortHash(payload.meta.sweep_hash)}`;
     const filteredRows = currentSweepRows();
     renderSweepSummary(payload, filteredRows);
     renderSweepWarnings(payload, filteredRows);
@@ -1122,130 +1814,63 @@
     renderSweepTable(filteredRows);
   }
 
-  async function pollJob(jobId) {
-    while (true) {
-      const job = await ui.fetchJson(`/api/backtests/jobs/${encodeURIComponent(jobId)}`);
-      renderJob(job);
-      if (job.status === "COMPLETED" && job.runId) {
-        const run = await ui.fetchJson(`/api/backtests/runs/${encodeURIComponent(job.runId)}`);
-        renderRunArtifact(run);
+  async function loadThreadTimeline() {
+    if (!state.focusedStrategyId || !state.dataStatus) {
+      state.threadTimeline = null;
+      resetThreadHistoryPage();
+      renderThreadViews();
+      return;
+    }
+    const csvPath = state.dataStatus.snapshot_path || "";
+    const executionModel = state.strategyExplorer?.meta?.execution_model || "ideal_same_close";
+    const priceBasis = state.strategyExplorer?.meta?.price_basis || "adjusted_close";
+    const cacheKey = [state.focusedStrategyId, csvPath, executionModel, priceBasis].join(":");
+    if (state.threadTimelineCache[cacheKey]) {
+      state.threadTimeline = state.threadTimelineCache[cacheKey];
+      resetThreadHistoryPage();
+      renderThreadViews();
+      return;
+    }
+    const params = new URLSearchParams({
+      profileId: state.profileId,
+      csvPath,
+      strategyId: state.focusedStrategyId,
+      executionModel,
+      priceBasis,
+    });
+    try {
+      const payload = await ui.fetchJson(`/api/backtests/thread-timeline?${params.toString()}`);
+      state.threadTimelineCache[cacheKey] = payload;
+      if (state.focusedStrategyId !== payload.meta.strategy_id) {
         return;
       }
-      if (job.status === "FAILED") {
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      state.threadTimeline = payload;
+      resetThreadHistoryPage();
+      renderThreadViews();
+    } catch (error) {
+      state.threadTimeline = null;
+      resetThreadHistoryPage();
+      renderThreadViews();
     }
   }
 
-  async function pollSweepJob(jobId) {
-    while (true) {
-      const job = await ui.fetchJson(`/api/backtests/sweeps/jobs/${encodeURIComponent(jobId)}`);
-      renderSweepJob(job);
-      if (job.status === "COMPLETED" && job.artifactId) {
-        const artifact = await ui.fetchJson(`/api/backtests/sweeps/runs/${encodeURIComponent(job.artifactId)}`);
-        renderSweepArtifact(artifact);
-        return;
-      }
-      if (job.status === "FAILED") {
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-    }
-  }
-
-  async function loadCompare() {
-    const profileId = selectedProfileId();
-    const csvPath = document.getElementById("csv-path").value.trim();
-    const initialCapital = Number(document.getElementById("initial-capital").value || 10000);
-    const overrides = collectOverrides();
-    const params = new URLSearchParams({
-      profileId,
-      csvPath,
-      initialCapital: String(initialCapital),
-      threads: document.getElementById("compare-threads").value.trim() || "5,6,7",
-      stops: document.getElementById("compare-stops").value.trim() || "10,30,40",
-      threadCount: String(overrides.threadCount),
-      stopSessions: String(overrides.stopSessions),
-      takeProfitPct: String(overrides.takeProfitPct),
-      takeProfitOperator: overrides.takeProfitOperator,
-      entryDropPct: String(overrides.entryDropPct),
-      stopLossPct: String(overrides.stopLossPct),
-      maxEntriesPerSession: String(overrides.maxEntriesPerSession),
-      sizingMode: overrides.sizingMode,
-      priceBasis: overrides.priceBasis,
-    });
-    const payload = await ui.fetchJson(`/api/backtests/compare?${params.toString()}`);
-    renderCompare(payload);
-  }
-
-  async function loadRisk() {
-    const profileId = selectedProfileId();
-    const csvPath = document.getElementById("csv-path").value.trim();
-    const initialCapital = Number(document.getElementById("initial-capital").value || 10000);
-    const overrides = collectOverrides();
-    const params = new URLSearchParams({
-      profileId,
-      csvPath,
-      initialCapital: String(initialCapital),
-      threadCount: String(overrides.threadCount),
-      stopSessions: String(overrides.stopSessions),
-      takeProfitPct: String(overrides.takeProfitPct),
-      takeProfitOperator: overrides.takeProfitOperator,
-      entryDropPct: String(overrides.entryDropPct),
-      stopLossPct: String(overrides.stopLossPct),
-      maxEntriesPerSession: String(overrides.maxEntriesPerSession),
-      sizingMode: overrides.sizingMode,
-      priceBasis: overrides.priceBasis,
-    });
-    const payload = await ui.fetchJson(`/api/backtests/risk?${params.toString()}`);
-    renderRisk(payload);
-  }
-
-  async function loadMentorMatrix() {
-    const profileId = selectedProfileId();
-    const csvPath = document.getElementById("csv-path").value.trim();
-    const initialCapital = Number(document.getElementById("initial-capital").value || 10000);
-    const overrides = collectOverrides();
-    const params = new URLSearchParams({
-      profileId,
-      csvPath,
-      initialCapital: String(initialCapital),
-      threads: document.getElementById("compare-threads").value.trim() || "5,6,7",
-      stops: document.getElementById("compare-stops").value.trim() || "10,30,40",
-      threadCount: String(overrides.threadCount),
-      stopSessions: String(overrides.stopSessions),
-      takeProfitPct: String(overrides.takeProfitPct),
-      takeProfitOperator: overrides.takeProfitOperator,
-      entryDropPct: String(overrides.entryDropPct),
-      stopLossPct: String(overrides.stopLossPct),
-      maxEntriesPerSession: String(overrides.maxEntriesPerSession),
-      sizingMode: overrides.sizingMode,
-      priceBasis: overrides.priceBasis,
-    });
-    const payload = await ui.fetchJson(`/api/backtests/mentor-matrix?${params.toString()}`);
-    renderMentorMatrix(payload);
-    renderMentorCounts(payload);
-  }
-
-  async function loadStrategyExplorer() {
-    const profileId = selectedProfileId();
-    const csvPath = document.getElementById("csv-path").value.trim();
-    const params = new URLSearchParams({
-      profileId,
-      csvPath,
-      executionModel: document.getElementById("strategy-model").value || "next_open",
-      priceBasis: document.getElementById("strategy-price-basis").value || "adjusted_close",
-    });
-    const payload = await ui.fetchJson(`/api/backtests/strategy-explorer?${params.toString()}`);
-    renderStrategyExplorer(payload);
+  async function loadStrategyData() {
+    const csvPath = state.dataStatus?.snapshot_path || "";
+    const [officialExplorer, strategyExplorer] = await Promise.all([
+      ui.fetchJson(`/api/backtests/official-explorer?${new URLSearchParams({ profileId: state.profileId, csvPath }).toString()}`),
+      ui.fetchJson(`/api/backtests/strategy-explorer?${new URLSearchParams({ profileId: state.profileId, csvPath, executionModel: "ideal_same_close", priceBasis: "adjusted_close" }).toString()}`),
+    ]);
+    state.officialExplorer = officialExplorer;
+    state.officialMatrix = null;
+    renderOfficialMeta();
+    renderStrategyExplorer(strategyExplorer);
+    await loadThreadTimeline();
   }
 
   async function loadLatestSweep() {
-    const profileId = selectedProfileId();
-    const csvPath = document.getElementById("csv-path").value.trim();
+    const csvPath = state.dataStatus?.snapshot_path || "";
     const params = new URLSearchParams({
-      profileId,
+      profileId: state.profileId,
       csvPath,
       sweepId: "core6_v1",
       executionModel: document.getElementById("sweep-model").value || "next_open",
@@ -1256,104 +1881,67 @@
   }
 
   async function bootstrap() {
-    const [profiles, dataStatus, overview] = await Promise.all([
+    const [profilesPayload, dataStatus] = await Promise.all([
       ui.fetchJson("/api/profiles"),
       ui.fetchJson("/api/data/status"),
-      ui.fetchJson("/api/backtests"),
     ]);
-    populateProfiles(profiles);
-    document.getElementById("csv-path").value = dataStatus.snapshot_path;
+    state.profiles = profilesPayload.profiles || [];
+    state.profileId = profilesPayload.defaultProfileId || state.profileId;
+    renderProfileSummary(currentProfile());
     renderDataStatus(dataStatus);
-    if (overview.jobs && overview.jobs.length) {
-      renderJob(overview.jobs[0]);
-    }
-    if (overview.latestRun) {
-      renderRunArtifact(overview.latestRun);
-    }
-    await Promise.all([loadStrategyExplorer(), loadLatestSweep(), loadCompare(), loadRisk(), loadMentorMatrix()]);
+    await Promise.all([loadStrategyData(), loadLatestSweep()]);
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll("[data-tab]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const tabId = button.getAttribute("data-tab");
+        if (tabId) {
+          activateTab(tabId);
+        }
+      });
+    });
+
     bootstrap().catch((error) => {
-      const errorBox = document.getElementById("job-error");
-      errorBox.textContent = error.message;
-      errorBox.classList.add("visible");
-    });
-
-    document.getElementById("backtest-form").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const payload = {
-        profileId: selectedProfileId(),
-        csvPath: document.getElementById("csv-path").value.trim(),
-        initialCapital: Number(document.getElementById("initial-capital").value || 10000),
-        overrides: collectOverrides(),
-      };
-      const job = await ui.postJson("/api/backtests/jobs", payload);
-      renderJob(job);
-      await pollJob(job.jobId);
-    });
-
-    document.getElementById("compare-button").addEventListener("click", async () => {
-      await Promise.all([loadCompare(), loadRisk(), loadMentorMatrix()]);
-    });
-
-    document.getElementById("profile-select").addEventListener("change", async (event) => {
-      ui.setText("sb-profile", event.target.value);
-      syncControlsFromProfile(selectedProfile());
-      await Promise.all([loadStrategyExplorer(), loadLatestSweep(), loadCompare(), loadRisk(), loadMentorMatrix()]);
+      setNotice("strategy-meta-note", error.message);
+      document.getElementById("sweep-meta-note").textContent = error.message;
     });
 
     document.getElementById("strategy-apply-button").addEventListener("click", () => {
       state.selectedStrategyPresetId = "custom";
+      resetThreadHistoryPage();
       renderStrategySlicePresets();
       renderStrategyViews();
     });
 
-    document.getElementById("strategy-reset-button").addEventListener("click", () => {
-      if (!state.strategyExplorer) {
+    const strategyRollWindow = document.getElementById("strategy-roll-window");
+    if (strategyRollWindow) {
+      strategyRollWindow.addEventListener("change", () => {
+        renderStrategyRollingChart();
+      });
+    }
+
+    document.getElementById("thread-drawer-close").addEventListener("click", () => {
+      closeThreadDrawer();
+    });
+
+    document.getElementById("thread-drawer-backdrop").addEventListener("click", () => {
+      closeThreadDrawer();
+    });
+
+    document.addEventListener("click", (event) => {
+      const drawer = document.getElementById("thread-drawer");
+      const target = event.target;
+      if (!(target instanceof Element) || !drawer.classList.contains("visible")) {
         return;
       }
-      state.selectedStrategyPresetId = "all";
-      const allPreset = state.strategyExplorer.meta.slice_presets.find((preset) => preset.preset_id === "all");
-      if (allPreset) {
-        setStrategyDateInputs(allPreset.start, allPreset.end);
-      }
-      renderStrategySlicePresets();
-      renderStrategyViews();
-    });
-
-    document.getElementById("strategy-refresh-button").addEventListener("click", async () => {
-      await loadStrategyExplorer();
-    });
-
-    document.getElementById("strategy-roll-window").addEventListener("change", () => {
-      renderStrategyRollingChart();
-    });
-
-    document.getElementById("strategy-model").addEventListener("change", async () => {
-      await loadStrategyExplorer();
-    });
-
-    document.getElementById("strategy-price-basis").addEventListener("change", async () => {
-      await loadStrategyExplorer();
-    });
-
-    document.getElementById("sweep-run-button").addEventListener("click", async () => {
-      const payload = {
-        profileId: selectedProfileId(),
-        csvPath: document.getElementById("csv-path").value.trim(),
-        sweepId: "core6_v1",
-        executionModel: document.getElementById("sweep-model").value || "next_open",
-        priceBasis: document.getElementById("sweep-price-basis").value || "adjusted_close",
-      };
-      const job = await ui.postJson("/api/backtests/sweeps/jobs", payload);
-      renderSweepJob(job);
-      if (job.status === "COMPLETED" && job.artifactId) {
-        const artifact = await ui.fetchJson(`/api/backtests/sweeps/runs/${encodeURIComponent(job.artifactId)}`);
-        renderSweepArtifact(artifact);
+      if (target.closest("#thread-drawer .thread-drawer-panel")) {
         return;
       }
-      await pollSweepJob(job.jobId);
+      if (target.closest("[data-thread-session-date], [data-thread-trade-id]")) {
+        return;
+      }
+      closeThreadDrawer();
     });
 
     document.getElementById("sweep-refresh-button").addEventListener("click", async () => {
@@ -1387,6 +1975,12 @@
       document.getElementById("sweep-filter-pareto").value = "all";
       if (state.sweepArtifact) {
         renderSweepArtifact(state.sweepArtifact);
+      }
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeThreadDrawer();
       }
     });
   });

@@ -130,6 +130,11 @@ class StrategyTest(unittest.TestCase):
         run = run_backtest(bars, self.make_config(thread_count=3, max_entries_per_session=2, stop_sessions=99))
         self.assertEqual([event.event_type for event in run.events].count("ENTRY"), 2)
 
+    def test_entry_shares_are_whole_numbers(self) -> None:
+        bars = [bar(2, "10"), bar(3, "9"), bar(4, "11")]
+        run = run_backtest(bars, self.make_config(thread_count=1))
+        self.assertEqual(run.trades[0].shares, D("111"))
+
     def test_config_hash_changes_with_threshold_fields(self) -> None:
         base = self.make_config()
         changed = self.make_config(take_profit_pct="5", entry_drop_pct="2", stop_loss_pct="10", take_profit_operator="gte")

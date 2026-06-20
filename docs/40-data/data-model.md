@@ -4,10 +4,16 @@
 
 - 버전 관리되는 SOXL 시세 바는 Python 객체로 표현되며 CSV fixture에서 적재된다.
 - 표준 로컬 SOXL 스냅샷 경로는 `data/raw/soxl_daily_2011_present.csv`이며, `2011-01-01` 이후 데이터로 채워진다.
+- 표준 로컬 SOXL 스냅샷의 공식 소스는 Yahoo chart sync다.
+- 표준 로컬 SOXL 스냅샷의 매니페스트는 `data/manifests/soxl_daily_2011_present.json`에 기록한다.
 - 네트워크 동기화는 Yahoo, Investing, Stooq를 소스로 사용할 수 있으며, 동시에 백테스트용 버전 관리 CSV 스냅샷을 유지한다.
+- Yahoo 동기화는 `range=max` 대신 기간 chunk 요청을 사용하고, 성공한 raw JSON chunk를 `data/snapshots/yahoo_chart/` 아래에 캐시한다.
+- Yahoo가 이후 `429 Too Many Requests`를 반환해도 동일 chunk 캐시가 있으면 그 캐시를 재사용할 수 있어야 한다.
 - 기본 연구용 가격 기준으로는 `adj_close`가 필요하다. 동기화된 스냅샷이 전체 구간에서 `close`를 그대로 `adj_close`에 복제했다면, 적재 요약에서 adjusted-close parity를 지원할 수 없다는 경고가 나와야 한다.
+- snapshot manifest에는 `symbol`, `source`, `generated_at`, `rows`, `start`, `end`, `data_hash`, `output_csv`, `warnings`, `errors`를 저장한다.
 - `db/migrations/0001_initial.sql`에 PostgreSQL 마이그레이션 스켈레톤이 존재한다.
 - 수동 체결 기록은 시뮬레이션 백테스트와 분리되어야 한다.
+- 백테스트 trade의 `entry shares`와 수동 장부 `quantity`는 항상 양의 정수다. 소수 수량은 신규 진입과 수동 fill에서 허용하지 않는다.
 - 모든 백테스트 실행과 연구 산출물은 `config_hash`, `data_hash`, `code_commit`를 함께 보관해야 한다.
 - `backtest_research_artifacts`는 `Strategy Explorer`와 `Sweep Explorer`의 정규화된 저장소다.
   - 공통 메타데이터: `artifact_key`, `artifact_kind`, `profile_id`, `symbol`, `csv_path`, `execution_model`, `price_basis`, `data_hash`, `code_commit`, `created_at`
@@ -18,7 +24,8 @@
   - 강건성 컬럼: `mean_segment_return_pct`, `segment_stddev_pct`, `worst_segment_return_pct`, `positive_segment_ratio_pct`, `recent_segment_return_pct`
   - Pareto 컬럼: `pareto_return_mdd`, `pareto_return_stability`
 - 대시보드가 `DATABASE_URL` 없이 로컬 프로세스로 실행될 때만 in-memory fallback을 사용할 수 있으며, 공유 저장소로 간주하지 않는다.
-- 고정된 멘토 레퍼런스 화면 fixture는 `engine/tests/fixtures/mentor_reference_matrix.yaml`에 위치한다.
+- 공식 제품 golden fixture는 `engine/tests/fixtures/official_reference_matrix.json`과 `engine/tests/fixtures/official_explorer_summary.json`에 위치한다.
+- 고정된 멘토 레퍼런스 화면 fixture는 `engine/tests/fixtures/mentor_reference_matrix.yaml`에 위치하며 `legacy comparison` 전용이다.
 - 멘토 매트릭스는 두 가지 결과 계열을 구분한다.
   - 연도별 매트릭스 행과 연도별 카운트 행에 사용하는 연도 독립 실행
   - 단리/복리 집계 행에 사용하는 연속 carry 실행
@@ -32,3 +39,4 @@
   - `y1`: 2024
 - 권위 있는 멘토 화면은 고정 fixture에서 렌더될 수 있지만, 런타임 parity가 `DATA_MISMATCH`인 동안 이것은 parity 주장으로 간주되지 않는다.
 - 현재 대시보드의 멘토 매트릭스는 런타임 `actual` 백테스트 값을 기본으로 사용하며, 고정된 멘토 전사값은 비교용 메타데이터로만 남아 있다.
+- 현재 대시보드와 CI의 공식 연구 baseline은 Yahoo 스냅샷 기반 `official-explorer`와 `official-matrix`다.

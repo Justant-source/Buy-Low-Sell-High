@@ -1,0 +1,1679 @@
+{
+  "benchmark": {
+    "aggregate_rows": {
+      "average_5y": 125.1,
+      "compound_1y": 491.2,
+      "compound_3y": 910.8,
+      "compound_5y": 299.2,
+      "compound_total": 35706.4,
+      "simple_5y": 299.2
+    },
+    "yearly": [
+      {
+        "price_change": "0.78->0.39",
+        "return_pct": -49.2,
+        "year": 2011
+      },
+      {
+        "price_change": "0.41->0.41",
+        "return_pct": -0.1,
+        "year": 2012
+      },
+      {
+        "price_change": "0.46->1.05",
+        "return_pct": 127.7,
+        "year": 2013
+      },
+      {
+        "price_change": "1.00->2.04",
+        "return_pct": 104.5,
+        "year": 2014
+      },
+      {
+        "price_change": "2.04->1.62",
+        "return_pct": -20.6,
+        "year": 2015
+      },
+      {
+        "price_change": "1.57->3.63",
+        "return_pct": 131.3,
+        "year": 2016
+      },
+      {
+        "price_change": "3.64->8.77",
+        "return_pct": 141.3,
+        "year": 2017
+      },
+      {
+        "price_change": "9.50->5.35",
+        "return_pct": -43.7,
+        "year": 2018
+      },
+      {
+        "price_change": "5.49->17.74",
+        "return_pct": 223.3,
+        "year": 2019
+      },
+      {
+        "price_change": "18.84->30.16",
+        "return_pct": 60.1,
+        "year": 2020
+      },
+      {
+        "price_change": "29.74->66.00",
+        "return_pct": 121.9,
+        "year": 2021
+      },
+      {
+        "price_change": "69.97->9.46",
+        "return_pct": -86.5,
+        "year": 2022
+      },
+      {
+        "price_change": "9.16->30.94",
+        "return_pct": 237.8,
+        "year": 2023
+      },
+      {
+        "price_change": "27.63->27.13",
+        "return_pct": -1.8,
+        "year": 2024
+      },
+      {
+        "price_change": "27.49->42.03",
+        "return_pct": 52.9,
+        "year": 2025
+      },
+      {
+        "price_change": "47.24->279.29",
+        "return_pct": 491.2,
+        "year": 2026
+      }
+    ]
+  },
+  "combos": {
+    "5x10": {
+      "aggregate_count_rows": {
+        "avg_5y": {
+          "take_profit": 90.0,
+          "time_stop": 12.9
+        },
+        "avg_all": {
+          "take_profit": 92.3,
+          "time_stop": 13.8
+        },
+        "compound_total": {
+          "take_profit": 1502,
+          "time_stop": 228
+        },
+        "compound_y1": {
+          "take_profit": 37,
+          "time_stop": 3
+        },
+        "compound_y3": {
+          "take_profit": 243,
+          "time_stop": 22
+        },
+        "compound_y5": {
+          "take_profit": 445,
+          "time_stop": 64
+        },
+        "simple_total": {
+          "take_profit": 1502,
+          "time_stop": 228
+        },
+        "simple_y3": {
+          "take_profit": 243,
+          "time_stop": 22
+        },
+        "simple_y5": {
+          "take_profit": 445,
+          "time_stop": 64
+        }
+      },
+      "compound_returns_pct": {
+        "total": -1.6953888301425384e+34,
+        "y1": 730.8,
+        "y3": -1462135452.2,
+        "y5": -232613685079.0
+      },
+      "simple_returns_pct": {
+        "total": 524.0,
+        "y3": 158.0,
+        "y5": 244.8
+      },
+      "stats_pct": {
+        "avg_5y": 47.2,
+        "avg_all": 32.2,
+        "stddev": 21.1
+      },
+      "stop_sessions": 10,
+      "thread_count": 5,
+      "yearly_counts": {
+        "2011": {
+          "take_profit": 102,
+          "time_stop": 19
+        },
+        "2012": {
+          "take_profit": 93,
+          "time_stop": 22
+        },
+        "2013": {
+          "take_profit": 101,
+          "time_stop": 8
+        },
+        "2014": {
+          "take_profit": 93,
+          "time_stop": 7
+        },
+        "2015": {
+          "take_profit": 94,
+          "time_stop": 19
+        },
+        "2016": {
+          "take_profit": 98,
+          "time_stop": 9
+        },
+        "2017": {
+          "take_profit": 88,
+          "time_stop": 7
+        },
+        "2018": {
+          "take_profit": 86,
+          "time_stop": 27
+        },
+        "2019": {
+          "take_profit": 92,
+          "time_stop": 13
+        },
+        "2020": {
+          "take_profit": 100,
+          "time_stop": 14
+        },
+        "2021": {
+          "take_profit": 95,
+          "time_stop": 15
+        },
+        "2022": {
+          "take_profit": 101,
+          "time_stop": 24
+        },
+        "2023": {
+          "take_profit": 97,
+          "time_stop": 16
+        },
+        "2024": {
+          "take_profit": 106,
+          "time_stop": 7
+        },
+        "2025": {
+          "take_profit": 94,
+          "time_stop": 11
+        },
+        "2026": {
+          "take_profit": 37,
+          "time_stop": 3
+        }
+      },
+      "yearly_returns_pct": {
+        "2011": 18.3,
+        "2012": 0.7,
+        "2013": 44.0,
+        "2014": 22.8,
+        "2015": 17.1,
+        "2016": 41.1,
+        "2017": 28.7,
+        "2018": -17.0,
+        "2019": 29.7,
+        "2020": 37.6,
+        "2021": 59.1,
+        "2022": 34.1,
+        "2023": 52.8,
+        "2024": 74.4,
+        "2025": 37.1,
+        "2026": 35.2
+      }
+    },
+    "5x30": {
+      "aggregate_count_rows": {
+        "avg_5y": {
+          "take_profit": 89.3,
+          "time_stop": 5.3
+        },
+        "avg_all": {
+          "take_profit": 89.9,
+          "time_stop": 5.8
+        },
+        "compound_total": {
+          "take_profit": 1471,
+          "time_stop": 98
+        },
+        "compound_y1": {
+          "take_profit": 39,
+          "time_stop": 0
+        },
+        "compound_y3": {
+          "take_profit": 248,
+          "time_stop": 10
+        },
+        "compound_y5": {
+          "take_profit": 441,
+          "time_stop": 29
+        },
+        "simple_total": {
+          "take_profit": 1471,
+          "time_stop": 98
+        },
+        "simple_y3": {
+          "take_profit": 248,
+          "time_stop": 10
+        },
+        "simple_y5": {
+          "take_profit": 441,
+          "time_stop": 29
+        }
+      },
+      "compound_returns_pct": {
+        "total": 8.712289943366847e+30,
+        "y1": 1341.2,
+        "y3": -42966051.4,
+        "y5": -50239671408.1
+      },
+      "simple_returns_pct": {
+        "total": 586.9,
+        "y3": 171.6,
+        "y5": 259.7
+      },
+      "stats_pct": {
+        "avg_5y": 51.1,
+        "avg_all": 33.9,
+        "stddev": 34.8
+      },
+      "stop_sessions": 30,
+      "thread_count": 5,
+      "yearly_counts": {
+        "2011": {
+          "take_profit": 96,
+          "time_stop": 11
+        },
+        "2012": {
+          "take_profit": 77,
+          "time_stop": 13
+        },
+        "2013": {
+          "take_profit": 100,
+          "time_stop": 2
+        },
+        "2014": {
+          "take_profit": 98,
+          "time_stop": 1
+        },
+        "2015": {
+          "take_profit": 91,
+          "time_stop": 9
+        },
+        "2016": {
+          "take_profit": 100,
+          "time_stop": 2
+        },
+        "2017": {
+          "take_profit": 92,
+          "time_stop": 0
+        },
+        "2018": {
+          "take_profit": 67,
+          "time_stop": 14
+        },
+        "2019": {
+          "take_profit": 93,
+          "time_stop": 4
+        },
+        "2020": {
+          "take_profit": 95,
+          "time_stop": 5
+        },
+        "2021": {
+          "take_profit": 105,
+          "time_stop": 3
+        },
+        "2022": {
+          "take_profit": 87,
+          "time_stop": 14
+        },
+        "2023": {
+          "take_profit": 98,
+          "time_stop": 5
+        },
+        "2024": {
+          "take_profit": 108,
+          "time_stop": 3
+        },
+        "2025": {
+          "take_profit": 93,
+          "time_stop": 7
+        },
+        "2026": {
+          "take_profit": 39,
+          "time_stop": 0
+        }
+      },
+      "yearly_returns_pct": {
+        "2011": -5.5,
+        "2012": -18.2,
+        "2013": 45.4,
+        "2014": 44.5,
+        "2015": 10.2,
+        "2016": 48.0,
+        "2017": 37.4,
+        "2018": -37.1,
+        "2019": 59.5,
+        "2020": 41.2,
+        "2021": 90.2,
+        "2022": 0.1,
+        "2023": 71.7,
+        "2024": 82.3,
+        "2025": 25.4,
+        "2026": 46.7
+      }
+    },
+    "5x40": {
+      "aggregate_count_rows": {
+        "avg_5y": {
+          "take_profit": 86.1,
+          "time_stop": 4.1
+        },
+        "avg_all": {
+          "take_profit": 87.5,
+          "time_stop": 4.6
+        },
+        "compound_total": {
+          "take_profit": 1428,
+          "time_stop": 80
+        },
+        "compound_y1": {
+          "take_profit": 39,
+          "time_stop": 0
+        },
+        "compound_y3": {
+          "take_profit": 244,
+          "time_stop": 8
+        },
+        "compound_y5": {
+          "take_profit": 422,
+          "time_stop": 23
+        },
+        "simple_total": {
+          "take_profit": 1428,
+          "time_stop": 80
+        },
+        "simple_y3": {
+          "take_profit": 244,
+          "time_stop": 8
+        },
+        "simple_y5": {
+          "take_profit": 422,
+          "time_stop": 23
+        }
+      },
+      "compound_returns_pct": {
+        "total": 1.3449741345004083e+32,
+        "y1": 1341.2,
+        "y3": -118317225.3,
+        "y5": -495190121689.5
+      },
+      "simple_returns_pct": {
+        "total": 603.2,
+        "y3": 168.2,
+        "y5": 248.6
+      },
+      "stats_pct": {
+        "avg_5y": 48.7,
+        "avg_all": 34.6,
+        "stddev": 34.8
+      },
+      "stop_sessions": 40,
+      "thread_count": 5,
+      "yearly_counts": {
+        "2011": {
+          "take_profit": 90,
+          "time_stop": 10
+        },
+        "2012": {
+          "take_profit": 74,
+          "time_stop": 10
+        },
+        "2013": {
+          "take_profit": 101,
+          "time_stop": 0
+        },
+        "2014": {
+          "take_profit": 98,
+          "time_stop": 1
+        },
+        "2015": {
+          "take_profit": 90,
+          "time_stop": 6
+        },
+        "2016": {
+          "take_profit": 101,
+          "time_stop": 1
+        },
+        "2017": {
+          "take_profit": 92,
+          "time_stop": 0
+        },
+        "2018": {
+          "take_profit": 58,
+          "time_stop": 12
+        },
+        "2019": {
+          "take_profit": 93,
+          "time_stop": 4
+        },
+        "2020": {
+          "take_profit": 91,
+          "time_stop": 5
+        },
+        "2021": {
+          "take_profit": 105,
+          "time_stop": 3
+        },
+        "2022": {
+          "take_profit": 78,
+          "time_stop": 12
+        },
+        "2023": {
+          "take_profit": 92,
+          "time_stop": 3
+        },
+        "2024": {
+          "take_profit": 108,
+          "time_stop": 1
+        },
+        "2025": {
+          "take_profit": 90,
+          "time_stop": 5
+        },
+        "2026": {
+          "take_profit": 39,
+          "time_stop": 0
+        }
+      },
+      "yearly_returns_pct": {
+        "2011": -5.6,
+        "2012": -21.8,
+        "2013": 51.9,
+        "2014": 44.9,
+        "2015": 12.2,
+        "2016": 54.7,
+        "2017": 37.4,
+        "2018": -24.9,
+        "2019": 64.3,
+        "2020": 33.8,
+        "2021": 94.1,
+        "2022": -6.9,
+        "2023": 71.0,
+        "2024": 79.4,
+        "2025": 23.0,
+        "2026": 46.7
+      }
+    },
+    "6x10": {
+      "aggregate_count_rows": {
+        "avg_5y": {
+          "take_profit": 91.1,
+          "time_stop": 13.0
+        },
+        "avg_all": {
+          "take_profit": 94.1,
+          "time_stop": 14.0
+        },
+        "compound_total": {
+          "take_profit": 1530,
+          "time_stop": 232
+        },
+        "compound_y1": {
+          "take_profit": 37,
+          "time_stop": 3
+        },
+        "compound_y3": {
+          "take_profit": 246,
+          "time_stop": 22
+        },
+        "compound_y5": {
+          "take_profit": 451,
+          "time_stop": 64
+        },
+        "simple_total": {
+          "take_profit": 1530,
+          "time_stop": 232
+        },
+        "simple_y3": {
+          "take_profit": 246,
+          "time_stop": 22
+        },
+        "simple_y5": {
+          "take_profit": 451,
+          "time_stop": 64
+        }
+      },
+      "compound_returns_pct": {
+        "total": -1.4127896757293822e+34,
+        "y1": 609.0,
+        "y3": -1218436842.6,
+        "y5": -193855584583.1
+      },
+      "simple_returns_pct": {
+        "total": 456.5,
+        "y3": 133.9,
+        "y5": 208.9
+      },
+      "stats_pct": {
+        "avg_5y": 39.8,
+        "avg_all": 28.2,
+        "stddev": 16.7
+      },
+      "stop_sessions": 10,
+      "thread_count": 6,
+      "yearly_counts": {
+        "2011": {
+          "take_profit": 106,
+          "time_stop": 19
+        },
+        "2012": {
+          "take_profit": 98,
+          "time_stop": 23
+        },
+        "2013": {
+          "take_profit": 102,
+          "time_stop": 8
+        },
+        "2014": {
+          "take_profit": 93,
+          "time_stop": 7
+        },
+        "2015": {
+          "take_profit": 96,
+          "time_stop": 20
+        },
+        "2016": {
+          "take_profit": 99,
+          "time_stop": 9
+        },
+        "2017": {
+          "take_profit": 89,
+          "time_stop": 7
+        },
+        "2018": {
+          "take_profit": 90,
+          "time_stop": 27
+        },
+        "2019": {
+          "take_profit": 94,
+          "time_stop": 13
+        },
+        "2020": {
+          "take_profit": 100,
+          "time_stop": 15
+        },
+        "2021": {
+          "take_profit": 97,
+          "time_stop": 15
+        },
+        "2022": {
+          "take_profit": 104,
+          "time_stop": 24
+        },
+        "2023": {
+          "take_profit": 97,
+          "time_stop": 16
+        },
+        "2024": {
+          "take_profit": 108,
+          "time_stop": 7
+        },
+        "2025": {
+          "take_profit": 95,
+          "time_stop": 11
+        },
+        "2026": {
+          "take_profit": 37,
+          "time_stop": 3
+        }
+      },
+      "yearly_returns_pct": {
+        "2011": 19.6,
+        "2012": 2.9,
+        "2013": 37.2,
+        "2014": 19.0,
+        "2015": 16.1,
+        "2016": 35.3,
+        "2017": 24.3,
+        "2018": -9.1,
+        "2019": 26.5,
+        "2020": 29.5,
+        "2021": 49.8,
+        "2022": 31.0,
+        "2023": 44.0,
+        "2024": 63.5,
+        "2025": 31.7,
+        "2026": 29.4
+      }
+    },
+    "6x30": {
+      "aggregate_count_rows": {
+        "avg_5y": {
+          "take_profit": 93.4,
+          "time_stop": 5.4
+        },
+        "avg_all": {
+          "take_profit": 95.1,
+          "time_stop": 6.1
+        },
+        "compound_total": {
+          "take_profit": 1553,
+          "time_stop": 104
+        },
+        "compound_y1": {
+          "take_profit": 40,
+          "time_stop": 0
+        },
+        "compound_y3": {
+          "take_profit": 256,
+          "time_stop": 10
+        },
+        "compound_y5": {
+          "take_profit": 463,
+          "time_stop": 29
+        },
+        "simple_total": {
+          "take_profit": 1553,
+          "time_stop": 104
+        },
+        "simple_y3": {
+          "take_profit": 256,
+          "time_stop": 10
+        },
+        "simple_y5": {
+          "take_profit": 463,
+          "time_stop": 29
+        }
+      },
+      "compound_returns_pct": {
+        "total": 7.260968877060733e+30,
+        "y1": 1120.7,
+        "y3": -35804379.3,
+        "y5": -41866136464.0
+      },
+      "simple_returns_pct": {
+        "total": 539.0,
+        "y3": 152.6,
+        "y5": 238.6
+      },
+      "stats_pct": {
+        "avg_5y": 46.2,
+        "avg_all": 31.6,
+        "stddev": 27.5
+      },
+      "stop_sessions": 30,
+      "thread_count": 6,
+      "yearly_counts": {
+        "2011": {
+          "take_profit": 102,
+          "time_stop": 12
+        },
+        "2012": {
+          "take_profit": 87,
+          "time_stop": 14
+        },
+        "2013": {
+          "take_profit": 107,
+          "time_stop": 2
+        },
+        "2014": {
+          "take_profit": 99,
+          "time_stop": 1
+        },
+        "2015": {
+          "take_profit": 94,
+          "time_stop": 10
+        },
+        "2016": {
+          "take_profit": 103,
+          "time_stop": 2
+        },
+        "2017": {
+          "take_profit": 94,
+          "time_stop": 0
+        },
+        "2018": {
+          "take_profit": 82,
+          "time_stop": 15
+        },
+        "2019": {
+          "take_profit": 99,
+          "time_stop": 4
+        },
+        "2020": {
+          "take_profit": 98,
+          "time_stop": 6
+        },
+        "2021": {
+          "take_profit": 109,
+          "time_stop": 3
+        },
+        "2022": {
+          "take_profit": 99,
+          "time_stop": 14
+        },
+        "2023": {
+          "take_profit": 100,
+          "time_stop": 5
+        },
+        "2024": {
+          "take_profit": 111,
+          "time_stop": 3
+        },
+        "2025": {
+          "take_profit": 97,
+          "time_stop": 7
+        },
+        "2026": {
+          "take_profit": 40,
+          "time_stop": 0
+        }
+      },
+      "yearly_returns_pct": {
+        "2011": -3.1,
+        "2012": -12.2,
+        "2013": 40.8,
+        "2014": 38.0,
+        "2015": 7.7,
+        "2016": 41.6,
+        "2017": 32.3,
+        "2018": -19.8,
+        "2019": 56.6,
+        "2020": 36.8,
+        "2021": 76.3,
+        "2022": 12.2,
+        "2023": 60.2,
+        "2024": 71.2,
+        "2025": 25.1,
+        "2026": 41.9
+      }
+    },
+    "6x40": {
+      "aggregate_count_rows": {
+        "avg_5y": {
+          "take_profit": 91.7,
+          "time_stop": 4.3
+        },
+        "avg_all": {
+          "take_profit": 93.6,
+          "time_stop": 4.9
+        },
+        "compound_total": {
+          "take_profit": 1526,
+          "time_stop": 87
+        },
+        "compound_y1": {
+          "take_profit": 40,
+          "time_stop": 0
+        },
+        "compound_y3": {
+          "take_profit": 255,
+          "time_stop": 8
+        },
+        "compound_y5": {
+          "take_profit": 455,
+          "time_stop": 23
+        },
+        "simple_total": {
+          "take_profit": 1526,
+          "time_stop": 87
+        },
+        "simple_y3": {
+          "take_profit": 255,
+          "time_stop": 8
+        },
+        "simple_y5": {
+          "take_profit": 455,
+          "time_stop": 23
+        }
+      },
+      "compound_returns_pct": {
+        "total": 1.1207958838264505e+32,
+        "y1": 1120.7,
+        "y3": -98596287.3,
+        "y5": -412653578412.0
+      },
+      "simple_returns_pct": {
+        "total": 556.0,
+        "y3": 152.6,
+        "y5": 233.1
+      },
+      "stats_pct": {
+        "avg_5y": 45.0,
+        "avg_all": 32.3,
+        "stddev": 28.3
+      },
+      "stop_sessions": 40,
+      "thread_count": 6,
+      "yearly_counts": {
+        "2011": {
+          "take_profit": 99,
+          "time_stop": 11
+        },
+        "2012": {
+          "take_profit": 83,
+          "time_stop": 12
+        },
+        "2013": {
+          "take_profit": 108,
+          "time_stop": 0
+        },
+        "2014": {
+          "take_profit": 99,
+          "time_stop": 1
+        },
+        "2015": {
+          "take_profit": 94,
+          "time_stop": 7
+        },
+        "2016": {
+          "take_profit": 104,
+          "time_stop": 1
+        },
+        "2017": {
+          "take_profit": 94,
+          "time_stop": 0
+        },
+        "2018": {
+          "take_profit": 75,
+          "time_stop": 13
+        },
+        "2019": {
+          "take_profit": 99,
+          "time_stop": 4
+        },
+        "2020": {
+          "take_profit": 94,
+          "time_stop": 6
+        },
+        "2021": {
+          "take_profit": 109,
+          "time_stop": 3
+        },
+        "2022": {
+          "take_profit": 92,
+          "time_stop": 12
+        },
+        "2023": {
+          "take_profit": 100,
+          "time_stop": 3
+        },
+        "2024": {
+          "take_profit": 111,
+          "time_stop": 1
+        },
+        "2025": {
+          "take_profit": 96,
+          "time_stop": 5
+        },
+        "2026": {
+          "take_profit": 40,
+          "time_stop": 0
+        }
+      },
+      "yearly_returns_pct": {
+        "2011": -0.1,
+        "2012": -16.6,
+        "2013": 46.2,
+        "2014": 38.3,
+        "2015": 5.7,
+        "2016": 47.2,
+        "2017": 32.3,
+        "2018": -12.2,
+        "2019": 60.6,
+        "2020": 31.7,
+        "2021": 79.6,
+        "2022": 4.2,
+        "2023": 62.7,
+        "2024": 68.8,
+        "2025": 25.8,
+        "2026": 41.9
+      }
+    },
+    "7x10": {
+      "aggregate_count_rows": {
+        "avg_5y": {
+          "take_profit": 92.0,
+          "time_stop": 13.0
+        },
+        "avg_all": {
+          "take_profit": 94.8,
+          "time_stop": 14.1
+        },
+        "compound_total": {
+          "take_profit": 1543,
+          "time_stop": 233
+        },
+        "compound_y1": {
+          "take_profit": 37,
+          "time_stop": 3
+        },
+        "compound_y3": {
+          "take_profit": 247,
+          "time_stop": 22
+        },
+        "compound_y5": {
+          "take_profit": 454,
+          "time_stop": 64
+        },
+        "simple_total": {
+          "take_profit": 1543,
+          "time_stop": 233
+        },
+        "simple_y3": {
+          "take_profit": 247,
+          "time_stop": 22
+        },
+        "simple_y5": {
+          "take_profit": 454,
+          "time_stop": 64
+        }
+      },
+      "compound_returns_pct": {
+        "total": -1.2109984773809848e+34,
+        "y1": 522.0,
+        "y3": -1044376927.8,
+        "y5": -166151866803.0
+      },
+      "simple_returns_pct": {
+        "total": 402.2,
+        "y3": 116.2,
+        "y5": 182.1
+      },
+      "stats_pct": {
+        "avg_5y": 34.8,
+        "avg_all": 24.8,
+        "stddev": 14.4
+      },
+      "stop_sessions": 10,
+      "thread_count": 7,
+      "yearly_counts": {
+        "2011": {
+          "take_profit": 108,
+          "time_stop": 19
+        },
+        "2012": {
+          "take_profit": 99,
+          "time_stop": 24
+        },
+        "2013": {
+          "take_profit": 102,
+          "time_stop": 8
+        },
+        "2014": {
+          "take_profit": 93,
+          "time_stop": 7
+        },
+        "2015": {
+          "take_profit": 96,
+          "time_stop": 20
+        },
+        "2016": {
+          "take_profit": 100,
+          "time_stop": 9
+        },
+        "2017": {
+          "take_profit": 90,
+          "time_stop": 7
+        },
+        "2018": {
+          "take_profit": 90,
+          "time_stop": 27
+        },
+        "2019": {
+          "take_profit": 94,
+          "time_stop": 13
+        },
+        "2020": {
+          "take_profit": 102,
+          "time_stop": 15
+        },
+        "2021": {
+          "take_profit": 98,
+          "time_stop": 15
+        },
+        "2022": {
+          "take_profit": 106,
+          "time_stop": 24
+        },
+        "2023": {
+          "take_profit": 97,
+          "time_stop": 16
+        },
+        "2024": {
+          "take_profit": 108,
+          "time_stop": 7
+        },
+        "2025": {
+          "take_profit": 96,
+          "time_stop": 11
+        },
+        "2026": {
+          "take_profit": 37,
+          "time_stop": 3
+        }
+      },
+      "yearly_returns_pct": {
+        "2011": 20.2,
+        "2012": 2.6,
+        "2013": 31.9,
+        "2014": 16.3,
+        "2015": 13.8,
+        "2016": 31.5,
+        "2017": 21.4,
+        "2018": -7.8,
+        "2019": 22.7,
+        "2020": 25.6,
+        "2021": 43.8,
+        "2022": 28.2,
+        "2023": 37.7,
+        "2024": 54.4,
+        "2025": 28.6,
+        "2026": 25.2
+      }
+    },
+    "7x30": {
+      "aggregate_count_rows": {
+        "avg_5y": {
+          "take_profit": 97.1,
+          "time_stop": 5.4
+        },
+        "avg_all": {
+          "take_profit": 98.4,
+          "time_stop": 6.3
+        },
+        "compound_total": {
+          "take_profit": 1605,
+          "time_stop": 107
+        },
+        "compound_y1": {
+          "take_profit": 40,
+          "time_stop": 0
+        },
+        "compound_y3": {
+          "take_profit": 259,
+          "time_stop": 10
+        },
+        "compound_y5": {
+          "take_profit": 479,
+          "time_stop": 29
+        },
+        "simple_total": {
+          "take_profit": 1605,
+          "time_stop": 107
+        },
+        "simple_y3": {
+          "take_profit": 259,
+          "time_stop": 10
+        },
+        "simple_y5": {
+          "take_profit": 479,
+          "time_stop": 29
+        }
+      },
+      "compound_returns_pct": {
+        "total": 6.223022487061667e+30,
+        "y1": 960.6,
+        "y3": -30689746.0,
+        "y5": -35885407996.6
+      },
+      "simple_returns_pct": {
+        "total": 503.6,
+        "y3": 133.1,
+        "y5": 216.7
+      },
+      "stats_pct": {
+        "avg_5y": 43.6,
+        "avg_all": 29.9,
+        "stddev": 22.7
+      },
+      "stop_sessions": 30,
+      "thread_count": 7,
+      "yearly_counts": {
+        "2011": {
+          "take_profit": 107,
+          "time_stop": 12
+        },
+        "2012": {
+          "take_profit": 92,
+          "time_stop": 15
+        },
+        "2013": {
+          "take_profit": 108,
+          "time_stop": 2
+        },
+        "2014": {
+          "take_profit": 99,
+          "time_stop": 1
+        },
+        "2015": {
+          "take_profit": 97,
+          "time_stop": 11
+        },
+        "2016": {
+          "take_profit": 105,
+          "time_stop": 2
+        },
+        "2017": {
+          "take_profit": 95,
+          "time_stop": 0
+        },
+        "2018": {
+          "take_profit": 91,
+          "time_stop": 15
+        },
+        "2019": {
+          "take_profit": 100,
+          "time_stop": 4
+        },
+        "2020": {
+          "take_profit": 107,
+          "time_stop": 6
+        },
+        "2021": {
+          "take_profit": 110,
+          "time_stop": 3
+        },
+        "2022": {
+          "take_profit": 108,
+          "time_stop": 14
+        },
+        "2023": {
+          "take_profit": 104,
+          "time_stop": 5
+        },
+        "2024": {
+          "take_profit": 112,
+          "time_stop": 3
+        },
+        "2025": {
+          "take_profit": 99,
+          "time_stop": 7
+        },
+        "2026": {
+          "take_profit": 40,
+          "time_stop": 0
+        }
+      },
+      "yearly_returns_pct": {
+        "2011": 1.9,
+        "2012": -8.0,
+        "2013": 35.4,
+        "2014": 32.6,
+        "2015": 6.6,
+        "2016": 37.5,
+        "2017": 28.2,
+        "2018": -10.6,
+        "2019": 49.5,
+        "2020": 45.7,
+        "2021": 66.6,
+        "2022": 18.7,
+        "2023": 53.2,
+        "2024": 61.6,
+        "2025": 23.2,
+        "2026": 35.9
+      }
+    },
+    "7x40": {
+      "aggregate_count_rows": {
+        "avg_5y": {
+          "take_profit": 97.3,
+          "time_stop": 4.3
+        },
+        "avg_all": {
+          "take_profit": 97.9,
+          "time_stop": 5.1
+        },
+        "compound_total": {
+          "take_profit": 1595,
+          "time_stop": 89
+        },
+        "compound_y1": {
+          "take_profit": 40,
+          "time_stop": 0
+        },
+        "compound_y3": {
+          "take_profit": 261,
+          "time_stop": 8
+        },
+        "compound_y5": {
+          "take_profit": 481,
+          "time_stop": 23
+        },
+        "simple_total": {
+          "take_profit": 1595,
+          "time_stop": 89
+        },
+        "simple_y3": {
+          "take_profit": 261,
+          "time_stop": 8
+        },
+        "simple_y5": {
+          "take_profit": 481,
+          "time_stop": 23
+        }
+      },
+      "compound_returns_pct": {
+        "total": 9.607008240404577e+31,
+        "y1": 960.6,
+        "y3": -84511545.5,
+        "y5": -353700995528.3
+      },
+      "simple_returns_pct": {
+        "total": 534.4,
+        "y3": 143.3,
+        "y5": 227.2
+      },
+      "stats_pct": {
+        "avg_5y": 45.1,
+        "avg_all": 31.3,
+        "stddev": 23.4
+      },
+      "stop_sessions": 40,
+      "thread_count": 7,
+      "yearly_counts": {
+        "2011": {
+          "take_profit": 104,
+          "time_stop": 11
+        },
+        "2012": {
+          "take_profit": 92,
+          "time_stop": 13
+        },
+        "2013": {
+          "take_profit": 110,
+          "time_stop": 0
+        },
+        "2014": {
+          "take_profit": 99,
+          "time_stop": 1
+        },
+        "2015": {
+          "take_profit": 96,
+          "time_stop": 8
+        },
+        "2016": {
+          "take_profit": 106,
+          "time_stop": 1
+        },
+        "2017": {
+          "take_profit": 95,
+          "time_stop": 0
+        },
+        "2018": {
+          "take_profit": 83,
+          "time_stop": 13
+        },
+        "2019": {
+          "take_profit": 100,
+          "time_stop": 4
+        },
+        "2020": {
+          "take_profit": 106,
+          "time_stop": 6
+        },
+        "2021": {
+          "take_profit": 110,
+          "time_stop": 3
+        },
+        "2022": {
+          "take_profit": 106,
+          "time_stop": 12
+        },
+        "2023": {
+          "take_profit": 106,
+          "time_stop": 3
+        },
+        "2024": {
+          "take_profit": 112,
+          "time_stop": 1
+        },
+        "2025": {
+          "take_profit": 101,
+          "time_stop": 5
+        },
+        "2026": {
+          "take_profit": 40,
+          "time_stop": 0
+        }
+      },
+      "yearly_returns_pct": {
+        "2011": 3.5,
+        "2012": -10.8,
+        "2013": 40.4,
+        "2014": 32.9,
+        "2015": 1.3,
+        "2016": 42.3,
+        "2017": 28.2,
+        "2018": -5.1,
+        "2019": 52.9,
+        "2020": 44.4,
+        "2021": 69.4,
+        "2022": 16.0,
+        "2023": 56.2,
+        "2024": 59.6,
+        "2025": 34.0,
+        "2026": 35.9
+      }
+    }
+  },
+  "meta": {
+    "code_commit": "workspace",
+    "config_hash": "c292d98eed3e895b993c9b09be28abfdb534bc5e1101149dd61210d0c38cbaeb",
+    "data_hash": "9c6ca09d2c091a40280f715ca81051d993e0b7803faafc2bb1d92642f74f77d9",
+    "execution_model": "ideal_same_close",
+    "initial_capital": "10000",
+    "official_combo_key": "5x40",
+    "official_profile_id": "ddeolsao_pal_official_v1",
+    "period_end": "2026-06-18",
+    "period_start": "2011-01-03",
+    "price_basis": "adjusted_close",
+    "symbol": "SOXL",
+    "windows": {
+      "total": {
+        "end_year": 2026,
+        "start_year": 2011
+      },
+      "y1": {
+        "end_year": 2026,
+        "start_year": 2026
+      },
+      "y3": {
+        "end_year": 2026,
+        "start_year": 2024
+      },
+      "y5": {
+        "end_year": 2026,
+        "start_year": 2022
+      }
+    }
+  },
+  "selected_count_combos": {
+    "5x40": {
+      "aggregate_rows": {
+        "avg_5y": {
+          "take_profit": 86.1,
+          "time_stop": 4.1
+        },
+        "avg_all": {
+          "take_profit": 87.5,
+          "time_stop": 4.6
+        },
+        "compound_total": {
+          "take_profit": 1428,
+          "time_stop": 80
+        },
+        "compound_y1": {
+          "take_profit": 39,
+          "time_stop": 0
+        },
+        "compound_y3": {
+          "take_profit": 244,
+          "time_stop": 8
+        },
+        "compound_y5": {
+          "take_profit": 422,
+          "time_stop": 23
+        },
+        "simple_total": {
+          "take_profit": 1428,
+          "time_stop": 80
+        },
+        "simple_y3": {
+          "take_profit": 244,
+          "time_stop": 8
+        },
+        "simple_y5": {
+          "take_profit": 422,
+          "time_stop": 23
+        }
+      },
+      "yearly_counts": {
+        "2011": {
+          "take_profit": 90,
+          "time_stop": 10
+        },
+        "2012": {
+          "take_profit": 74,
+          "time_stop": 10
+        },
+        "2013": {
+          "take_profit": 101,
+          "time_stop": 0
+        },
+        "2014": {
+          "take_profit": 98,
+          "time_stop": 1
+        },
+        "2015": {
+          "take_profit": 90,
+          "time_stop": 6
+        },
+        "2016": {
+          "take_profit": 101,
+          "time_stop": 1
+        },
+        "2017": {
+          "take_profit": 92,
+          "time_stop": 0
+        },
+        "2018": {
+          "take_profit": 58,
+          "time_stop": 12
+        },
+        "2019": {
+          "take_profit": 93,
+          "time_stop": 4
+        },
+        "2020": {
+          "take_profit": 91,
+          "time_stop": 5
+        },
+        "2021": {
+          "take_profit": 105,
+          "time_stop": 3
+        },
+        "2022": {
+          "take_profit": 78,
+          "time_stop": 12
+        },
+        "2023": {
+          "take_profit": 92,
+          "time_stop": 3
+        },
+        "2024": {
+          "take_profit": 108,
+          "time_stop": 1
+        },
+        "2025": {
+          "take_profit": 90,
+          "time_stop": 5
+        },
+        "2026": {
+          "take_profit": 39,
+          "time_stop": 0
+        }
+      }
+    }
+  },
+  "selection": {
+    "current_catalog_top": {
+      "combo_key": "5x40",
+      "full_return_pct": 603.18,
+      "label": "5T / 40S",
+      "mean_segment_return_pct": 49.73,
+      "positive_segment_ratio_pct": 100.0,
+      "rank": 1,
+      "recent_segment_return_pct": 14.24,
+      "segment_stddev_pct": 26.76,
+      "stop_sessions": 40,
+      "strategy_id": "5x40",
+      "thread_count": 5,
+      "worst_segment_return_pct": 14.24
+    },
+    "matches_current_catalog_top": true,
+    "meta": {
+      "catalog_id": "core_profiles_v1",
+      "code_commit": "workspace",
+      "data_hash": "9c6ca09d2c091a40280f715ca81051d993e0b7803faafc2bb1d92642f74f77d9",
+      "execution_model": "ideal_same_close",
+      "initial_capital": "10000",
+      "official_combo_key": "5x40",
+      "official_profile_id": "ddeolsao_pal_official_v1",
+      "period_end": "2026-06-18",
+      "period_start": "2011-01-03",
+      "price_basis": "adjusted_close",
+      "selection_basis": "mean_segment_return desc, segment_stddev asc, full_return desc",
+      "symbol": "SOXL"
+    },
+    "official_profile": {
+      "combo_key": "5x40",
+      "config_hash": "c292d98eed3e895b993c9b09be28abfdb534bc5e1101149dd61210d0c38cbaeb",
+      "profile_id": "ddeolsao_pal_official_v1",
+      "stop_sessions": 40,
+      "thread_count": 5
+    },
+    "rankings": [
+      {
+        "combo_key": "5x40",
+        "full_return_pct": 603.18,
+        "label": "5T / 40S",
+        "mean_segment_return_pct": 49.73,
+        "positive_segment_ratio_pct": 100.0,
+        "rank": 1,
+        "recent_segment_return_pct": 14.24,
+        "segment_stddev_pct": 26.76,
+        "stop_sessions": 40,
+        "strategy_id": "5x40",
+        "thread_count": 5,
+        "worst_segment_return_pct": 14.24
+      },
+      {
+        "combo_key": "5x30",
+        "full_return_pct": 586.86,
+        "label": "5T / 30S",
+        "mean_segment_return_pct": 49.26,
+        "positive_segment_ratio_pct": 100.0,
+        "rank": 2,
+        "recent_segment_return_pct": 14.76,
+        "segment_stddev_pct": 28.28,
+        "stop_sessions": 30,
+        "strategy_id": "5x30",
+        "thread_count": 5,
+        "worst_segment_return_pct": 14.76
+      },
+      {
+        "combo_key": "6x40",
+        "full_return_pct": 555.96,
+        "label": "6T / 40S",
+        "mean_segment_return_pct": 47.41,
+        "positive_segment_ratio_pct": 100.0,
+        "rank": 3,
+        "recent_segment_return_pct": 14.41,
+        "segment_stddev_pct": 24.75,
+        "stop_sessions": 40,
+        "strategy_id": "6x40",
+        "thread_count": 6,
+        "worst_segment_return_pct": 14.41
+      },
+      {
+        "combo_key": "6x30",
+        "full_return_pct": 539.04,
+        "label": "6T / 30S",
+        "mean_segment_return_pct": 46.7,
+        "positive_segment_ratio_pct": 100.0,
+        "rank": 4,
+        "recent_segment_return_pct": 14.42,
+        "segment_stddev_pct": 25.0,
+        "stop_sessions": 30,
+        "strategy_id": "6x30",
+        "thread_count": 6,
+        "worst_segment_return_pct": 14.42
+      },
+      {
+        "combo_key": "7x40",
+        "full_return_pct": 534.38,
+        "label": "7T / 40S",
+        "mean_segment_return_pct": 46.38,
+        "positive_segment_ratio_pct": 100.0,
+        "rank": 5,
+        "recent_segment_return_pct": 14.99,
+        "segment_stddev_pct": 24.13,
+        "stop_sessions": 40,
+        "strategy_id": "7x40",
+        "thread_count": 7,
+        "worst_segment_return_pct": 14.99
+      },
+      {
+        "combo_key": "5x10",
+        "full_return_pct": 524.04,
+        "label": "5T / 10S",
+        "mean_segment_return_pct": 46.35,
+        "positive_segment_ratio_pct": 100.0,
+        "rank": 6,
+        "recent_segment_return_pct": 15.25,
+        "segment_stddev_pct": 27.2,
+        "stop_sessions": 10,
+        "strategy_id": "5x10",
+        "thread_count": 5,
+        "worst_segment_return_pct": 15.25
+      },
+      {
+        "combo_key": "7x30",
+        "full_return_pct": 503.62,
+        "label": "7T / 30S",
+        "mean_segment_return_pct": 45.0,
+        "positive_segment_ratio_pct": 100.0,
+        "rank": 7,
+        "recent_segment_return_pct": 13.27,
+        "segment_stddev_pct": 24.27,
+        "stop_sessions": 30,
+        "strategy_id": "7x30",
+        "thread_count": 7,
+        "worst_segment_return_pct": 13.27
+      },
+      {
+        "combo_key": "6x10",
+        "full_return_pct": 456.49,
+        "label": "6T / 10S",
+        "mean_segment_return_pct": 42.67,
+        "positive_segment_ratio_pct": 100.0,
+        "rank": 8,
+        "recent_segment_return_pct": 14.29,
+        "segment_stddev_pct": 24.21,
+        "stop_sessions": 10,
+        "strategy_id": "6x10",
+        "thread_count": 6,
+        "worst_segment_return_pct": 14.29
+      },
+      {
+        "combo_key": "7x10",
+        "full_return_pct": 402.18,
+        "label": "7T / 10S",
+        "mean_segment_return_pct": 39.43,
+        "positive_segment_ratio_pct": 100.0,
+        "rank": 9,
+        "recent_segment_return_pct": 13.84,
+        "segment_stddev_pct": 21.25,
+        "stop_sessions": 10,
+        "strategy_id": "7x10",
+        "thread_count": 7,
+        "worst_segment_return_pct": 13.84
+      }
+    ]
+  }
+}

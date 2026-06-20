@@ -113,6 +113,22 @@ class ManualTest(unittest.TestCase):
         self.assertEqual(summary["open_threads"], 1)
         self.assertEqual(summary["fill_count"], 1)
 
+    def test_fill_rejects_fractional_quantity(self) -> None:
+        ledger = create_ledger("acct", 1, 1000)
+        with self.assertRaisesRegex(ValueError, "whole number"):
+            record_fill(ledger, thread_id=1, side="BUY", quantity="1.5", price="5")
+
+    def test_fill_rejects_non_positive_quantity(self) -> None:
+        ledger = create_ledger("acct", 1, 1000)
+        with self.assertRaisesRegex(ValueError, "must be > 0"):
+            record_fill(ledger, thread_id=1, side="BUY", quantity="0", price="5")
+
+    def test_sell_cannot_exceed_open_quantity(self) -> None:
+        ledger = create_ledger("acct", 1, 1000)
+        record_fill(ledger, thread_id=1, side="BUY", quantity="4", price="5")
+        with self.assertRaisesRegex(ValueError, "exceeds open quantity"):
+            record_fill(ledger, thread_id=1, side="SELL", quantity="5", price="6")
+
 
 if __name__ == "__main__":
     unittest.main()

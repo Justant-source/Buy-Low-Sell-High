@@ -54,10 +54,10 @@ class MentorMatrixTest(unittest.TestCase):
             },
             "combos": {
                 "1x1": {
-                    "yearly_returns_pct": {"2022": 22.2, "2023": 22.2, "2024": 22.2},
-                    "stats_pct": {"stddev": 0.0, "avg_all": 22.2, "avg_5y": 22.2},
-                    "simple_returns_pct": {"total": 46.7, "y3": 46.7},
-                    "compound_returns_pct": {"total": 159.1, "y3": 159.1, "y1": 22.2},
+                    "yearly_returns_pct": {"2022": 22.1, "2023": 22.1, "2024": 22.1},
+                    "stats_pct": {"stddev": 0.0, "avg_all": 22.1, "avg_5y": 22.1},
+                    "simple_returns_pct": {"total": 46.5, "y3": 46.5},
+                    "compound_returns_pct": {"total": 156.5, "y3": 156.5, "y1": 22.1},
                 }
             },
             "selected_count_combos": {
@@ -89,7 +89,8 @@ class MentorMatrixTest(unittest.TestCase):
             selected_count_combos=("1x1",),
         )
         self.assertEqual(payload["parity"]["status"], "PASS")
-        self.assertEqual(payload["actual"]["combos"]["1x1"]["simple_returns_pct"]["total"], 46.7)
+        self.assertEqual(payload["mentor_floor"]["status"], "PASS")
+        self.assertEqual(payload["actual"]["combos"]["1x1"]["simple_returns_pct"]["total"], 46.5)
         self.assertEqual(payload["actual"]["selected_count_combos"]["1x1"]["aggregate_rows"]["compound_total"]["time_stop"], 2)
 
     def test_build_mentor_matrix_returns_data_mismatch_when_benchmark_boundaries_differ(self) -> None:
@@ -116,6 +117,57 @@ class MentorMatrixTest(unittest.TestCase):
         )
         self.assertEqual(payload["parity"]["status"], "DATA_MISMATCH")
         self.assertEqual(payload["parity"]["first_mismatch"]["section"], "benchmark.yearly")
+
+    def test_build_mentor_matrix_reports_floor_fail_when_actual_drops_more_than_tolerance(self) -> None:
+        bars = [
+            make_bar(2022, 1, 3, "10"),
+            make_bar(2022, 1, 4, "9"),
+            make_bar(2022, 1, 5, "11"),
+            make_bar(2023, 1, 3, "10"),
+            make_bar(2023, 1, 4, "9"),
+            make_bar(2023, 1, 5, "11"),
+            make_bar(2024, 1, 3, "10"),
+            make_bar(2024, 1, 4, "9"),
+            make_bar(2024, 1, 5, "11"),
+        ]
+        config = StrategyConfig.from_mapping({"thread_count": 1, "stop_sessions": 1, "initial_capital": 1000})
+        reference = {
+            "meta": {"source_image_sha256": "test"},
+            "benchmark": {
+                "yearly": [
+                    {"year": 2022, "price_change": "10.00->11.00"},
+                    {"year": 2023, "price_change": "10.00->11.00"},
+                    {"year": 2024, "price_change": "10.00->11.00"},
+                ]
+            },
+            "combos": {
+                "1x1": {
+                    "yearly_returns_pct": {"2022": 28.0, "2023": 22.1, "2024": 22.1},
+                    "stats_pct": {"stddev": 0.0, "avg_all": 24.1, "avg_5y": 24.1},
+                    "simple_returns_pct": {"total": 46.5, "y3": 46.5},
+                    "compound_returns_pct": {"total": 156.5, "y3": 156.5, "y1": 22.1},
+                }
+            },
+            "selected_count_combos": {},
+        }
+        payload = build_mentor_matrix(
+            bars,
+            config,
+            data_hash="synthetic-hash",
+            reference=reference,
+            combos=((1, 1),),
+            windows={"total": (2022, 2024), "y3": (2022, 2024), "y1": (2024, 2024)},
+            selected_count_combos=(),
+        )
+        self.assertEqual(payload["mentor_floor"]["status"], "FAIL")
+        self.assertEqual(payload["mentor_floor"]["failure_count"], 1)
+        self.assertEqual(payload["mentor_floor"]["combo_failure_counts"], {"1x1": 1})
+        self.assertEqual(payload["mentor_floor"]["first_mismatch"]["combo"], "1x1")
+        self.assertEqual(payload["mentor_floor"]["first_mismatch"]["metric"], "2022")
+        self.assertEqual(payload["mentor_floor"]["first_mismatch"]["minimum_allowed"], "23.0")
+        self.assertEqual(payload["mentor_floor"]["first_mismatch"]["actual"], "22.1")
+        self.assertEqual(payload["mentor_floor"]["worst_mismatches"][0]["combo"], "1x1")
+        self.assertEqual(payload["mentor_floor"]["worst_mismatches"][0]["delta_to_floor"], "-0.9")
 
 
 if __name__ == "__main__":

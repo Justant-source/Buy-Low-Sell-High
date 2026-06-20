@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-import { jobsRoot, mentorMatrixRoot, runsRoot, runtimeRoot } from "./paths.js";
+import { jobsRoot, mentorMatrixRoot, officialMatrixRoot, runsRoot, runtimeRoot } from "./paths.js";
 import type { DashboardJobRecord, PersistedRunArtifact } from "./types.js";
 
 async function ensureDir(target: string): Promise<void> {
@@ -14,6 +14,7 @@ async function ensureLayout(): Promise<void> {
   await ensureDir(jobsRoot);
   await ensureDir(runsRoot);
   await ensureDir(mentorMatrixRoot);
+  await ensureDir(officialMatrixRoot);
 }
 
 async function writeJson(filePath: string, payload: unknown): Promise<void> {
@@ -65,6 +66,11 @@ function mentorMatrixPath(cacheKey: string): string {
   return path.join(mentorMatrixRoot, `${digest}.json`);
 }
 
+function officialMatrixPath(cacheKey: string): string {
+  const digest = createHash("sha256").update(cacheKey).digest("hex");
+  return path.join(officialMatrixRoot, `${digest}.json`);
+}
+
 export function newJobId(): string {
   return randomUUID();
 }
@@ -105,4 +111,12 @@ export async function saveMentorMatrixArtifact<T>(cacheKey: string, payload: T):
 
 export async function loadMentorMatrixArtifact<T>(cacheKey: string): Promise<T | null> {
   return readJson<T>(mentorMatrixPath(cacheKey));
+}
+
+export async function saveOfficialMatrixArtifact<T>(cacheKey: string, payload: T): Promise<void> {
+  await writeJson(officialMatrixPath(cacheKey), payload);
+}
+
+export async function loadOfficialMatrixArtifact<T>(cacheKey: string): Promise<T | null> {
+  return readJson<T>(officialMatrixPath(cacheKey));
 }

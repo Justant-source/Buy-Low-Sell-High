@@ -32,6 +32,8 @@ DEFAULT_SELECTED_COUNT_COMBOS: tuple[str, ...] = ("5x30", "6x10", "6x30", "7x30"
 DISPLAY_PRICE = D("0.01")
 DISPLAY_PERCENT = D("0.1")
 COUNT_AVERAGE_QUANT = D("0.1")
+DEFAULT_FLOOR_TOLERANCE = D("5.0")
+DEFAULT_FLOOR_SECTIONS: tuple[str, ...] = ("yearly_returns_pct", "simple_returns_pct")
 
 
 @dataclass(frozen=True)
@@ -94,6 +96,12 @@ def build_mentor_matrix(
         },
     }
     parity = compare_to_reference(actual, reference_payload, data_hash=data_hash)
+    mentor_floor = compare_to_floor(
+        actual,
+        reference_payload,
+        tolerance=DEFAULT_FLOOR_TOLERANCE,
+        sections=DEFAULT_FLOOR_SECTIONS,
+    )
     return {
         "meta": {
             "symbol": base_config.symbol,
@@ -117,6 +125,17 @@ def build_mentor_matrix(
             "value_status": parity["value_status"],
             "first_mismatch": parity["first_mismatch"],
             "mismatches": parity["mismatches"],
+        },
+        "mentor_floor": {
+            "status": mentor_floor["status"],
+            "data_status": parity["data_status"],
+            "tolerance_pct": mentor_floor["tolerance_pct"],
+            "sections": mentor_floor["sections"],
+            "failure_count": mentor_floor["failure_count"],
+            "combo_failure_counts": mentor_floor["combo_failure_counts"],
+            "first_mismatch": mentor_floor["first_mismatch"],
+            "mismatches": mentor_floor["mismatches"],
+            "worst_mismatches": mentor_floor["worst_mismatches"],
         },
     }
 
@@ -224,6 +243,93 @@ def compare_to_reference(actual: dict[str, Any], reference: dict[str, Any], *, d
     }
 
 
+def compare_to_floor(
+    actual: dict[str, Any],
+    reference: dict[str, Any],
+    *,
+    tolerance: Decimal,
+    sections: tuple[str, ...] = DEFAULT_FLOOR_SECTIONS,
+) -> dict[str, Any]:
+    failures: list[dict[str, str | float]] = []
+
+    for combo_key, combo_reference in reference["combos"].items():
+        combo_actual = actual["combos"].get(combo_key)
+        if combo_actual is None:
+            failures.append(
+                {
+                    "combo": combo_key,
+                    "section": "combo",
+                    "metric": "combo",
+                    "mentor": "present",
+                    "minimum_allowed": "present",
+                    "actual": "missing",
+                    "delta_to_mentor": "missing",
+                    "delta_to_floor": "missing",
+                }
+            )
+            continue
+        for section in sections:
+            expected_map = combo_reference.get(section, {})
+            actual_map = combo_actual.get(section, {})
+            for metric, mentor_value in expected_map.items():
+                actual_value = actual_map.get(metric)
+                if actual_value is None:
+                    failures.append(
+                        {
+                            "combo": combo_key,
+                            "section": section,
+                            "metric": metric,
+                            "mentor": str(mentor_value),
+                            "minimum_allowed": str(D(str(mentor_value)) - tolerance),
+                            "actual": "missing",
+                            "delta_to_mentor": "missing",
+                            "delta_to_floor": "missing",
+                        }
+                    )
+                    continue
+                mentor_decimal = D(str(mentor_value))
+                actual_decimal = D(str(actual_value))
+                minimum_allowed = mentor_decimal - tolerance
+                if actual_decimal < minimum_allowed:
+                    failures.append(
+                        {
+                            "combo": combo_key,
+                            "section": section,
+                            "metric": metric,
+                            "mentor": str(mentor_decimal),
+                            "minimum_allowed": str(minimum_allowed),
+                            "actual": str(actual_decimal),
+                            "delta_to_mentor": str(actual_decimal - mentor_decimal),
+                            "delta_to_floor": str(actual_decimal - minimum_allowed),
+                        }
+                    )
+
+    combo_failure_counts: dict[str, int] = {}
+    for item in failures:
+        combo_key = str(item["combo"])
+        combo_failure_counts[combo_key] = combo_failure_counts.get(combo_key, 0) + 1
+    worst_mismatches = sorted(
+        failures,
+        key=lambda item: (
+            D(str(item["delta_to_floor"])) if item["delta_to_floor"] != "missing" else D("999999"),
+            str(item["combo"]),
+            str(item["section"]),
+            str(item["metric"]),
+        ),
+    )[:10]
+
+    return {
+        "status": "PASS" if not failures else "FAIL",
+        "tolerance_pct": float(tolerance),
+        "sections": list(sections),
+        "failure_count": len(failures),
+        "combo_failure_counts": dict(sorted(combo_failure_counts.items())),
+        "first_mismatch": failures[0] if failures else None,
+        "mismatches": failures[:10],
+        "worst_mismatches": worst_mismatches,
+    }
+
+
 def _compare_numeric_map(
     mismatches: list[MentorMatrixMismatch],
     *,
@@ -272,9 +378,11 @@ def _actual_combo_payloads(
     data_hash: str,
     combos: tuple[tuple[int, int], ...],
     windows: dict[str, tuple[int, int]],
+    *,
+    years: list[int] | None = None,
 ) -> dict[str, Any]:
     payloads: dict[str, Any] = {}
-    years = sorted({bar.session_date.year for bar in bars if 2011 <= bar.session_date.year <= 2024})
+    years = years or sorted({bar.session_date.year for bar in bars if 2011 <= bar.session_date.year <= 2024})
 
     for thread_count, stop_sessions in combos:
         combo_key = f"{thread_count}x{stop_sessions}"

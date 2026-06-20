@@ -10,10 +10,12 @@
 ## 구현 원칙
 - 보유 기간은 달력일이 아니라 거래소 세션 기준으로 계산한다.
 - 레퍼런스 무결성을 지킨다. 불일치를 숨기기 위해 fixture를 수정하지 않는다.
+- 공식 연구 기준선은 Yahoo `adjusted_close` 스냅샷과 `ideal_same_close` 실행 모델을 사용한다.
 - `ideal_same_close` 연구용 출력과 현실적인 수동 체결 출력은 분리한다.
 
 ## 현재 전략 참조 문서
 - **전략 SSOT (매매 로직·파라미터·백테스트 준거)**: `docs/70-policy/ddeolsao-pal-ssot.md`
+- **공식 연구 기준선 ADR**: `docs/90-adr/0003-official-research-baseline.md`
 - 실행 가능한 기준 의미론: `docs/90-adr/0001-mentor-semantics.md`
-- 멘토 화면 및 parity 의미론: `docs/90-adr/0002-mentor-reference-screen.md`
-- 멘토 전략과 구현 전략 비교: `docs/70-policy/mentor-vs-implemented-strategy.md`
+- 멘토 화면 및 parity 의미론: `docs/90-adr/0002-mentor-reference-screen.md` (`legacy comparison`)
+- 멘토 전략과 구현 전략 비교: `docs/70-policy/mentor-vs-implemented-strategy.md` (`legacy comparison`)

@@ -7,10 +7,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/tokens.css">
-<link rel="stylesheet" href="/css/components.css">
-<link rel="stylesheet" href="/css/dashboard.css">
-<script src="/js/theme.js"></script>
+<link rel="stylesheet" href="/css/tokens.css?v=20260620-15">
+<link rel="stylesheet" href="/css/components.css?v=20260620-15">
+<link rel="stylesheet" href="/css/dashboard.css?v=20260620-15">
+<script src="/js/theme.js?v=20260620-15"></script>
 </head>
 <body>
 <div class="app-shell">
@@ -23,14 +23,12 @@
       </div>
     </div>
     <div class="strategy-card">
-      <div class="sc-label">운영 전략</div>
-      <div class="sc-code">ddeolsao_pal · 7x30</div>
+      <div class="sc-label">연구 기준선</div>
       <div class="sc-tags">
-        <span class="badge info">SOXL Daily</span>
-        <span class="badge info">Manual-Only</span>
+        <span class="badge info">Yahoo Adj Close</span>
+        <span class="badge info">Read-Only</span>
       </div>
       <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);display:flex;flex-direction:column;gap:4px;font:var(--t-small);color:var(--text-muted)">
-        <div style="display:flex;justify-content:space-between"><span>기본 프로필</span><span class="mono" id="sb-profile">mentor_default_7x30</span></div>
         <div style="display:flex;justify-content:space-between"><span>데이터셋</span><span class="mono" id="sb-range">2011-01-03 - 2026-06-18</span></div>
         <div style="display:flex;justify-content:space-between"><span>실행 모델</span><span class="mono" id="sb-model">ideal_same_close</span></div>
       </div>
@@ -56,608 +54,372 @@
     <div class="page-head">
       <div>
         <div class="page-title">백테스트 워크벤치</div>
-        <div class="page-sub">Bit-Mania 스타일의 multi-card 연구 화면에 SOXL 일봉 백테스트와 9조합 비교를 통합했습니다.</div>
       </div>
     </div>
 
-    <div class="hero-strip">
-      <div>
-        <div class="page-title" style="font:var(--t-h2)">2011-present canonical dataset</div>
-        <div class="page-sub">`data/raw/soxl_daily_2011_present.csv`를 기본 데이터셋으로 사용합니다.</div>
-      </div>
-      <div class="hero-metrics">
-        <div class="hero-metric">
-          <span class="hero-label">Rows</span>
-          <span class="hero-value mono" id="hero-rows">-</span>
-        </div>
-        <div class="hero-metric">
-          <span class="hero-label">Period</span>
-          <span class="hero-value mono" id="hero-period">-</span>
-        </div>
-        <div class="hero-metric">
-          <span class="hero-label">Data Hash</span>
-          <span class="hero-value mono" id="hero-hash">-</span>
-        </div>
-      </div>
+    <div class="tab-strip" role="tablist" aria-label="백테스트 탭">
+      <button class="tab-button active" type="button" role="tab" aria-selected="true" data-tab="strategy">전략</button>
+      <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="parameter">파라미터 테스트</button>
+      <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="mentor">멘토 래퍼런스</button>
     </div>
 
-    <div class="card">
-      <div class="card-head">
-        <div>
-          <div class="card-title">Strategy Explorer</div>
-          <div class="card-sub">Bit-Mania의 `/home/justant/Data/Bit-Mania/backtest/dashboards/strategy_dashboard.html`을 계속 참조하는 구간별 전략 비교 화면입니다.</div>
-        </div>
-        <div class="sc-tags">
-          <span class="badge info mono">core_profiles_v1</span>
-          <span class="badge warning">max 6 compare</span>
-        </div>
-      </div>
-      <div class="field-grid research-grid">
-        <div class="field">
-          <label for="strategy-model">연구 실행 모델</label>
-          <select class="select" id="strategy-model">
-            <option value="next_open" selected>next_open</option>
-            <option value="ideal_same_close">ideal_same_close</option>
-            <option value="next_close">next_close</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="strategy-price-basis">연구 가격 기준</label>
-          <select class="select" id="strategy-price-basis">
-            <option value="adjusted_close" selected>adjusted_close</option>
-            <option value="raw_close_with_actions">raw_close_with_actions</option>
-          </select>
-        </div>
-        <div class="field full">
-          <label>전략 선택</label>
-          <div class="strategy-selector-grid" id="strategy-selector"></div>
-          <div class="table-note" id="strategy-selector-note">core_profiles_v1 로딩 중…</div>
-        </div>
-        <div class="field full">
-          <label>기간 프리셋</label>
-          <div class="preset-row" id="strategy-slice-presets"></div>
-        </div>
-        <div class="field">
-          <label for="strategy-slice-start">시작일</label>
-          <input class="input mono" id="strategy-slice-start" type="date">
-        </div>
-        <div class="field">
-          <label for="strategy-slice-end">종료일</label>
-          <input class="input mono" id="strategy-slice-end" type="date">
-        </div>
-        <div class="field">
-          <label for="strategy-roll-window">롤링 윈도</label>
-          <select class="select" id="strategy-roll-window">
-            <option value="63">63 sessions</option>
-            <option value="126">126 sessions</option>
-            <option value="252" selected>252 sessions</option>
-          </select>
-        </div>
-      </div>
-      <div class="action-row">
-        <button class="btn primary" type="button" id="strategy-apply-button">구간 적용</button>
-        <button class="btn" type="button" id="strategy-reset-button">전체 기간 복귀</button>
-        <button class="btn" type="button" id="strategy-refresh-button">전략 리프레시</button>
-      </div>
-      <div class="notice" style="margin-top:14px" id="strategy-meta-note">전체 기간 run을 먼저 계산하고, 구간 조회는 재실행 없이 slice rebase로 처리합니다.</div>
-    </div>
-
-    <div class="row row-4">
-      <div class="kpi"><span class="kpi-label">선택 전략 수</span><span class="kpi-value" id="strategy-kpi-count">-</span><div class="kpi-meta">up to 6</div></div>
-      <div class="kpi"><span class="kpi-label">구간 최고 수익률</span><span class="kpi-value" id="strategy-kpi-best-return">-</span><div class="kpi-meta">selected slice leader</div></div>
-      <div class="kpi"><span class="kpi-label">구간 최저 MDD</span><span class="kpi-value" id="strategy-kpi-best-mdd">-</span><div class="kpi-meta">selected slice</div></div>
-      <div class="kpi"><span class="kpi-label">조회 구간</span><span class="kpi-value mono" id="strategy-kpi-period">-</span><div class="kpi-meta">rebased slice</div></div>
-    </div>
-
-    <div class="row row-2">
+    <section class="tab-panel active" data-tab-panel="strategy">
       <div class="card">
         <div class="card-head">
           <div>
-            <div class="card-title">Rebased Equity</div>
-            <div class="card-sub">선택 구간 시작 시점을 $10,000으로 재기준화합니다.</div>
+            <div class="card-title">기간 설정</div>
           </div>
         </div>
-        <div class="chart-wrap" id="strategy-equity-chart"><div class="empty-state">전략 Explorer 데이터를 불러오면 차트가 표시됩니다.</div></div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Slice Drawdown</div>
-            <div class="card-sub">구간 내부 peak 기준 drawdown입니다.</div>
+        <div class="field-grid research-grid">
+          <div class="field">
+            <label for="strategy-slice-start">시작일</label>
+            <input class="input mono" id="strategy-slice-start" type="date">
+          </div>
+          <div class="field">
+            <label for="strategy-slice-end">종료일</label>
+            <input class="input mono" id="strategy-slice-end" type="date">
+          </div>
+          <div class="field period-apply-field">
+            <label>&nbsp;</label>
+            <button class="btn primary" type="button" id="strategy-apply-button">구간 적용</button>
+          </div>
+          <div class="field full">
+            <label>기간 프리셋</label>
+            <div class="preset-row" id="strategy-slice-presets"></div>
           </div>
         </div>
-        <div class="chart-wrap" id="strategy-drawdown-chart"><div class="empty-state">전략 Explorer 데이터를 불러오면 차트가 표시됩니다.</div></div>
-      </div>
-    </div>
-
-    <div class="row row-2">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Rolling Return</div>
-            <div class="card-sub">63 / 126 / 252 sessions rolling return</div>
-          </div>
-        </div>
-        <div class="chart-wrap" id="strategy-rolling-chart"><div class="empty-state">선택 전략이 2개 이상의 관측치를 가지면 롤링 수익률이 표시됩니다.</div></div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">월별 손익 히트맵</div>
-            <div class="card-sub">선택 전략과 slice 범위의 월별 수익률입니다.</div>
-          </div>
-        </div>
-        <div class="chart-wrap" id="strategy-monthly-chart"><div class="empty-state">선택 전략의 월별 히트맵이 표시됩니다.</div></div>
-      </div>
-    </div>
-
-    <div class="card wide-table">
-      <div class="card-head">
-        <div>
-          <div class="card-title">구간 비교 표</div>
-          <div class="card-sub">고정 macro segment 기준의 수익률과 MDD를 비교합니다.</div>
-        </div>
-      </div>
-      <div class="tbl-wrap">
-        <table class="tbl" id="strategy-segment-table">
-          <thead id="strategy-segment-head">
-            <tr><th>Segment</th><th class="num">Range</th><th class="num">Result</th></tr>
-          </thead>
-          <tbody id="strategy-segment-body">
-            <tr><td colspan="3" class="muted" style="text-align:center">전략 Explorer 결과를 불러오지 않았습니다.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-head">
-        <div>
-          <div class="card-title">Sweep Explorer</div>
-          <div class="card-sub">Bit-Mania의 `/home/justant/Data/Bit-Mania/backtest/dashboards/supertrend_sweep_dashboard.html`을 계속 참조하는 떨사오팔 핵심 6개 파라미터 스윕입니다.</div>
-        </div>
-        <div class="sc-tags">
-          <span class="badge info mono">core6_v1</span>
-          <span class="badge warning" id="sweep-latest-state">latest pending</span>
-        </div>
-      </div>
-      <div class="field-grid research-grid">
-        <div class="field">
-          <label for="sweep-model">스윕 실행 모델</label>
-          <select class="select" id="sweep-model">
-            <option value="next_open" selected>next_open</option>
-            <option value="ideal_same_close">ideal_same_close</option>
-            <option value="next_close">next_close</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="sweep-price-basis">스윕 가격 기준</label>
-          <select class="select" id="sweep-price-basis">
-            <option value="adjusted_close" selected>adjusted_close</option>
-            <option value="raw_close_with_actions">raw_close_with_actions</option>
-          </select>
-        </div>
-        <div class="field full">
-          <label>스윕 정의</label>
-          <div class="notice">`thread_count[5,6,7] × stop_sessions[10,20,30,40] × take_profit_pct[0,0.5,1] × entry_drop_pct[0,0.5,1] × stop_loss_pct[0,5,10] × max_entries_per_session[1,2]`</div>
-        </div>
-      </div>
-      <div class="action-row">
-        <button class="btn primary" type="button" id="sweep-run-button">스윕 실행</button>
-        <button class="btn" type="button" id="sweep-refresh-button">최신 결과 불러오기</button>
-      </div>
-      <div class="alert-box" id="sweep-job-error" style="margin-top:14px"></div>
-      <div class="meta-grid" style="margin-top:14px">
-        <div class="meta-item"><span>Sweep Job</span><strong class="mono" id="sweep-job-id">-</strong></div>
-        <div class="meta-item"><span>Status</span><strong id="sweep-job-status">Idle</strong></div>
-        <div class="meta-item"><span>Progress</span><strong id="sweep-job-progress">0%</strong></div>
-        <div class="meta-item"><span>Artifact ID</span><strong class="mono" id="sweep-artifact-id">-</strong></div>
-        <div class="meta-item"><span>Requested</span><strong class="mono" id="sweep-job-requested">-</strong></div>
-        <div class="meta-item"><span>Finished</span><strong class="mono" id="sweep-job-finished">-</strong></div>
-      </div>
-      <div class="notice" style="margin-top:14px" id="sweep-meta-note">현실 모델 `next_open` 기준 robust/overfit 지표를 기본으로 사용합니다.</div>
-    </div>
-
-    <div class="row row-4">
-      <div class="kpi"><span class="kpi-label">콤보 수</span><span class="kpi-value" id="sweep-kpi-count">-</span><div class="kpi-meta">core6_v1</div></div>
-      <div class="kpi"><span class="kpi-label">최고 전체 수익</span><span class="kpi-value mono" id="sweep-kpi-best-full">-</span><div class="kpi-meta">combo key</div></div>
-      <div class="kpi"><span class="kpi-label">최고 강건 조합</span><span class="kpi-value mono" id="sweep-kpi-best-robust">-</span><div class="kpi-meta">mean segment return basis</div></div>
-      <div class="kpi"><span class="kpi-label">Pareto</span><span class="kpi-value" id="sweep-kpi-pareto">-</span><div class="kpi-meta">return/MDD + return/stability</div></div>
-    </div>
-
-    <div class="row row-2">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Pareto Scatter</div>
-            <div class="card-sub">전체 수익률 vs MDD, 색상은 recent segment return입니다.</div>
-          </div>
-        </div>
-        <div class="chart-wrap" id="sweep-scatter-chart"><div class="empty-state">스윕 결과가 준비되면 Pareto scatter가 표시됩니다.</div></div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Parameter Box Plot</div>
-            <div class="card-sub">선택 파라미터 값별 mean segment return 분포입니다.</div>
-          </div>
-          <select class="select" id="sweep-box-axis" style="width:180px">
-            <option value="thread_count">thread_count</option>
-            <option value="stop_sessions">stop_sessions</option>
-            <option value="take_profit_pct">take_profit_pct</option>
-            <option value="entry_drop_pct">entry_drop_pct</option>
-            <option value="stop_loss_pct">stop_loss_pct</option>
-            <option value="max_entries_per_session">max_entries_per_session</option>
-          </select>
-        </div>
-        <div class="chart-wrap" id="sweep-box-chart"><div class="empty-state">스윕 결과가 준비되면 box plot이 표시됩니다.</div></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-head">
-        <div>
-          <div class="card-title">Parallel Coordinates</div>
-          <div class="card-sub">6개 파라미터와 핵심 성과 지표를 한 번에 비교합니다.</div>
-        </div>
-      </div>
-      <div class="chart-wrap" id="sweep-parcoords-chart"><div class="empty-state">스윕 결과가 준비되면 parallel coordinates가 표시됩니다.</div></div>
-    </div>
-
-    <div class="card wide-table">
-      <div class="card-head">
-        <div>
-          <div class="card-title">상위 100 콤보</div>
-          <div class="card-sub">기본 정렬: mean segment return desc, segment stddev asc, full return desc</div>
-        </div>
-      </div>
-      <div class="sweep-filter-grid">
-        <div class="field">
-          <label for="sweep-filter-min-return">최소 전체 수익률</label>
-          <input class="input mono" id="sweep-filter-min-return" type="number" step="10" value="0">
-        </div>
-        <div class="field">
-          <label for="sweep-filter-max-mdd">최대 MDD</label>
-          <input class="input mono" id="sweep-filter-max-mdd" type="number" step="5" value="-100">
-        </div>
-        <div class="field">
-          <label for="sweep-filter-max-std">최대 구간 표준편차</label>
-          <input class="input mono" id="sweep-filter-max-std" type="number" step="5" value="100">
-        </div>
-        <div class="field">
-          <label for="sweep-filter-pareto">Pareto 필터</label>
-          <select class="select" id="sweep-filter-pareto">
-            <option value="all" selected>all</option>
-            <option value="return_mdd">return / MDD</option>
-            <option value="return_stability">return / stability</option>
-          </select>
-        </div>
-      </div>
-      <div class="action-row" style="margin-top:14px">
-        <button class="btn" type="button" id="sweep-filter-apply">필터 적용</button>
-        <button class="btn" type="button" id="sweep-filter-reset">필터 초기화</button>
-      </div>
-      <div class="stack-list" id="sweep-warning-list" style="margin-top:14px">
-        <div class="stack-row"><span class="title">스윕 결과를 기다리는 중</span><span class="badge neutral">pending</span></div>
-      </div>
-      <div class="tbl-wrap" style="margin-top:14px">
-        <table class="tbl" id="sweep-table">
-          <thead>
-            <tr>
-              <th>Combo</th>
-              <th class="num">Params</th>
-              <th class="num">Full Return</th>
-              <th class="num">MDD</th>
-              <th class="num">Mean Segment</th>
-              <th class="num">Segment Std</th>
-              <th class="num">Recent</th>
-              <th class="num">Pareto</th>
-            </tr>
-          </thead>
-          <tbody id="sweep-table-body">
-            <tr><td colspan="8" class="muted" style="text-align:center">스윕 결과를 불러오지 않았습니다.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="section-title" style="margin-top:4px">
-      <h3>상세 실행</h3>
-      <span class="badge info">single run + mentor + risk</span>
-    </div>
-
-    <div class="row row-6">
-      <div class="kpi"><span class="kpi-label">총 수익률</span><span class="kpi-value" id="kpi-return">-</span><div class="kpi-meta">Latest completed run</div></div>
-      <div class="kpi"><span class="kpi-label">MDD</span><span class="kpi-value" id="kpi-mdd">-</span><div class="kpi-meta">Latest completed run</div></div>
-      <div class="kpi"><span class="kpi-label">거래 수</span><span class="kpi-value" id="kpi-trades">-</span><div class="kpi-meta">Closed trades</div></div>
-      <div class="kpi"><span class="kpi-label">변동성</span><span class="kpi-value" id="kpi-volatility">-</span><div class="kpi-meta">Daily return stddev</div></div>
-      <div class="kpi"><span class="kpi-label">Config Hash</span><span class="kpi-value mono" id="kpi-config">-</span><div class="kpi-meta">Reproducibility</div></div>
-      <div class="kpi"><span class="kpi-label">Code Commit</span><span class="kpi-value mono" id="kpi-commit">-</span><div class="kpi-meta">Workspace snapshot</div></div>
-    </div>
-
-    <div class="split-panel">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">실행 제어</div>
-            <div class="card-sub">단일 백테스트 job 생성과 9조합 비교를 같은 화면에서 실행합니다.</div>
-          </div>
-        </div>
-        <form id="backtest-form">
-          <div class="field-grid">
-            <div class="field">
-              <label for="profile-select">프로필</label>
-              <select class="select" id="profile-select"></select>
-            </div>
-            <div class="field">
-              <label for="initial-capital">초기 자본</label>
-              <input class="input mono" id="initial-capital" type="number" min="1000" step="1000" value="10000">
-            </div>
-            <div class="field">
-              <label for="thread-count">계좌 수</label>
-              <input class="input mono" id="thread-count" type="number" min="1" step="1" value="7">
-            </div>
-            <div class="field">
-              <label for="stop-sessions">손절 거래일</label>
-              <input class="input mono" id="stop-sessions" type="number" min="1" step="1" value="30">
-            </div>
-            <div class="field">
-              <label for="take-profit-pct">매도 상승률(%)</label>
-              <input class="input mono" id="take-profit-pct" type="number" min="0" step="0.5" value="0">
-            </div>
-            <div class="field">
-              <label for="take-profit-operator">매도 비교</label>
-              <select class="select" id="take-profit-operator">
-                <option value="gt" selected>&gt; entry × threshold</option>
-                <option value="gte">&gt;= entry × threshold</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="stop-loss-pct">가격 손절(%)</label>
-              <input class="input mono" id="stop-loss-pct" type="number" min="0" step="0.5" value="0">
-            </div>
-            <div class="field">
-              <label for="entry-drop-pct">진입 하락(%)</label>
-              <input class="input mono" id="entry-drop-pct" type="number" min="0" step="0.5" value="0">
-            </div>
-            <div class="field">
-              <label for="max-entries-per-session">하루 최대 진입</label>
-              <input class="input mono" id="max-entries-per-session" type="number" min="1" step="1" value="1">
-            </div>
-            <div class="field">
-              <label for="sizing-mode">투자금 보전</label>
-              <select class="select" id="sizing-mode">
-                <option value="fixed_principal" selected>기본원금 보전</option>
-                <option value="thread_compound">계좌별 복리</option>
-                <option value="portfolio_rebalance_compound">전체 재배분</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="price-basis">기준 종가</label>
-              <select class="select" id="price-basis">
-                <option value="adjusted_close" selected>조정종가</option>
-                <option value="raw_close_with_actions">원시종가</option>
-              </select>
-            </div>
-            <div class="field full">
-              <label for="csv-path">CSV 경로</label>
-              <input class="input mono" id="csv-path" type="text">
-            </div>
-            <div class="field">
-              <label for="compare-threads">비교 축 계좌 수</label>
-              <input class="input mono" id="compare-threads" type="text" value="5,6,7">
-            </div>
-            <div class="field">
-              <label for="compare-stops">비교 축 손절일</label>
-              <input class="input mono" id="compare-stops" type="text" value="10,30,40">
-            </div>
-          </div>
-          <div class="action-row">
-            <button class="btn primary" type="submit">백테스트 실행</button>
-            <button class="btn" type="button" id="compare-button">비교 실행</button>
-          </div>
-        </form>
-        <div class="notice" style="margin-top:14px">Job 기반 실행이므로 버튼 클릭 후 상태를 polling합니다. 자동매매, 주문 제출, 브로커 연동은 포함되지 않습니다.</div>
+        <div class="notice" style="margin-top:14px;display:none" id="strategy-meta-note"></div>
       </div>
 
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">최근 Job 상태</div>
-            <div class="card-sub">Queued -> Running -> Completed / Failed</div>
-          </div>
-        </div>
-        <div class="alert-box" id="job-error"></div>
-        <div class="meta-grid">
-          <div class="meta-item"><span>Job ID</span><strong class="mono" id="job-id">-</strong></div>
-          <div class="meta-item"><span>Status</span><strong id="job-status">Idle</strong></div>
-          <div class="meta-item"><span>Progress</span><strong id="job-progress">0%</strong></div>
-          <div class="meta-item"><span>Run ID</span><strong class="mono" id="job-run-id">-</strong></div>
-          <div class="meta-item"><span>Requested</span><strong class="mono" id="job-requested">-</strong></div>
-          <div class="meta-item"><span>Finished</span><strong class="mono" id="job-finished">-</strong></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="row row-2">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Equity Curve</div>
-            <div class="card-sub">Latest completed run</div>
-          </div>
-          <a class="btn" id="trades-download" href="#" download>거래 CSV</a>
-        </div>
-        <div class="chart-wrap" id="equity-chart"><div class="empty-state">백테스트 실행 후 equity curve가 표시됩니다.</div></div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Drawdown Curve</div>
-            <div class="card-sub">Percent drawdown by session</div>
-          </div>
-        </div>
-        <div class="chart-wrap" id="drawdown-chart"><div class="empty-state">백테스트 실행 후 drawdown curve가 표시됩니다.</div></div>
-      </div>
-    </div>
-
-    <div class="card wide-table">
-      <div class="card-head">
-        <div>
-          <div class="card-title">연도별 성과</div>
-          <div class="card-sub">start / end equity, yearly return, yearly MDD, close counts</div>
-        </div>
-      </div>
-      <div class="tbl-wrap">
-        <table class="tbl" id="yearly-table">
-          <thead>
-            <tr>
-              <th>연도</th>
-              <th class="num">시작 자산</th>
-              <th class="num">종료 자산</th>
-              <th class="num">수익률</th>
-              <th class="num">MDD</th>
-              <th class="num">익절 수</th>
-              <th class="num">손절 수</th>
-            </tr>
-          </thead>
-          <tbody id="yearly-tbody">
-            <tr><td colspan="7" class="muted" style="text-align:center">결과 없음</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="card wide-table">
-      <div class="card-head">
-        <div>
-            <div class="card-title">비교 매트릭스</div>
-            <div class="card-sub">사용자 지정 Thread x Stop 비교. 각 셀은 수익률 / MDD / 거래 수를 표시합니다.</div>
-          </div>
-        </div>
-      <div class="tbl-wrap">
-        <table class="tbl matrix-table" id="compare-table">
-          <thead id="compare-head">
-            <tr><th>Thread \ Stop</th><th>10</th><th>30</th><th>40</th></tr>
-          </thead>
-          <tbody id="compare-body">
-            <tr><td colspan="4" class="muted" style="text-align:center">비교 데이터를 불러오지 않았습니다.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="card wide-table">
-      <div class="card-head">
-        <div>
-          <div class="card-title">멘토 레퍼런스 매트릭스</div>
-          <div class="card-sub">현재 데이터셋으로 실제 백테스트를 실행한 값을 기본으로 렌더링하고, 멘토 이미지 전사값과의 차이는 진단 정보로만 표시합니다.</div>
-        </div>
-        <div class="sc-tags">
-          <span class="badge warning" id="mentor-matrix-status">loading</span>
-          <span class="badge info mono" id="mentor-matrix-hash">-</span>
-        </div>
-      </div>
-      <div class="notice" id="mentor-matrix-note">실제 백테스트 결과를 계산하는 중입니다.</div>
-      <div class="tbl-wrap mentor-matrix-wrap">
-        <table class="tbl mentor-matrix-table" id="mentor-matrix-table">
-          <tbody id="mentor-matrix-body">
-            <tr><td class="muted" style="text-align:center">멘토 레퍼런스 매트릭스를 불러오지 않았습니다.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="card wide-table">
-      <div class="card-head">
-        <div>
-          <div class="card-title">익절 / 손절 수</div>
-          <div class="card-sub">현재 엔진이 계산한 선택 조합 4개의 연도행과 집계행을 표시합니다.</div>
-        </div>
-      </div>
-      <div class="tbl-wrap mentor-matrix-wrap">
-        <table class="tbl mentor-counts-table" id="mentor-counts-table">
-          <tbody id="mentor-counts-body">
-            <tr><td class="muted" style="text-align:center">카운트 표를 불러오지 않았습니다.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="row row-4">
-      <div class="kpi"><span class="kpi-label">Close→Open Drift</span><span class="kpi-value" id="risk-gap-drift">-</span><div class="kpi-meta">ideal_same_close vs next_open</div></div>
-      <div class="kpi"><span class="kpi-label">Data Delay Drag</span><span class="kpi-value" id="risk-delay-drift">-</span><div class="kpi-meta">next_open vs next_close</div></div>
-      <div class="kpi"><span class="kpi-label">Stress Cost Drag</span><span class="kpi-value" id="risk-cost-drift">-</span><div class="kpi-meta">next_open zero cost vs stress</div></div>
-      <div class="kpi"><span class="kpi-label">Worst Recovery</span><span class="kpi-value" id="risk-recovery">-</span><div class="kpi-meta">Peak to recovery sessions</div></div>
-    </div>
-
-    <div class="row row-2">
       <div class="card wide-table">
         <div class="card-head">
           <div>
-            <div class="card-title">실행 모델 리스크 비교</div>
-            <div class="card-sub">ideal_same_close, next_open, next_close 비교로 gap risk와 data delay 영향을 봅니다.</div>
+            <div class="card-title">콤보 랭킹</div>
+            <div class="card-sub">행을 눌러 최대 6개 콤보를 비교하고, Focus 버튼으로 아래 thread timeline 전략을 바꿀 수 있습니다. Combo는 Thread 수 x 손절일 파라미터 조합입니다.</div>
           </div>
         </div>
         <div class="tbl-wrap">
-          <table class="tbl">
+          <table class="tbl" id="strategy-ranking-table">
             <thead>
-              <tr><th>Scenario</th><th>Model</th><th class="num">Return</th><th class="num">MDD</th><th class="num">Vol</th><th class="num">Trades</th><th class="num">Recovery</th></tr>
+              <tr>
+                <th>Focus</th>
+                <th>선택</th>
+                <th>Rank</th>
+                <th>COMBO<br><small class="tbl-head-sub">Thread 수 x 손절일</small></th>
+                <th class="num">Full Return</th>
+                <th class="num">Mean Segment</th>
+                <th class="num">Segment Std</th>
+                <th class="num">Recent</th>
+              </tr>
             </thead>
-            <tbody id="risk-models-tbody">
-              <tr><td colspan="7" class="muted" style="text-align:center">리스크 리포트를 불러오지 않았습니다.</td></tr>
+            <tbody id="strategy-ranking-body">
+              <tr><td colspan="8" class="muted" style="text-align:center">전략 랭킹을 불러오는 중입니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-note" id="strategy-selector-note">선택 0 / 6</div>
+      </div>
+
+      <div class="row row-2">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Rebased Equity</div>
+              <div class="card-sub">선택 구간 시작 시점을 $10,000으로 재기준화합니다.</div>
+            </div>
+          </div>
+          <div class="chart-wrap" id="strategy-equity-chart"><div class="empty-state"></div></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Slice Drawdown</div>
+              <div class="card-sub">구간 내부 peak 기준 drawdown입니다.</div>
+            </div>
+          </div>
+          <div class="chart-wrap" id="strategy-drawdown-chart"><div class="empty-state"></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Thread Summary</div>
+          </div>
+        </div>
+        <div class="thread-summary-grid" style="margin-top:14px">
+          <div class="kpi thread-summary-card working-days"><span class="kpi-label">전체 Working Days</span><span class="kpi-value" id="thread-kpi-working-days">-</span></div>
+          <div class="kpi thread-summary-card entry-sessions"><span class="kpi-label">Entry Sessions</span><span class="kpi-value" id="thread-kpi-entry-sessions">-</span><div class="kpi-meta">days with buys</div></div>
+          <div class="kpi thread-summary-card exit-sessions"><span class="kpi-label">Exit Sessions</span><span class="kpi-value" id="thread-kpi-exit-sessions">-</span><div class="kpi-meta">days with sells</div></div>
+          <div class="kpi thread-summary-card free-days"><span class="kpi-label">All Threads Free Days</span><span class="kpi-value" id="thread-kpi-free-days">-</span></div>
+          <div class="kpi thread-summary-card full-days"><span class="kpi-label">All Threads Full Days</span><span class="kpi-value" id="thread-kpi-full-days">-</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Thread Timeline</div>
+            <div class="card-sub">기본은 한 줄 접기 화면입니다. 펼치면 모든 thread 보유 구간을 동시에 볼 수 있습니다.</div>
+          </div>
+        </div>
+        <div class="thread-legend">
+          <span class="thread-legend-item"><span class="thread-swatch tp"></span>익절 종료</span>
+          <span class="thread-legend-item"><span class="thread-swatch stop"></span>손절 종료</span>
+          <span class="thread-legend-item"><span class="thread-swatch open"></span>현재 보유</span>
+          <span class="thread-legend-item"><span class="thread-entry-chip">▲</span>매수</span>
+          <span class="thread-legend-item"><span class="thread-exit-chip">2</span>매도</span>
+        </div>
+        <div id="thread-timeline-card">
+          <div class="empty-state" style="position:relative;min-height:180px">thread timeline을 불러오는 중입니다.</div>
+        </div>
+      </div>
+
+      <div class="card wide-table">
+        <div class="card-head thread-history-head">
+          <div>
+            <div class="card-title">거래 이력</div>
+          </div>
+          <div class="thread-history-meta" id="thread-history-meta">총 0건</div>
+        </div>
+        <div class="tbl-wrap">
+          <table class="tbl thread-history-table">
+            <colgroup>
+              <col class="thread-history-col-index">
+              <col class="thread-history-col-thread">
+              <col class="thread-history-col-status">
+              <col>
+              <col>
+              <col>
+              <col>
+              <col>
+              <col>
+              <col>
+              <col>
+              <col>
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="thread-history-index-col">번호</th>
+                <th class="thread-history-thread-col">Thread</th>
+                <th class="thread-history-status-col">상태</th>
+                <th>진입 날짜</th>
+                <th>종료 날짜</th>
+                <th class="num">진입 가격</th>
+                <th class="num">종료 가격</th>
+                <th class="num">진입 수량</th>
+                <th class="num">PNL</th>
+                <th class="num">Return</th>
+                <th class="num">보유 기간</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody id="thread-history-body">
+              <tr><td colspan="12" class="muted" style="text-align:center">거래 이력을 불러오는 중입니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="thread-history-footer">
+          <div class="thread-history-footer-spacer" aria-hidden="true"></div>
+          <div class="thread-history-pager">
+            <button class="btn" type="button" id="thread-history-prev">이전</button>
+            <span class="thread-history-page-status mono" id="thread-history-page-status">1 / 1</span>
+            <button class="btn" type="button" id="thread-history-next">다음</button>
+          </div>
+          <div class="thread-history-actions">
+            <label for="thread-history-page-size">페이지 크기</label>
+            <select class="select thread-history-page-select" id="thread-history-page-size">
+              <option value="10">10</option>
+              <option value="20" selected>20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="thread-drawer" id="thread-drawer" aria-hidden="true">
+        <div class="thread-drawer-backdrop" id="thread-drawer-backdrop"></div>
+        <aside class="thread-drawer-panel">
+          <div class="thread-drawer-head">
+            <div>
+              <div class="card-title">Thread Drilldown</div>
+              <div class="card-sub" id="thread-drawer-subtitle">세션 또는 trade를 선택하면 상세가 표시됩니다.</div>
+            </div>
+            <button class="btn" type="button" id="thread-drawer-close">닫기</button>
+          </div>
+          <div class="thread-drawer-body" id="thread-drawer-body">
+            <div class="stack-row"><span class="title">상세 대기</span><span class="badge neutral">idle</span></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="tab-panel" data-tab-panel="parameter">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Parameter Sweep Explorer</div>
+          </div>
+          <div class="sc-tags">
+            <span class="badge info mono">core6_v1</span>
+            <span class="badge neutral mono" id="sweep-artifact-id">-</span>
+          </div>
+        </div>
+        <div class="field-grid research-grid">
+          <div class="field">
+            <label for="sweep-model">아티팩트 실행 모델</label>
+            <select class="select" id="sweep-model">
+              <option value="next_open" selected>next_open</option>
+              <option value="ideal_same_close">ideal_same_close</option>
+              <option value="next_close">next_close</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="sweep-price-basis">아티팩트 가격 기준</label>
+            <select class="select" id="sweep-price-basis">
+              <option value="adjusted_close" selected>adjusted_close</option>
+              <option value="raw_close_with_actions">raw_close_with_actions</option>
+            </select>
+          </div>
+          <div class="field full">
+            <label>스윕 정의</label>
+            <div class="notice">`thread_count[5,6,7] × stop_sessions[10,20,30,40] × take_profit_pct[0,0.5,1] × entry_drop_pct[0,0.5,1] × stop_loss_pct[0,5,10] × max_entries_per_session[1,2]`</div>
+          </div>
+        </div>
+        <div class="action-row">
+          <button class="btn" type="button" id="sweep-refresh-button">최신 산출물 다시 읽기</button>
+        </div>
+        <div class="notice" style="margin-top:14px" id="sweep-meta-note">Codex가 생성한 최신 스윕 산출물을 읽어오는 중입니다.</div>
+      </div>
+
+      <div class="row row-4">
+        <div class="kpi"><span class="kpi-label">콤보 수</span><span class="kpi-value" id="sweep-kpi-count">-</span><div class="kpi-meta">core6_v1</div></div>
+        <div class="kpi"><span class="kpi-label">최고 전체 수익</span><span class="kpi-value mono" id="sweep-kpi-best-full">-</span><div class="kpi-meta">combo key</div></div>
+        <div class="kpi"><span class="kpi-label">최고 강건 조합</span><span class="kpi-value mono" id="sweep-kpi-best-robust">-</span><div class="kpi-meta">mean segment return basis</div></div>
+        <div class="kpi"><span class="kpi-label">Pareto</span><span class="kpi-value" id="sweep-kpi-pareto">-</span><div class="kpi-meta">return/MDD + return/stability</div></div>
+      </div>
+
+      <div class="row row-2">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Pareto Scatter</div>
+              <div class="card-sub">전체 수익률 vs MDD, 색상은 recent segment return입니다.</div>
+            </div>
+          </div>
+          <div class="chart-wrap" id="sweep-scatter-chart"><div class="empty-state">스윕 결과가 준비되면 Pareto scatter가 표시됩니다.</div></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Parameter Box Plot</div>
+              <div class="card-sub">선택 파라미터 값별 mean segment return 분포입니다.</div>
+            </div>
+            <select class="select" id="sweep-box-axis" style="width:180px">
+              <option value="thread_count">thread_count</option>
+              <option value="stop_sessions">stop_sessions</option>
+              <option value="take_profit_pct">take_profit_pct</option>
+              <option value="entry_drop_pct">entry_drop_pct</option>
+              <option value="stop_loss_pct">stop_loss_pct</option>
+              <option value="max_entries_per_session">max_entries_per_session</option>
+            </select>
+          </div>
+          <div class="chart-wrap" id="sweep-box-chart"><div class="empty-state">스윕 결과가 준비되면 box plot이 표시됩니다.</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Parallel Coordinates</div>
+            <div class="card-sub">6개 파라미터와 핵심 성과 지표를 한 번에 비교합니다.</div>
+          </div>
+        </div>
+        <div class="chart-wrap" id="sweep-parcoords-chart"><div class="empty-state">스윕 결과가 준비되면 parallel coordinates가 표시됩니다.</div></div>
+      </div>
+
+      <div class="card wide-table">
+        <div class="card-head">
+          <div>
+            <div class="card-title">상위 100 콤보</div>
+            <div class="card-sub">기본 정렬: mean segment return desc, segment stddev asc, full return desc</div>
+          </div>
+        </div>
+        <div class="sweep-filter-grid">
+          <div class="field">
+            <label for="sweep-filter-min-return">최소 전체 수익률</label>
+            <input class="input mono" id="sweep-filter-min-return" type="number" step="10" value="0">
+          </div>
+          <div class="field">
+            <label for="sweep-filter-max-mdd">최대 MDD</label>
+            <input class="input mono" id="sweep-filter-max-mdd" type="number" step="5" value="-100">
+          </div>
+          <div class="field">
+            <label for="sweep-filter-max-std">최대 구간 표준편차</label>
+            <input class="input mono" id="sweep-filter-max-std" type="number" step="5" value="100">
+          </div>
+          <div class="field">
+            <label for="sweep-filter-pareto">Pareto 필터</label>
+            <select class="select" id="sweep-filter-pareto">
+              <option value="all" selected>all</option>
+              <option value="return_mdd">return / MDD</option>
+              <option value="return_stability">return / stability</option>
+            </select>
+          </div>
+        </div>
+        <div class="action-row" style="margin-top:14px">
+          <button class="btn" type="button" id="sweep-filter-apply">필터 적용</button>
+          <button class="btn" type="button" id="sweep-filter-reset">필터 초기화</button>
+        </div>
+        <div class="stack-list" id="sweep-warning-list" style="margin-top:14px">
+          <div class="stack-row"><span class="title">스윕 결과를 기다리는 중</span><span class="badge neutral">pending</span></div>
+        </div>
+        <div class="tbl-wrap" style="margin-top:14px">
+          <table class="tbl" id="sweep-table">
+            <thead>
+              <tr>
+                <th>Combo</th>
+                <th class="num">Params</th>
+                <th class="num">Full Return</th>
+                <th class="num">MDD</th>
+                <th class="num">Mean Segment</th>
+                <th class="num">Segment Std</th>
+                <th class="num">Recent</th>
+                <th class="num">Pareto</th>
+              </tr>
+            </thead>
+            <tbody id="sweep-table-body">
+              <tr><td colspan="8" class="muted" style="text-align:center">스윕 결과를 불러오지 않았습니다.</td></tr>
             </tbody>
           </table>
         </div>
       </div>
-      <div class="card wide-table">
-        <div class="card-head">
-          <div>
-            <div class="card-title">비용 민감도</div>
-            <div class="card-sub">next_open 기준에서 수수료와 슬리피지 가정이 결과를 얼마나 훼손하는지 비교합니다.</div>
-          </div>
-        </div>
-        <div class="tbl-wrap">
-          <table class="tbl">
-            <thead>
-              <tr><th>Scenario</th><th class="num">Comm bps</th><th class="num">Slip bps</th><th class="num">Return</th><th class="num">MDD</th><th class="num">Recovery</th></tr>
-            </thead>
-            <tbody id="risk-costs-tbody">
-              <tr><td colspan="6" class="muted" style="text-align:center">비용 리포트를 불러오지 않았습니다.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+    </section>
 
-    <div class="row row-2">
+    <section class="tab-panel" data-tab-panel="mentor">
       <div class="card">
         <div class="card-head">
           <div>
-            <div class="card-title">현실 모델 기준 민감도 하이라이트</div>
-            <div class="card-sub">next_open 기준에서 가장 높은 수익률 셀과 가장 낮은 MDD 셀을 요약합니다.</div>
+            <div class="card-title">멘토 원본 자료</div>
+            <div class="card-sub">레거시 비교용 원본 이미지입니다. 이 화면은 현재 기준선의 정답표가 아니라 참고 자료로만 사용합니다.</div>
+          </div>
+          <div class="sc-tags">
+            <span class="badge warning">legacy comparison</span>
           </div>
         </div>
-        <div class="stack-list" id="risk-summary-list">
-          <div class="stack-row"><span class="title">대기 중</span><span class="badge neutral">pending</span></div>
+        <div class="notice" style="margin-bottom:14px">
+          멘토 기준과 현재 Yahoo 기준선은 별개입니다. exact parity 대신 원본 화면을 그대로 보관합니다.
+        </div>
+        <div class="reference-frame">
+          <img class="reference-shot" src="/assets/mentor-reference.jpg" alt="멘토 떨사오팔 백테스트 결과">
         </div>
       </div>
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">리스크 경고</div>
-            <div class="card-sub">투자 조언 아님 및 레버리지 ETF 위험 고지</div>
-          </div>
-        </div>
-        <div class="stack-list" id="risk-warning-list">
-          <div class="stack-row"><span class="title">대기 중</span><span class="badge neutral">pending</span></div>
-        </div>
-      </div>
-    </div>
+    </section>
   </main>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
-<script src="/js/common.js"></script>
-<script src="/js/backtests-dashboard.js"></script>
+<script src="/js/common.js?v=20260620-15"></script>
+<script src="/js/backtests-dashboard.js?v=20260620-15"></script>
 </body>
 </html>
