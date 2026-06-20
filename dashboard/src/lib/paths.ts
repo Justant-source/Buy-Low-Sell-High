@@ -14,4 +14,7 @@ export const mentorMatrixRoot = path.join(runtimeRoot, "mentor-matrix");
 export const officialMatrixRoot = path.join(runtimeRoot, "official-matrix");
 export const configsRoot = path.join(repoRoot, "configs", "strategies");
 export const engineSrcRoot = path.join(repoRoot, "engine", "src");
-export const defaultCsvPath = path.join(repoRoot, "data", "raw", "soxl_daily_2011_present.csv");
+
+export function defaultCsvPathForSymbol(symbol: string): string {
+  return path.join(repoRoot, "data", "raw", `${symbol.toLowerCase()}_daily_2011_present.csv`);
+}

@@ -20,7 +20,7 @@ Phase A에서는 런타임 코드에서 현재 엔진 동작을 직접 검증했
 
 - 전체 스냅샷 `data_hash`: `87c5a8bd35006c7a2624d99d0609ba5302e97807d332a567db121be1ff668aca`
 - 2011-2024 구간 `data_hash`: `ce269809b8ce2eb0140935980842607bb21c9e994d43983b38f3e3109245633f`
-- `mentor_default_5x30`에 대한 `profile show` 결과는 `price_basis=adjusted_close`, `execution_model=ideal_same_close`, `sizing_mode=fixed_principal`, `year_boundary=carry`
+- `soxl_default_5x30`에 대한 `profile show` 결과는 `price_basis=adjusted_close`, `execution_model=ideal_same_close`, `sizing_mode=fixed_principal`, `year_boundary=carry`
 - 레거시 멘토 fixture에 대한 `parity report`는 연간 경계 가격에서 `DATA_MISMATCH`, 연간 수익률과 카운트에서 `FAIL`을 반환한다.
 - 연간 경계 가격 비교는 표시 반올림 노이즈를 `±0.01`로 허용해도 깨진다.
   - 첫 의미 있는 경계 불일치: `2022` 연말 `2022-12-30`, expected `9.36`, actual `9.67`

@@ -8,7 +8,7 @@ from ..domain.money import D
 from .research_common import CORE_PROFILE_CATALOG, CORE_PROFILE_CATALOG_ID, as_number, mean_decimal, stddev_decimal
 from .strategy_explorer import build_strategy_explorer
 
-OFFICIAL_PROFILE_ID = "ddeolsao_pal_official_v1"
+OFFICIAL_PROFILE_ID = "soxl_official_ddeolsao_pal_v1"
 OFFICIAL_SELECTION_BASIS = "mean_segment_return desc, segment_stddev asc, full_return desc"
 
 

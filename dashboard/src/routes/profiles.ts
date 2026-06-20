@@ -1,9 +1,15 @@
 import { Router } from "express";
 
 import { asyncHandler, HttpError, parseNumber, requireString } from "../lib/http.js";
-import { defaultProfileId, getProfileDefinition, listProfileDefinitions } from "../lib/profiles.js";
+import {
+  defaultProfileId,
+  getDefaultProfileIdForWorkspace,
+  getProfileDefinition,
+  listProfileDefinitionsForWorkspace,
+} from "../lib/profiles.js";
 import { runCliJson } from "../lib/python.js";
 import type { ProfilePayload } from "../lib/types.js";
+import { defaultWorkspaceDefinition, getWorkspaceDefinition } from "../lib/workspaces.js";
 
 async function hydrateProfile(profileId: string, initialCapital: number): Promise<ProfilePayload> {
   const definition = getProfileDefinition(profileId);
@@ -32,11 +38,17 @@ export function createProfilesRouter(): Router {
     "/",
     asyncHandler(async (req, res) => {
       const initialCapital = parseNumber(req.query.initialCapital, 10000);
+      const workspaceId = typeof req.query.workspaceId === "string" ? req.query.workspaceId : defaultWorkspaceDefinition().workspaceId;
+      const workspace = getWorkspaceDefinition(workspaceId);
+      if (!workspace) {
+        throw new HttpError(404, `Unknown workspaceId: ${workspaceId}`);
+      }
       const profiles = await Promise.all(
-        listProfileDefinitions().map((profile) => hydrateProfile(profile.profileId, initialCapital)),
+        listProfileDefinitionsForWorkspace(workspaceId).map((profile) => hydrateProfile(profile.profileId, initialCapital)),
       );
       res.json({
-        defaultProfileId,
+        workspaceId,
+        defaultProfileId: getDefaultProfileIdForWorkspace(workspaceId) ?? defaultProfileId,
         profiles,
       });
     }),

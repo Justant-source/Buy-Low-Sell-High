@@ -4,9 +4,9 @@ from datetime import date
 from pathlib import Path
 import unittest
 
-from soxl_mania.domain.models import MarketBar, StrategyConfig
-from soxl_mania.domain.money import D
-from soxl_mania.reporting.mentor_matrix import build_mentor_matrix, default_reference_path, load_reference_fixture
+from buy_low_sell_high.domain.models import MarketBar, StrategyConfig
+from buy_low_sell_high.domain.money import D
+from buy_low_sell_high.reporting.mentor_matrix import build_mentor_matrix, default_reference_path, load_reference_fixture
 
 
 def make_bar(year: int, month: int, day: int, close: str) -> MarketBar:
@@ -54,10 +54,10 @@ class MentorMatrixTest(unittest.TestCase):
             },
             "combos": {
                 "1x1": {
-                    "yearly_returns_pct": {"2022": 22.1, "2023": 22.1, "2024": 22.1},
-                    "stats_pct": {"stddev": 0.0, "avg_all": 22.1, "avg_5y": 22.1},
-                    "simple_returns_pct": {"total": 46.5, "y3": 46.5},
-                    "compound_returns_pct": {"total": 156.5, "y3": 156.5, "y1": 22.1},
+                    "yearly_returns_pct": {"2022": 22.2, "2023": 22.2, "2024": 22.2},
+                    "stats_pct": {"stddev": 0.0, "avg_all": 22.2, "avg_5y": 22.2},
+                    "simple_returns_pct": {"total": 46.6, "y3": 46.6},
+                    "compound_returns_pct": {"total": 47.8, "y3": 47.8, "y1": 22.2},
                 }
             },
             "selected_count_combos": {
@@ -90,7 +90,7 @@ class MentorMatrixTest(unittest.TestCase):
         )
         self.assertEqual(payload["parity"]["status"], "PASS")
         self.assertEqual(payload["mentor_floor"]["status"], "PASS")
-        self.assertEqual(payload["actual"]["combos"]["1x1"]["simple_returns_pct"]["total"], 46.5)
+        self.assertEqual(payload["actual"]["combos"]["1x1"]["simple_returns_pct"]["total"], 46.6)
         self.assertEqual(payload["actual"]["selected_count_combos"]["1x1"]["aggregate_rows"]["compound_total"]["time_stop"], 2)
 
     def test_build_mentor_matrix_returns_data_mismatch_when_benchmark_boundaries_differ(self) -> None:
@@ -142,10 +142,10 @@ class MentorMatrixTest(unittest.TestCase):
             },
             "combos": {
                 "1x1": {
-                    "yearly_returns_pct": {"2022": 28.0, "2023": 22.1, "2024": 22.1},
+                    "yearly_returns_pct": {"2022": 28.0, "2023": 22.2, "2024": 22.2},
                     "stats_pct": {"stddev": 0.0, "avg_all": 24.1, "avg_5y": 24.1},
-                    "simple_returns_pct": {"total": 46.5, "y3": 46.5},
-                    "compound_returns_pct": {"total": 156.5, "y3": 156.5, "y1": 22.1},
+                    "simple_returns_pct": {"total": 46.6, "y3": 46.6},
+                    "compound_returns_pct": {"total": 47.8, "y3": 47.8, "y1": 22.2},
                 }
             },
             "selected_count_combos": {},
@@ -165,9 +165,9 @@ class MentorMatrixTest(unittest.TestCase):
         self.assertEqual(payload["mentor_floor"]["first_mismatch"]["combo"], "1x1")
         self.assertEqual(payload["mentor_floor"]["first_mismatch"]["metric"], "2022")
         self.assertEqual(payload["mentor_floor"]["first_mismatch"]["minimum_allowed"], "23.0")
-        self.assertEqual(payload["mentor_floor"]["first_mismatch"]["actual"], "22.1")
+        self.assertEqual(payload["mentor_floor"]["first_mismatch"]["actual"], "22.2")
         self.assertEqual(payload["mentor_floor"]["worst_mismatches"][0]["combo"], "1x1")
-        self.assertEqual(payload["mentor_floor"]["worst_mismatches"][0]["delta_to_floor"], "-0.9")
+        self.assertEqual(payload["mentor_floor"]["worst_mismatches"][0]["delta_to_floor"], "-0.8")
 
 
 if __name__ == "__main__":

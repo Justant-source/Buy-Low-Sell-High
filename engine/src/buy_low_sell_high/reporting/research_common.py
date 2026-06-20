@@ -25,14 +25,14 @@ CORE_PROFILE_CATALOG: tuple[dict[str, Any], ...] = (
         "label": "5T / 30S",
         "thread_count": 5,
         "stop_sessions": 30,
-        "mentor_profiles": ["mentor_default_5x30"],
+        "mentor_profiles": ["soxl_default_5x30"],
     },
     {
         "strategy_id": "5x40",
         "label": "5T / 40S",
         "thread_count": 5,
         "stop_sessions": 40,
-        "mentor_profiles": ["mentor_grid_best_avg_5x40"],
+        "mentor_profiles": ["soxl_best_avg_5x40"],
     },
     {
         "strategy_id": "6x10",
@@ -60,14 +60,14 @@ CORE_PROFILE_CATALOG: tuple[dict[str, Any], ...] = (
         "label": "7T / 10S",
         "thread_count": 7,
         "stop_sessions": 10,
-        "mentor_profiles": ["mentor_low_vol_7x10"],
+        "mentor_profiles": ["soxl_low_vol_7x10"],
     },
     {
         "strategy_id": "7x30",
         "label": "7T / 30S",
         "thread_count": 7,
         "stop_sessions": 30,
-        "mentor_profiles": ["mentor_default_7x30"],
+        "mentor_profiles": ["soxl_default_7x30"],
     },
     {
         "strategy_id": "7x40",

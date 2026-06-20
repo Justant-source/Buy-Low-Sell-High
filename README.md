@@ -1,14 +1,15 @@
-# SOXL-Mania
+# Buy-Low-Sell-High
 
-SOXL-Mania is a clean-room research and manual decision-support stack for the SOXL daily-close "ddeolsao-pal" strategy. It excludes broker automation, Redis, and exchange-specific execution code by design.
+Buy-Low-Sell-High is a clean-room backtesting stack for daily-close "ddeolsao-pal" research. It excludes broker automation, monitor/manual-ledger workflows, Redis, and exchange-specific execution code by design.
 
 ## Current Scope
 - Python engine, Docker runtime, and safety guardrails are implemented.
-- SOXL daily history can be synced from 2011-01-01 onward into the canonical local CSV snapshot at `data/raw/soxl_daily_2011_present.csv`.
+- Symbol snapshots follow `data/raw/{symbol_lower}_daily_2011_present.csv`.
+- SOXL remains the default workspace and reference dataset at `data/raw/soxl_daily_2011_present.csv`.
 - Network sync currently falls back in the order `Yahoo chart -> Investing historical API -> Stooq`.
-- Strategy logic, parity fixtures, and manual ledger workflows are available in the Python CLI.
-- The Express dashboard now serves Bit-Mania-style `monitor`, `backtests`, and `manual` pages backed by CLI-driven API routes, file-backed dashboard jobs, PostgreSQL-backed research artifacts, and manual ledger export / restore flows.
-- The `backtests` tab now includes `Strategy Explorer` and `Sweep Explorer` sections for full-period strategy comparison and 6-parameter sweep analysis.
+- Strategy logic, parity fixtures, and symbol-aware backtest workflows are available in the Python CLI.
+- The Express dashboard serves workspace-based backtest pages at `/backtests/:symbolSlug`.
+- The `backtests` workspace includes `Strategy Explorer`, `Sweep Explorer`, official SOXL reference views, and risk comparison.
 - Ongoing UI and methodology reference must continue to use `/home/justant/Data/Bit-Mania`, especially `/home/justant/Data/Bit-Mania/backtest/dashboards/strategy_dashboard.html` and `/home/justant/Data/Bit-Mania/backtest/dashboards/supertrend_sweep_dashboard.html`.
 
 ## 8 Workstreams
@@ -19,7 +20,7 @@ SOXL-Mania is a clean-room research and manual decision-support stack for the SO
 5. Mentor reference fixture and parity calibration
 6. PostgreSQL persistence and job worker
 7. Dashboard APIs and comparison UI
-8. Manual ledger, recommendations, risk views, and release hardening
+8. Workspace routing, risk views, and release hardening
 
 ## Repository Layout
 - `engine/`: Python package for the strategy and backtest engine
@@ -34,27 +35,24 @@ make bootstrap-check
 make lint-docs
 make scenario-report
 make e2e-backtest
-make e2e-manual
 make e2e-risk
-make backup
-make backup-restore-test
 make clean-room
 make ci
 npm --prefix dashboard run build
 npm --prefix dashboard test
 python3 scripts/verify_no_autotrading.py
-PYTHONPATH=engine/src python3 -m soxl_mania.cli data sync --symbol SOXL --start-date 2011-01-01
-PYTHONPATH=engine/src python3 -m soxl_mania.cli backtest run --profile configs/strategies/mentor_default_5x30.yaml --symbol SOXL
+PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli data sync --symbol SOXL --start-date 2011-01-01
+PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile configs/strategies/soxl_default_5x30.yaml --symbol SOXL
 ```
 
 ## Docker
 ```bash
 ./scripts/docker_init.sh
-./scripts/docker_sync_soxl.sh
-./scripts/docker_backtest_soxl.sh
+./scripts/docker_sync_symbol.sh
+./scripts/docker_backtest_default.sh
 ```
 
-Docker helper containers use the `soxlmania-` prefix, including `soxlmania-postgres`, `soxlmania-dashboard`, `soxlmania-engine-sync`, and `soxlmania-engine-backtest`.
+Docker helper containers use the `buylowsellhigh-` prefix, including `buylowsellhigh-postgres`, `buylowsellhigh-dashboard`, `buylowsellhigh-engine-sync`, and `buylowsellhigh-engine-backtest`.
 
 The dashboard container expects `DATABASE_URL` so `Strategy Explorer` and `Sweep Explorer` artifacts can be persisted in PostgreSQL.
 
@@ -62,12 +60,11 @@ In the current Codex snap environment, the Docker CLI can be installed locally, 
 
 ## Dashboard Routes
 - Default dashboard port: `3232`
-- `http://localhost:3232/monitor`
 - `http://localhost:3232/backtests`
-- `http://localhost:3232/manual`
+- `http://localhost:3232/backtests/soxl`
 
-The default landing page is `/backtests`.
+The default landing page redirects to `/backtests/soxl`.
 
 ## Notes
-- `env/` contains legacy environment artifacts and is not part of the SOXL-Mania runtime.
-- The implementation source of truth is [`.request/SOXL_MANIA_CODEX_IMPLEMENTATION_PLAN.md`](./.request/SOXL_MANIA_CODEX_IMPLEMENTATION_PLAN.md).
+- `env/` contains legacy environment artifacts and is not part of the Buy-Low-Sell-High runtime.
+- The implementation source of truth is [`.request/BUY_LOW_SELL_HIGH_CODEX_IMPLEMENTATION_PLAN.md`](./.request/BUY_LOW_SELL_HIGH_CODEX_IMPLEMENTATION_PLAN.md).

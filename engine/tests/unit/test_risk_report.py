@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import date
 import unittest
 
-from soxl_mania.domain.models import MarketBar, StrategyConfig
-from soxl_mania.domain.money import D
-from soxl_mania.reporting.risk_report import build_risk_report
+from buy_low_sell_high.domain.models import MarketBar, StrategyConfig
+from buy_low_sell_high.domain.money import D
+from buy_low_sell_high.reporting.risk_report import build_risk_report
 
 
 def bar(day: int, close: str, *, open_: str | None = None) -> MarketBar:

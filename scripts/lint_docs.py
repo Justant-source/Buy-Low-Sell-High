@@ -14,7 +14,6 @@ REQUIRED_DOCS = [
     "docs/60-runtime/state-machines.md",
     "docs/70-policy/strategy.md",
     "docs/70-policy/backtest-methodology.md",
-    "docs/70-policy/manual-operations.md",
 ]
 
 
@@ -39,4 +38,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

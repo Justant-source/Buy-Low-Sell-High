@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>백테스트 워크벤치 - SOXL-Mania</title>
+<title>백테스트 워크벤치 - Buy-Low-Sell-High</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -18,15 +18,18 @@
     <div class="brand">
       <span class="mark-glyph">S</span>
       <div>
-        <div class="b-name">SOXL-Mania</div>
-        <div class="b-sub">SOXL 리서치 & 수동 운용</div>
+        <div class="b-name">Buy-Low-Sell-High</div>
+        <div class="b-sub">다종목 백테스트 리서치</div>
       </div>
     </div>
     <div class="strategy-card">
-      <div class="sc-label">연구 기준선</div>
-      <div class="sc-tags">
+      <div class="sc-label" id="sb-nav-label">백테스트 (SOXL)</div>
+      <div class="sc-tags" id="workspace-tags">
         <span class="badge info">Yahoo Adj Close</span>
         <span class="badge info">Read-Only</span>
+      </div>
+      <div id="sb-description" style="margin-top:10px;font:var(--t-small);color:var(--text-muted)">
+        Yahoo 조정종가 기준 SOXL 일봉 백테스트
       </div>
       <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);display:flex;flex-direction:column;gap:4px;font:var(--t-small);color:var(--text-muted)">
         <div style="display:flex;justify-content:space-between"><span>데이터셋</span><span class="mono" id="sb-range">2011-01-03 - 2026-06-18</span></div>
@@ -34,10 +37,10 @@
       </div>
     </div>
     <nav class="nav">
-      <div class="nav-section">운영</div>
-      <a class="nav-item" href="/monitor">시스템 모니터</a>
-      <a class="nav-item active" href="/backtests">백테스트</a>
-      <a class="nav-item" href="/manual">수동 장부</a>
+      <div class="nav-section">백테스트</div>
+      <div id="workspace-nav">
+        <a class="nav-item active" href="/backtests/soxl">백테스트 (SOXL)</a>
+      </div>
     </nav>
     <div class="sidebar-footer">
       <span class="status-dot green live"></span>
@@ -53,7 +56,8 @@
   <main class="page">
     <div class="page-head">
       <div>
-        <div class="page-title">백테스트 워크벤치</div>
+        <div class="page-title" id="page-title">백테스트 (SOXL)</div>
+        <div class="page-sub" id="page-subtitle">SOXL 일봉 떨사오팔 기준선과 파라미터 백테스트를 확인하는 기본 워크스페이스입니다.</div>
       </div>
     </div>
 
@@ -61,7 +65,7 @@
       <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="guide">설명</button>
       <button class="tab-button active" type="button" role="tab" aria-selected="true" data-tab="strategy">전략</button>
       <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="parameter">파라미터 테스트</button>
-      <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="mentor">멘토 래퍼런스</button>
+      <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="mentor" id="mentor-tab-button">멘토 래퍼런스</button>
     </div>
 
     <section class="tab-panel" data-tab-panel="guide">
@@ -199,6 +203,20 @@
         <div class="notice">
           중요한 점: 지금 현재 엔진과 대시보드의 기본 동작은 여전히 <span class="mono">take_profit_pct = 0</span> 입니다.
           QQQ 레짐 기반 익절은 설명에만 먼저 적어두는 예정 기능이며, 실제 코드에 들어가면 별도 파라미터와 검증 문서가 함께 추가되어야 합니다.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">실행 모델 리스크 비교</div>
+            <div class="card-sub">같은 전략이라도 체결 가정과 비용 설정에 따라 결과가 크게 달라질 수 있습니다.</div>
+          </div>
+        </div>
+        <div class="guide-reading-list">
+          <div class="stack-row"><span class="title">비용 민감도</span><span class="muted">수수료와 슬리피지 가정에 따라 수익률과 회복 시간이 달라집니다.</span></div>
+          <div class="stack-row"><span class="title">리스크 경고</span><span class="muted">레버리지 ETF는 시가 갭과 변동성 때문에 종가 기준 연구 결과와 실제 체감 수익이 다를 수 있습니다.</span></div>
+          <div class="stack-row"><span class="title">투자 조언 아님</span><span class="muted">이 화면은 비교와 연구를 위한 백테스트 도구이며 매수 추천이나 자동매매 기능을 제공하지 않습니다.</span></div>
         </div>
       </div>
     </section>

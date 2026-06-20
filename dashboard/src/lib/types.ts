@@ -11,6 +11,7 @@ export interface DataStatusPayload {
 }
 
 export interface ProfileDefinition {
+  workspaceId: string;
   profileId: string;
   name: string;
   description: string;
@@ -25,6 +26,19 @@ export interface ProfileDefinition {
 export interface ProfilePayload extends ProfileDefinition {
   configHash: string;
   initialCapital: string;
+}
+
+export interface WorkspaceDefinition {
+  workspaceId: string;
+  symbol: string;
+  routeSlug: string;
+  navLabel: string;
+  description: string;
+  summary: string;
+  defaultProfileId: string;
+  csvPath: string;
+  referenceMode: "soxl_reference" | "backtest_only";
+  warningTags: string[];
 }
 
 export interface BacktestOverrides {
@@ -518,60 +532,6 @@ export interface ParameterSweepPayload {
   warnings: string[];
   rows: ParameterSweepRowPayload[];
   payload_hash: string;
-}
-
-export interface ManualRecommendationPayload {
-  thread_id: number;
-  action: string;
-  reason: string;
-  basis_price: string;
-  session_date: string;
-}
-
-export interface ManualComparisonRowPayload {
-  thread_id: number;
-  action: string;
-  expected_side: string | null;
-  reason: string;
-  basis_price: string;
-  session_date: string;
-  status: string;
-  execution_quality: string;
-  fill_id: string | null;
-  actual_price: string | null;
-  actual_quantity: string | null;
-  actual_filled_at: string | null;
-  price_gap: string | null;
-  price_gap_pct: string | null;
-}
-
-export interface ManualLedgerPayload {
-  summary: {
-    account_id: string;
-    thread_count: number;
-    fill_count: number;
-    open_threads: number;
-    total_cash: string;
-    total_quantity: string;
-  };
-  issues: string[];
-  threads: Array<{
-    thread_id: number;
-    cash: string;
-    quantity: string;
-    entry_price: string;
-    entry_date: string | null;
-  }>;
-  fills: Array<{
-    fill_id: string;
-    thread_id: number;
-    side: string;
-    quantity: string;
-    price: string;
-    fee: string;
-    filled_at: string;
-    reversed_by_fill_id: string | null;
-  }>;
 }
 
 export type DashboardJobStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";

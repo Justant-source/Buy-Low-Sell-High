@@ -17,10 +17,10 @@
 8. `docs/50-api/rest-api.md`
 9. `docs/60-runtime/state-machines.md`
 10. `docs/00-planning/workstreams.md`
-11. `docs/70-policy/manual-operations.md`
-12. `docs/90-adr/0001-mentor-semantics.md`
-13. `docs/90-adr/0002-mentor-reference-screen.md`
-14. `docs/70-policy/backup-restore.md`
+11. `docs/90-adr/0001-mentor-semantics.md`
+12. `docs/90-adr/0002-mentor-reference-screen.md`
+13. `docs/90-adr/0004-backtest-only-workspaces.md`
+14. `docs/90-adr/0005-idle-cash-and-official-baseline-refresh.md`
 
 ## Phase 매핑
 - `Phase 0`: `docs/00-planning/workstreams.md`, `docs/70-policy/strategy.md`

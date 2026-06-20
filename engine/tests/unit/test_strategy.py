@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import date
 import unittest
 
-from soxl_mania.backtest.engine import run_backtest
-from soxl_mania.domain.enums import CloseReason, EventOrder, ExecutionModel, PriceBasis, SizingMode, ThreadSelector
-from soxl_mania.domain.models import MarketBar, StrategyConfig
-from soxl_mania.domain.money import D
+from buy_low_sell_high.backtest.engine import run_backtest
+from buy_low_sell_high.domain.enums import CloseReason, EventOrder, ExecutionModel, PriceBasis, SizingMode, ThreadSelector
+from buy_low_sell_high.domain.models import MarketBar, StrategyConfig
+from buy_low_sell_high.domain.money import D
 
 
 def bar(day: int, close: str, *, open_: str | None = None, split: str = "1") -> MarketBar:
@@ -134,6 +134,16 @@ class StrategyTest(unittest.TestCase):
         bars = [bar(2, "10"), bar(3, "9"), bar(4, "11")]
         run = run_backtest(bars, self.make_config(thread_count=1))
         self.assertEqual(run.trades[0].shares, D("111"))
+
+    def test_open_position_keeps_uninvested_cash_in_total_equity(self) -> None:
+        bars = [bar(2, "10"), bar(3, "9")]
+        run = run_backtest(bars, self.make_config(thread_count=1, stop_sessions=99))
+        self.assertEqual(run.daily[-1].total_equity, D("1000"))
+
+    def test_exit_restores_uninvested_cash_to_free_equity(self) -> None:
+        bars = [bar(2, "10"), bar(3, "9"), bar(4, "10")]
+        run = run_backtest(bars, self.make_config(thread_count=1, stop_sessions=99))
+        self.assertEqual(run.daily[-1].total_equity, D("1111"))
 
     def test_config_hash_changes_with_threshold_fields(self) -> None:
         base = self.make_config()

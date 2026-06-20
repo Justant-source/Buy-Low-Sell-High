@@ -3,7 +3,7 @@
   "end": "2026-06-18",
   "errors": [],
   "generated_at": "2026-06-20T03:17:41.272489+00:00",
-  "output_csv": "/home/justant/Data/SOXL-Mania/data/raw/soxl_daily_2011_present.csv",
+  "output_csv": "/home/justant/Data/Buy-Low-Sell-High/data/raw/soxl_daily_2011_present.csv",
   "rows": 3888,
   "source": "yahoo_chart",
   "start": "2011-01-03",

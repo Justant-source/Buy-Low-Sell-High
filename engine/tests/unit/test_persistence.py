@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from soxl_mania.domain.models import BacktestJob
-from soxl_mania.persistence.repositories import InMemoryJobRepository
-from soxl_mania.persistence.worker import run_once
+from buy_low_sell_high.domain.models import BacktestJob
+from buy_low_sell_high.persistence.repositories import InMemoryJobRepository
+from buy_low_sell_high.persistence.worker import run_once
 import unittest
 
 

@@ -8,18 +8,7 @@ import json
 from typing import Any
 from uuid import uuid4
 
-from .enums import (
-    CloseReason,
-    EndOfTestMode,
-    EventOrder,
-    ExecutionModel,
-    PriceBasis,
-    RecommendationAction,
-    SizingMode,
-    ThreadSelector,
-    ThreadState,
-    YearBoundary,
-)
+from .enums import CloseReason, EndOfTestMode, EventOrder, ExecutionModel, PriceBasis, SizingMode, ThreadSelector, ThreadState, YearBoundary
 from .money import D, ZERO, quantize_money, quantize_shares
 
 
@@ -213,43 +202,6 @@ class BacktestRun:
     code_commit: str = "workspace"
 
 
-@dataclass(frozen=True)
-class Recommendation:
-    thread_id: int
-    action: RecommendationAction
-    reason: str
-    basis_price: Decimal
-    session_date: date
-
-
-@dataclass
-class ManualFill:
-    fill_id: str
-    thread_id: int
-    side: str
-    quantity: Decimal
-    price: Decimal
-    fee: Decimal
-    filled_at: datetime
-    reversed_by_fill_id: str | None = None
-
-
-@dataclass
-class ManualThreadState:
-    thread_id: int
-    cash: Decimal
-    quantity: Decimal = ZERO
-    entry_price: Decimal = ZERO
-    entry_date: date | None = None
-
-
-@dataclass
-class ManualLedger:
-    account_id: str
-    threads: dict[int, ManualThreadState]
-    fills: list[ManualFill] = field(default_factory=list)
-
-
 @dataclass
 class BacktestJob:
     job_id: str
@@ -267,10 +219,6 @@ class BacktestJob:
 
 
 def new_run_id() -> str:
-    return str(uuid4())
-
-
-def new_fill_id() -> str:
     return str(uuid4())
 
 

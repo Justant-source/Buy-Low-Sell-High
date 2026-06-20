@@ -202,6 +202,7 @@ def build_thread_timeline(
                 thread_state["entry_session_index"] = daily_snapshot.session_index
                 thread_state["entry_date"] = bar.session_date
                 thread_state["invested_amount"] = invested_amount
+                thread_state["reserve_pnl"] = quantize_money(thread_state["free_equity"] - invested_amount)
                 entry_batch.append(
                     {
                         "trade_id": trade_id,
@@ -238,10 +239,12 @@ def build_thread_timeline(
                 )
                 compute_trade_pnl(matched_trade)
             position["closed_trade"] = matched_trade
-            pnl = matched_trade.pnl
+            proceeds = quantize_money(
+                position["current_shares"] * D(matched_trade.exit_price if matched_trade.exit_price is not None else exit_price)
+            )
             thread_state["state"] = ThreadState.FREE
-            thread_state["reserve_pnl"] += pnl
-            thread_state["free_equity"] = position["invested_amount"] + thread_state["reserve_pnl"]
+            thread_state["free_equity"] = quantize_money(thread_state["reserve_pnl"] + proceeds)
+            thread_state["reserve_pnl"] = ZERO
             thread_state["last_closed_session_index"] = daily_snapshot.session_index
             thread_state["entry_price"] = ZERO
             thread_state["shares"] = ZERO

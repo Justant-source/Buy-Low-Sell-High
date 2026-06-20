@@ -14,4 +14,4 @@ COPY scripts /app/scripts
 COPY docs /app/docs
 COPY AGENTS.md CLAUDE.md README.md docker-compose.yml .env.example /app/
 
-CMD ["python", "-m", "soxl_mania.cli", "bootstrap-check"]
+CMD ["python", "-m", "buy_low_sell_high.cli", "bootstrap-check"]

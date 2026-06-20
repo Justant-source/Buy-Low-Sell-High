@@ -4,9 +4,9 @@ from argparse import Namespace
 from pathlib import Path
 import unittest
 
-from soxl_mania.backtest.parity import ParityResult
-from soxl_mania.cli import _load_strategy_config_with_overrides, _parity_exit_code, _serialize_config, default_manual_ledger_path, default_market_data_csv
-from soxl_mania.domain.models import StrategyConfig
+from buy_low_sell_high.backtest.parity import ParityResult
+from buy_low_sell_high.cli import _load_strategy_config_with_overrides, _parity_exit_code, _serialize_config, default_market_data_csv
+from buy_low_sell_high.domain.models import StrategyConfig
 
 
 class CliDefaultsTest(unittest.TestCase):
@@ -16,14 +16,12 @@ class CliDefaultsTest(unittest.TestCase):
         self.assertEqual(path.parent.name, "raw")
         self.assertEqual(path.parent.parent.name, "data")
 
-    def test_default_manual_ledger_path_points_to_dashboard_runtime(self) -> None:
-        path = Path(default_manual_ledger_path())
-        self.assertEqual(path.name, "manual_ledger.json")
-        self.assertEqual(path.parent.name, "dashboard")
-        self.assertEqual(path.parent.parent.name, "runtime")
+    def test_default_market_data_csv_is_symbol_aware(self) -> None:
+        path = Path(default_market_data_csv("TQQQ"))
+        self.assertEqual(path.name, "tqqq_daily_2011_present.csv")
 
     def test_override_loader_merges_profile_and_cli_values(self) -> None:
-        profile = Path(__file__).resolve().parents[3] / "configs" / "strategies" / "mentor_default_5x30.yaml"
+        profile = Path(__file__).resolve().parents[3] / "configs" / "strategies" / "soxl_default_5x30.yaml"
         args = Namespace(
             profile=str(profile),
             initial_capital=10000.0,

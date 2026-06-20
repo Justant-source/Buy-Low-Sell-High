@@ -5,9 +5,9 @@ from decimal import Decimal
 from pathlib import Path
 import unittest
 
-from soxl_mania.backtest.parity import check_data_parity, load_reference_fixture
-from soxl_mania.data.providers.csv_provider import CsvMarketDataProvider
-from soxl_mania.domain.models import MarketBar
+from buy_low_sell_high.backtest.parity import check_data_parity, load_reference_fixture
+from buy_low_sell_high.data.providers.csv_provider import CsvMarketDataProvider
+from buy_low_sell_high.domain.models import MarketBar
 
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "mentor_reference_2011_2024.json"

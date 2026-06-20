@@ -16,7 +16,7 @@ trap cleanup EXIT
 cd "${ROOT_DIR}"
 
 npm --prefix dashboard run build >/dev/null
-PORT="${PORT}" node dashboard/dist/server.js >/tmp/soxl-mania-backtest-e2e.log 2>&1 &
+PORT="${PORT}" node dashboard/dist/server.js >/tmp/buy-low-sell-high-backtest-e2e.log 2>&1 &
 SERVER_PID="$!"
 
 python3 - <<'PY'
@@ -54,9 +54,9 @@ for _ in range(40):
 else:
     raise SystemExit("dashboard health check failed")
 
-html = get(f"http://127.0.0.1:{port}/backtests")
+html = get(f"http://127.0.0.1:{port}/backtests/soxl")
 required_markers = [
-    "백테스트 워크벤치",
+    "백테스트 (SOXL)",
     "전략",
     "파라미터 테스트",
     "멘토 래퍼런스",
@@ -72,7 +72,7 @@ for marker in required_markers:
 
 strategy_explorer = json.loads(
     get(
-        f"http://127.0.0.1:{port}/api/backtests/strategy-explorer?profileId=mentor_default_5x30"
+        f"http://127.0.0.1:{port}/api/backtests/strategy-explorer?profileId=soxl_default_5x30"
         f"&csvPath={urllib.parse.quote(csv_path, safe='')}&executionModel=next_open&priceBasis=adjusted_close"
     )
 )
@@ -89,7 +89,7 @@ job = json.loads(
     post(
         f"http://127.0.0.1:{port}/api/backtests/jobs",
         {
-            "profileId": "mentor_default_5x30",
+            "profileId": "soxl_default_5x30",
             "csvPath": csv_path,
             "initialCapital": 10000,
             "overrides": {
@@ -128,7 +128,7 @@ if str(run["payload"]["config"].get("take_profit_pct")) != "5":
 
 compare = json.loads(
     get(
-        f"http://127.0.0.1:{port}/api/backtests/compare?profileId=mentor_default_5x30"
+        f"http://127.0.0.1:{port}/api/backtests/compare?profileId=soxl_default_5x30"
         f"&csvPath={urllib.parse.quote(csv_path, safe='')}&threads=6,7&stops=10,30"
         f"&takeProfitPct=5&threadCount=7&stopSessions=30"
     )
@@ -138,7 +138,7 @@ if len(compare.get("cells", [])) != 4:
 
 risk = json.loads(
     get(
-        f"http://127.0.0.1:{port}/api/backtests/risk?profileId=mentor_default_5x30"
+        f"http://127.0.0.1:{port}/api/backtests/risk?profileId=soxl_default_5x30"
         f"&csvPath={urllib.parse.quote(csv_path, safe='')}&takeProfitPct=5&threadCount=7&stopSessions=30"
     )
 )
@@ -153,7 +153,7 @@ sweep_job = json.loads(
     post(
         f"http://127.0.0.1:{port}/api/backtests/sweeps/jobs",
         {
-            "profileId": "mentor_default_5x30",
+            "profileId": "soxl_default_5x30",
             "csvPath": csv_path,
             "initialCapital": 10000,
             "executionModel": "next_open",
@@ -194,7 +194,7 @@ if not sweep_payload.get("summary", {}).get("best_robust_combo"):
 
 latest_sweep = json.loads(
     get(
-        f"http://127.0.0.1:{port}/api/backtests/sweeps/latest?profileId=mentor_default_5x30"
+        f"http://127.0.0.1:{port}/api/backtests/sweeps/latest?profileId=soxl_default_5x30"
         f"&csvPath={urllib.parse.quote(csv_path, safe='')}&executionModel=next_open&priceBasis=adjusted_close"
     )
 )

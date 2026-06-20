@@ -8,11 +8,15 @@
 
 ## 데이터
 - `GET /api/data/status`
-  - `symbol`, `rows`, `start`, `end`, `data_hash`, `source`, `warnings`, `snapshot_path`, `manifest_path`를 반환한다.
+  - `workspaceId` 또는 `symbol`/`csvPath` 기준으로 `symbol`, `rows`, `start`, `end`, `data_hash`, `source`, `warnings`, `snapshot_path`, `manifest_path`를 반환한다.
+
+## 워크스페이스
+- `GET /api/workspaces`
+  - `defaultWorkspaceId`와 좌측 백테스트 내비게이션에 쓰는 workspace 목록을 반환한다.
 
 ## 프로필
 - `GET /api/profiles`
-  - 대시보드가 사용하는 hydrated 전략 프로필과 `defaultProfileId`를 반환한다.
+  - `workspaceId` 기준 hydrated 전략 프로필과 `defaultProfileId`를 반환한다.
 - `GET /api/profiles/:profileId`
   - `configHash`, `initialCapital`을 포함한 단일 hydrated 프로필을 반환한다.
 
@@ -25,7 +29,7 @@
   - 전체 기간 canonical 실행을 전략별로 1회만 수행한 뒤 일별 곡선, 연도별 요약, 월별 수익, 구간별 요약을 반환한다.
 - `GET /api/backtests/official-explorer`
   - 공식 Yahoo 연구 기준선의 9조합 랭킹 payload를 반환한다.
-  - 기준 프로필은 `ddeolsao_pal_official_v1`, 실행 모델은 `ideal_same_close`, 가격 기준은 `adjusted_close`다.
+  - 기준 프로필은 `soxl_official_ddeolsao_pal_v1`, 실행 모델은 `ideal_same_close`, 가격 기준은 `adjusted_close`다.
 - `GET /api/backtests/official-matrix`
   - 공식 Yahoo 연구 기준선의 연간 수익률, 단리/복리 집계, 카운트, 선택 프로필 메타데이터를 포함한 canonical matrix payload를 반환한다.
 - `GET /api/backtests/thread-timeline`
@@ -58,26 +62,3 @@
   - 동일 `csv_path`, `execution_model`, `price_basis`, `data_hash`, `sweep_id` 조합의 최신 sweep 산출물을 반환한다.
 - `GET /api/backtests/sweeps/runs/:artifactId`
   - `combo_count`, Pareto 플래그, 구간 강건성 지표, 상위 100개 콤보용 정렬 가능한 row 목록을 포함한 저장된 sweep 산출물을 반환한다.
-
-## 수동 운용
-- `GET /api/manual/comparison`
-  - 오늘의 권고와 append-only 수동 체결을 매칭한 결과를 반환하며, 대기 상태와 기준가 대비 실제 체결가 차이를 포함한다.
-- `GET /api/manual/ledger`
-  - 선택한 프로필 장부 경로와 요약, 이슈, 스레드 상태, 체결 이력을 반환한다.
-- `GET /api/manual/threads`
-  - 선택한 프로필 장부 경로와 스레드 요약, 현재 스레드 상태를 반환한다.
-- `GET /api/manual/history`
-  - 선택한 프로필 장부 경로와 append-only 체결 이력을 반환한다.
-- `GET /api/manual/today`
-  - 선택한 프로필 장부 경로와 오늘의 권고를 반환한다.
-- `POST /api/manual/reconcile`
-  - 현재 append-only 장부에 대한 정합성 이슈와 선택한 프로필 장부 경로를 반환한다.
-- `POST /api/manual/fills`
-  - 장부에 수동 체결을 추가한다.
-  - `quantity`는 항상 양의 정수여야 한다.
-- `POST /api/manual/fills/:fillId/reverse`
-  - 되돌리기 체결을 추가하고 원본 체결과 연결한다.
-- `GET /api/manual/export`
-  - 선택한 프로필 장부를 복원 가능한 JSON 또는 체결 이력 CSV로 `format=json|csv` 기준 내보낸다.
-- `POST /api/manual/restore`
-  - 내보낸 JSON payload에서 선택한 프로필 장부를 복원한다. 명시적 확인 토큰 `RESTORE_MANUAL_LEDGER`가 필요하다.

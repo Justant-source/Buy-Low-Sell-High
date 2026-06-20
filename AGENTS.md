@@ -1,14 +1,14 @@
-# SOXL-Mania Agent Guide
+# Buy-Low-Sell-High Agent Guide
 
 ## Read First
 1. `docs/_index.md`
 2. `docs/70-policy/strategy.md`
-3. `.request/SOXL_MANIA_CODEX_IMPLEMENTATION_PLAN.md`
+3. `.request/BUY_LOW_SELL_HIGH_CODEX_IMPLEMENTATION_PLAN.md`
 
 ## Product Boundary
-- Research, dashboard, and manual ledger only.
+- Research and dashboard backtesting only.
 - Never add broker order submission, automatic trading, Redis, Bybit, or Telegram trading commands.
-- A recommendation is not a fill. Keep simulated and manual records separate.
+- Keep the product boundary limited to simulation, analytics, and reproducible backtest outputs.
 
 ## Reference Integrity
 - Do not edit mentor reference fixtures to make tests pass.

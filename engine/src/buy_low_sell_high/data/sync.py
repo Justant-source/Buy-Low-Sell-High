@@ -48,7 +48,7 @@ def write_snapshot_manifest(
     return manifest_path
 
 
-def sync_soxl_history(
+def sync_history(
     output_csv: str | Path,
     *,
     symbol: str = "SOXL",
@@ -72,7 +72,7 @@ def sync_soxl_history(
         except Exception as exc:  # pragma: no cover - network fallback path
             errors.append(f"{provider_name}: {exc}")
     if bars is None or source is None:
-        raise RuntimeError("Unable to download SOXL history: " + " | ".join(errors))
+        raise RuntimeError(f"Unable to download {symbol} history: " + " | ".join(errors))
     write_bars_to_csv(output_csv, bars)
     report = summarize_import(symbol, source, bars)
     data_hash = compute_data_hash(bars)

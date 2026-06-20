@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { HttpError } from "./http.js";
 import { getDataStatus } from "./data-service.js";
-import { defaultCsvPath } from "./paths.js";
+import { defaultCsvPathForSymbol } from "./paths.js";
 import { getProfileDefinition } from "./profiles.js";
 import { runCliJson } from "./python.js";
 import { getResearchStore, newResearchArtifactId } from "./research-store.js";
@@ -43,6 +43,10 @@ const DEFAULT_RESEARCH_EXECUTION_MODEL = "next_open";
 const DEFAULT_RESEARCH_PRICE_BASIS = "adjusted_close";
 const DEFAULT_STRATEGY_CATALOG_ID = "core_profiles_v1";
 const DEFAULT_SWEEP_ID = "core6_v1";
+
+function resolveCsvPath(csvPath: string | undefined, symbol: string): string {
+  return csvPath ?? defaultCsvPathForSymbol(symbol);
+}
 
 export interface BacktestJobInput {
   profileId: string;
@@ -362,7 +366,7 @@ export class BacktestService {
     if (!profile) {
       throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
     }
-    const csvPath = input.csvPath ?? defaultCsvPath;
+    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
     const [profilePayload, dataStatus] = await Promise.all([
       resolveProfilePayload(input.profileId, initialCapital, input.overrides),
       getDataStatus(csvPath, profile.symbol),
@@ -398,7 +402,7 @@ export class BacktestService {
     if (!profile) {
       throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
     }
-    const csvPath = input.csvPath ?? defaultCsvPath;
+    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
     const executionModel = input.executionModel ?? DEFAULT_RESEARCH_EXECUTION_MODEL;
     const priceBasis = input.priceBasis ?? DEFAULT_RESEARCH_PRICE_BASIS;
     const sweepId = input.sweepId ?? DEFAULT_SWEEP_ID;
@@ -453,7 +457,7 @@ export class BacktestService {
     if (!profile) {
       throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
     }
-    const csvPath = input.csvPath ?? defaultCsvPath;
+    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
     const catalogId = input.catalogId ?? DEFAULT_STRATEGY_CATALOG_ID;
     const executionModel = input.executionModel ?? DEFAULT_RESEARCH_EXECUTION_MODEL;
     const priceBasis = input.priceBasis ?? DEFAULT_RESEARCH_PRICE_BASIS;
@@ -499,7 +503,7 @@ export class BacktestService {
     if (!profile) {
       throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
     }
-    const csvPath = input.csvPath ?? defaultCsvPath;
+    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
     return runCliJson<OfficialExplorerPayload>([
       "backtest",
       "official-explorer",
@@ -520,7 +524,7 @@ export class BacktestService {
     if (!profile) {
       throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
     }
-    const csvPath = input.csvPath ?? defaultCsvPath;
+    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
     const executionModel = input.executionModel ?? "ideal_same_close";
     const priceBasis = input.priceBasis ?? "adjusted_close";
     return runCliJson<ThreadTimelinePayload>([
@@ -548,7 +552,7 @@ export class BacktestService {
     if (!profile) {
       throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
     }
-    const csvPath = input.csvPath ?? defaultCsvPath;
+    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
     const executionModel = input.executionModel ?? DEFAULT_RESEARCH_EXECUTION_MODEL;
     const priceBasis = input.priceBasis ?? DEFAULT_RESEARCH_PRICE_BASIS;
     const sweepId = input.sweepId ?? DEFAULT_SWEEP_ID;
@@ -620,7 +624,7 @@ export class BacktestService {
     if (!profile) {
       throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
     }
-    const csvPath = input.csvPath ?? defaultCsvPath;
+    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
     const [profilePayload, dataStatus, cells] = await Promise.all([
       resolveProfilePayload(input.profileId, initialCapital, input.overrides),
       getDataStatus(csvPath, profile.symbol),
@@ -660,7 +664,7 @@ export class BacktestService {
     if (!profile) {
       throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
     }
-    const csvPath = input.csvPath ?? defaultCsvPath;
+    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
     const [profilePayload, dataStatus] = await Promise.all([
       resolveProfilePayload(input.profileId, initialCapital, input.overrides),
       getDataStatus(csvPath, profile.symbol),
@@ -704,7 +708,7 @@ export class BacktestService {
     if (!profile) {
       throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
     }
-    const csvPath = input.csvPath ?? defaultCsvPath;
+    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
     const [profilePayload, dataStatus] = await Promise.all([
       resolveProfilePayload(input.profileId, initialCapital, input.overrides),
       getDataStatus(csvPath, profile.symbol),
@@ -753,7 +757,7 @@ export class BacktestService {
     if (!profile) {
       throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
     }
-    const csvPath = input.csvPath ?? defaultCsvPath;
+    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
     return runCliJson<BacktestRiskPayload>([
       "backtest",
       "risk-report",

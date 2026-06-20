@@ -23,14 +23,14 @@
 - 가격 기준: `price_basis=adjusted_close`
 - 실행 모델: `execution_model=ideal_same_close`
 - 사이징 모드: `sizing_mode=fixed_principal`
-- 공식 프로필: `configs/strategies/ddeolsao_pal_official_v1.yaml`
+- 공식 프로필: `configs/strategies/soxl_official_ddeolsao_pal_v1.yaml`
 
 공식 프로필 선택 방식:
 
 - 후보군: 코어 9조합 `5x10`부터 `7x40`
 - 정렬 기준: `mean_segment_return desc`, `segment_stddev asc`, `full_return desc`
 - 현재 표준 Yahoo 스냅샷에서 선택된 조합: `5x40`
-- 공식 profile id: `ddeolsao_pal_official_v1`
+- 공식 profile id: `soxl_official_ddeolsao_pal_v1`
 
 2026-06-20 기준 고정 메타데이터:
 
@@ -46,7 +46,7 @@
 - 멘토 parity와 `mentor_floor`는 `legacy comparison` 진단으로만 남기고 CI gate에서 제외한다.
 
 ## 결과
-- 대시보드 기본 프로필은 `ddeolsao_pal_official_v1`가 된다.
+- 대시보드 기본 프로필은 `soxl_official_ddeolsao_pal_v1`가 된다.
 - `/api/backtests/official-explorer`와 `/api/backtests/official-matrix`가 공식 canonical 리포트 경로가 된다.
 - 멘토 매트릭스와 관련 ADR은 계속 보존하지만, 제품 성공/실패 판정 기준은 아니다.
 - 이후 공식 baseline을 바꾸려면 새 snapshot hash, 새 golden fixture, 새 ADR 근거가 함께 필요하다.

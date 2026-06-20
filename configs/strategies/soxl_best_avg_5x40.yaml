@@ -1,7 +1,7 @@
-profile_id: mentor_low_vol_7x10
+profile_id: soxl_best_avg_5x40
 symbol: SOXL
-thread_count: 7
-stop_sessions: 10
+thread_count: 5
+stop_sessions: 40
 price_basis: adjusted_close
 execution_model: ideal_same_close
 sizing_mode: fixed_principal

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
 import json
 from pathlib import Path
 
@@ -12,12 +11,8 @@ from .config import load_strategy_config, load_strategy_mapping
 from .data.normalize import normalize_bars
 from .data.providers.csv_provider import CsvMarketDataProvider
 from .data.quality import compute_data_hash, summarize_import
-from .data.sync import snapshot_manifest_path, sync_soxl_history
-from .domain.models import BacktestJob, ManualLedger, StrategyConfig, new_run_id
-from .domain.money import ZERO
-from .manual.ledger import create_ledger, export_ledger, import_ledger, load_ledger, record_fill, reverse_fill, save_ledger, summarize_ledger
-from .manual.recommendation import build_recommendations
-from .manual.reconciliation import reconcile_ledger
+from .data.sync import snapshot_manifest_path, sync_history
+from .domain.models import BacktestJob, StrategyConfig, new_run_id
 from .persistence.repositories import InMemoryJobRepository
 from .persistence.worker import run_once
 from .reporting.mentor_matrix import build_mentor_matrix, load_reference_fixture as load_mentor_matrix_reference
@@ -34,12 +29,8 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def default_market_data_csv() -> str:
-    return str(_repo_root() / "data" / "raw" / "soxl_daily_2011_present.csv")
-
-
-def default_manual_ledger_path() -> str:
-    return str(_repo_root() / "data" / "runtime" / "dashboard" / "manual_ledger.json")
+def default_market_data_csv(symbol: str = "SOXL") -> str:
+    return str(_repo_root() / "data" / "raw" / f"{symbol.lower()}_daily_2011_present.csv")
 
 
 def bootstrap_check() -> int:
@@ -76,11 +67,11 @@ def _parity_exit_code(*results: ParityResult) -> int:
 
 
 def _add_csv_argument(parser: argparse.ArgumentParser, *, required: bool = False) -> None:
-    parser.add_argument("--csv", required=required, default=default_market_data_csv())
+    parser.add_argument("--csv", required=required)
 
 
-def _add_ledger_argument(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--ledger-path", default=default_manual_ledger_path())
+def _resolve_csv_path(csv_path: str | None, symbol: str) -> str:
+    return csv_path or default_market_data_csv(symbol)
 
 
 def _add_strategy_override_arguments(
@@ -193,59 +184,9 @@ def _serialize_run(run: object, config: StrategyConfig) -> dict[str, object]:
     }
 
 
-def _serialize_ledger(ledger: ManualLedger) -> dict[str, object]:
-    return {
-        "summary": summarize_ledger(ledger),
-        "issues": reconcile_ledger(ledger),
-        "threads": [
-            {
-                "thread_id": thread.thread_id,
-                "cash": str(thread.cash),
-                "quantity": str(thread.quantity),
-                "entry_price": str(thread.entry_price),
-                "entry_date": thread.entry_date.isoformat() if thread.entry_date else None,
-            }
-            for thread in ledger.threads.values()
-        ],
-        "fills": [
-            {
-                "fill_id": fill.fill_id,
-                "thread_id": fill.thread_id,
-                "side": fill.side,
-                "quantity": str(fill.quantity),
-                "price": str(fill.price),
-                "fee": str(fill.fee),
-                "filled_at": fill.filled_at.isoformat(),
-                "reversed_by_fill_id": fill.reversed_by_fill_id,
-            }
-            for fill in ledger.fills
-        ],
-    }
-
-
-def _open_positions_from_ledger(ledger: ManualLedger, bars: list[object]) -> dict[int, tuple[object, int]]:
-    positions: dict[int, tuple[object, int]] = {}
-    if not bars:
-        return positions
-    latest_index = len(bars) - 1
-    session_index_by_date = {bar.session_date: index for index, bar in enumerate(bars)}
-    for thread_id, thread in ledger.threads.items():
-        if thread.quantity <= ZERO or thread.entry_date is None:
-            continue
-        entry_index = session_index_by_date.get(thread.entry_date)
-        if entry_index is None:
-            entry_index = next(
-                (index for index, bar in enumerate(bars) if bar.session_date >= thread.entry_date),
-                None,
-            )
-        if entry_index is None:
-            continue
-        positions[thread_id] = (thread.entry_price, max(0, latest_index - entry_index))
-    return positions
-
-
 def _data_validate(args: argparse.Namespace) -> int:
-    bars, data_hash = _load_bars(args.csv, args.symbol)
+    csv_path = _resolve_csv_path(args.csv, args.symbol)
+    bars, data_hash = _load_bars(csv_path, args.symbol)
     report = summarize_import(args.symbol, "csv", bars)
     return _print_json(
         {
@@ -258,9 +199,10 @@ def _data_validate(args: argparse.Namespace) -> int:
 
 
 def _data_status(args: argparse.Namespace) -> int:
-    bars, data_hash = _load_bars(args.csv, args.symbol)
+    csv_path = _resolve_csv_path(args.csv, args.symbol)
+    bars, data_hash = _load_bars(csv_path, args.symbol)
     report = summarize_import(args.symbol, "csv", bars)
-    manifest_path = snapshot_manifest_path(args.csv)
+    manifest_path = snapshot_manifest_path(csv_path)
     return _print_json(
         {
             "symbol": args.symbol,
@@ -270,15 +212,15 @@ def _data_status(args: argparse.Namespace) -> int:
             "data_hash": data_hash,
             "source": bars[-1].source,
             "warnings": report.warnings,
-            "snapshot_path": str(Path(args.csv).resolve()),
+            "snapshot_path": str(Path(csv_path).resolve()),
             "manifest_path": str(manifest_path.resolve()) if manifest_path.exists() else None,
         }
     )
 
 
 def _data_sync(args: argparse.Namespace) -> int:
-    result = sync_soxl_history(
-        args.output_csv,
+    result = sync_history(
+        args.output_csv or default_market_data_csv(args.symbol),
         symbol=args.symbol,
         start_date=args.start_date,
     )
@@ -287,7 +229,7 @@ def _data_sync(args: argparse.Namespace) -> int:
 
 def _backtest_run(args: argparse.Namespace) -> int:
     config = _load_strategy_config_with_overrides(args)
-    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     run = run_backtest(bars, config, data_hash=data_hash)
     payload = _serialize_run(run, config)
     payload.pop("daily")
@@ -297,14 +239,14 @@ def _backtest_run(args: argparse.Namespace) -> int:
 
 def _backtest_detail(args: argparse.Namespace) -> int:
     config = _load_strategy_config_with_overrides(args)
-    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     run = run_backtest(bars, config, data_hash=data_hash)
     return _print_json(_serialize_run(run, config))
 
 
 def _backtest_grid(args: argparse.Namespace) -> int:
     config = _load_strategy_config_with_overrides(args)
-    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     thread_counts = [int(item) for item in args.threads.split(",")]
     stop_sessions = [int(item) for item in args.stops.split(",")]
     runs = run_grid(bars, config, thread_counts, stop_sessions, data_hash=data_hash)
@@ -328,7 +270,7 @@ def _backtest_grid(args: argparse.Namespace) -> int:
 
 def _backtest_risk_report(args: argparse.Namespace) -> int:
     config = _load_strategy_config_with_overrides(args)
-    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     return _print_json(build_risk_report(bars, config, data_hash=data_hash))
 
 
@@ -354,7 +296,7 @@ def _parse_combo_csv(raw: str) -> tuple[int, ...]:
 
 def _backtest_strategy_explorer(args: argparse.Namespace) -> int:
     config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
-    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     return _print_json(
         build_strategy_explorer(
             bars,
@@ -369,7 +311,7 @@ def _backtest_strategy_explorer(args: argparse.Namespace) -> int:
 
 def _backtest_parameter_sweep(args: argparse.Namespace) -> int:
     config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
-    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     return _print_json(
         build_parameter_sweep(
             bars,
@@ -384,13 +326,13 @@ def _backtest_parameter_sweep(args: argparse.Namespace) -> int:
 
 def _backtest_official_explorer(args: argparse.Namespace) -> int:
     config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
-    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     return _print_json(build_official_explorer(bars, config, data_hash=data_hash))
 
 
 def _backtest_official_matrix(args: argparse.Namespace) -> int:
     config = _load_strategy_config_with_overrides(args)
-    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     combos = tuple(
         (thread_count, stop_sessions)
         for thread_count in _parse_combo_csv(args.threads)
@@ -401,7 +343,7 @@ def _backtest_official_matrix(args: argparse.Namespace) -> int:
 
 def _backtest_thread_timeline(args: argparse.Namespace) -> int:
     config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
-    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     return _print_json(
         build_thread_timeline(
             bars,
@@ -417,7 +359,7 @@ def _backtest_thread_timeline(args: argparse.Namespace) -> int:
 
 def _backtest_mentor_matrix(args: argparse.Namespace) -> int:
     config = _load_strategy_config_with_overrides(args)
-    bars, data_hash = _load_bars(args.csv, args.symbol or config.symbol)
+    bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     combos = tuple(
         (thread_count, stop_sessions)
         for thread_count in _parse_combo_csv(args.threads)
@@ -467,103 +409,9 @@ def _parity_report(args: argparse.Namespace) -> int:
     return _parity_exit_code(data_result, event_result, performance_result)
 
 
-def _manual_today(args: argparse.Namespace) -> int:
-    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
-    bars, _data_hash = _load_bars(args.csv, args.symbol or config.symbol)
-    open_positions = {}
-    ledger_path = Path(args.ledger_path)
-    if ledger_path.exists():
-        open_positions = _open_positions_from_ledger(load_ledger(ledger_path), bars)
-    recommendations = build_recommendations(bars, config, open_positions)
-    return _print_json(
-        [
-            {
-                "thread_id": recommendation.thread_id,
-                "action": recommendation.action.value,
-                "reason": recommendation.reason,
-                "basis_price": str(recommendation.basis_price),
-                "session_date": recommendation.session_date.isoformat(),
-            }
-            for recommendation in recommendations
-        ]
-    )
-
-
 def _profile_show(args: argparse.Namespace) -> int:
     config = _load_strategy_config_with_overrides(args)
     return _print_json(_serialize_config(config))
-
-
-def _manual_ledger_init(args: argparse.Namespace) -> int:
-    ledger = create_ledger(args.account_id, args.thread_count, args.initial_capital)
-    save_ledger(args.ledger_path, ledger)
-    return _print_json(_serialize_ledger(ledger))
-
-
-def _manual_ledger_show(args: argparse.Namespace) -> int:
-    ledger = load_ledger(args.ledger_path)
-    return _print_json(_serialize_ledger(ledger))
-
-
-def _manual_ledger_fill(args: argparse.Namespace) -> int:
-    ledger = load_ledger(args.ledger_path)
-    fill = record_fill(
-        ledger,
-        thread_id=args.thread_id,
-        side=args.side,
-        quantity=args.quantity,
-        price=args.price,
-        fee=args.fee,
-        filled_at=datetime.fromisoformat(args.filled_at) if args.filled_at else None,
-    )
-    save_ledger(args.ledger_path, ledger)
-    return _print_json(
-        {
-            "fill": {
-                "fill_id": fill.fill_id,
-                "thread_id": fill.thread_id,
-                "side": fill.side,
-                "quantity": str(fill.quantity),
-                "price": str(fill.price),
-                "fee": str(fill.fee),
-                "filled_at": fill.filled_at.isoformat(),
-                "reversed_by_fill_id": fill.reversed_by_fill_id,
-            },
-            "ledger": _serialize_ledger(ledger),
-        }
-    )
-
-
-def _manual_ledger_reverse(args: argparse.Namespace) -> int:
-    ledger = load_ledger(args.ledger_path)
-    reversal = reverse_fill(ledger, args.fill_id)
-    save_ledger(args.ledger_path, ledger)
-    return _print_json(
-        {
-            "fill": {
-                "fill_id": reversal.fill_id,
-                "thread_id": reversal.thread_id,
-                "side": reversal.side,
-                "quantity": str(reversal.quantity),
-                "price": str(reversal.price),
-                "fee": str(reversal.fee),
-                "filled_at": reversal.filled_at.isoformat(),
-                "reversed_by_fill_id": reversal.reversed_by_fill_id,
-            },
-            "ledger": _serialize_ledger(ledger),
-        }
-    )
-
-
-def _manual_ledger_restore(args: argparse.Namespace) -> int:
-    ledger = import_ledger(Path(args.source_path).read_text(encoding="utf-8"))
-    save_ledger(args.ledger_path, ledger)
-    return _print_json(
-        {
-            "ledger": _serialize_ledger(ledger),
-            "backup": json.loads(export_ledger(ledger)),
-        }
-    )
 
 
 def _worker_smoke(_args: argparse.Namespace) -> int:
@@ -575,7 +423,7 @@ def _worker_smoke(_args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="soxl-mania")
+    parser = argparse.ArgumentParser(prog="buy-low-sell-high")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     bootstrap_parser = subparsers.add_parser("bootstrap-check")
@@ -588,7 +436,7 @@ def main() -> int:
     data_validate.add_argument("--symbol", default="SOXL")
     data_validate.set_defaults(handler=_data_validate)
     data_sync = data_subparsers.add_parser("sync")
-    data_sync.add_argument("--output-csv", default=default_market_data_csv())
+    data_sync.add_argument("--output-csv")
     data_sync.add_argument("--symbol", default="SOXL")
     data_sync.add_argument("--start-date", default="2011-01-01")
     data_sync.set_defaults(handler=_data_sync)
@@ -726,44 +574,6 @@ def main() -> int:
     profile_show_parser.add_argument("--initial-capital", type=float, default=10000.0)
     _add_strategy_override_arguments(profile_show_parser)
     profile_show_parser.set_defaults(handler=_profile_show)
-
-    manual_parser = subparsers.add_parser("manual")
-    manual_subparsers = manual_parser.add_subparsers(dest="manual_command", required=True)
-    manual_today = manual_subparsers.add_parser("today")
-    manual_today.add_argument("--profile", required=True)
-    _add_csv_argument(manual_today)
-    _add_ledger_argument(manual_today)
-    manual_today.add_argument("--symbol")
-    manual_today.add_argument("--initial-capital", type=float, default=10000.0)
-    manual_today.set_defaults(handler=_manual_today)
-    manual_ledger = manual_subparsers.add_parser("ledger")
-    manual_ledger_subparsers = manual_ledger.add_subparsers(dest="manual_ledger_command", required=True)
-    manual_ledger_init = manual_ledger_subparsers.add_parser("init")
-    _add_ledger_argument(manual_ledger_init)
-    manual_ledger_init.add_argument("--account-id", default="soxl-mania")
-    manual_ledger_init.add_argument("--thread-count", type=int, required=True)
-    manual_ledger_init.add_argument("--initial-capital", type=float, default=10000.0)
-    manual_ledger_init.set_defaults(handler=_manual_ledger_init)
-    manual_ledger_show = manual_ledger_subparsers.add_parser("show")
-    _add_ledger_argument(manual_ledger_show)
-    manual_ledger_show.set_defaults(handler=_manual_ledger_show)
-    manual_ledger_fill = manual_ledger_subparsers.add_parser("fill")
-    _add_ledger_argument(manual_ledger_fill)
-    manual_ledger_fill.add_argument("--thread-id", type=int, required=True)
-    manual_ledger_fill.add_argument("--side", required=True)
-    manual_ledger_fill.add_argument("--quantity", required=True)
-    manual_ledger_fill.add_argument("--price", required=True)
-    manual_ledger_fill.add_argument("--fee", default="0")
-    manual_ledger_fill.add_argument("--filled-at")
-    manual_ledger_fill.set_defaults(handler=_manual_ledger_fill)
-    manual_ledger_reverse = manual_ledger_subparsers.add_parser("reverse")
-    _add_ledger_argument(manual_ledger_reverse)
-    manual_ledger_reverse.add_argument("--fill-id", required=True)
-    manual_ledger_reverse.set_defaults(handler=_manual_ledger_reverse)
-    manual_ledger_restore = manual_ledger_subparsers.add_parser("restore")
-    _add_ledger_argument(manual_ledger_restore)
-    manual_ledger_restore.add_argument("--source-path", required=True)
-    manual_ledger_restore.set_defaults(handler=_manual_ledger_restore)
 
     worker_parser = subparsers.add_parser("worker")
     worker_subparsers = worker_parser.add_subparsers(dest="worker_command", required=True)

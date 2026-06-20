@@ -3,18 +3,17 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "soxl-mania"
+name = "buy-low-sell-high"
 version = "0.1.0"
-description = "SOXL research and manual decision-support stack"
+description = "Multi-symbol backtesting research stack"
 requires-python = ">=3.12"
 dependencies = []
 
 [project.scripts]
-soxl-mania = "soxl_mania.cli:main"
+buy-low-sell-high = "buy_low_sell_high.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "engine/src"}
 
 [tool.setuptools.packages.find]
 where = ["engine/src"]
-

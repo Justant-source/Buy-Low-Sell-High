@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import date
 import unittest
 
-from soxl_mania.domain.models import MarketBar, StrategyConfig
-from soxl_mania.domain.money import D
-from soxl_mania.reporting.strategy_explorer import build_strategy_explorer
+from buy_low_sell_high.domain.models import MarketBar, StrategyConfig
+from buy_low_sell_high.domain.money import D
+from buy_low_sell_high.reporting.strategy_explorer import build_strategy_explorer
 
 
 def bar(year: int, month: int, day: int, close: str) -> MarketBar:
@@ -48,7 +48,7 @@ class StrategyExplorerTest(unittest.TestCase):
                     "label": "7T / 30S",
                     "thread_count": 7,
                     "stop_sessions": 30,
-                    "mentor_profiles": ["mentor_default_7x30"],
+                    "mentor_profiles": ["soxl_default_7x30"],
                 },
             ),
         )
@@ -60,7 +60,7 @@ class StrategyExplorerTest(unittest.TestCase):
         self.assertIn("metrics", payload["strategies"][0])
         self.assertIn("monthly", payload["strategies"][0])
         self.assertIn("segments", payload["strategies"][0])
-        self.assertEqual(payload["strategies"][1]["mentor_profiles"], ["mentor_default_7x30"])
+        self.assertEqual(payload["strategies"][1]["mentor_profiles"], ["soxl_default_7x30"])
         segment_ids = {row["segment_id"] for row in payload["strategies"][0]["segments"]}
         self.assertIn("2025-latest", segment_ids)
 

@@ -4,10 +4,10 @@ from datetime import date
 from pathlib import Path
 import unittest
 
-from soxl_mania.domain.models import MarketBar, StrategyConfig
-from soxl_mania.domain.money import D
-from soxl_mania.reporting.official_explorer import build_official_explorer
-from soxl_mania.reporting.official_matrix import (
+from buy_low_sell_high.domain.models import MarketBar, StrategyConfig
+from buy_low_sell_high.domain.money import D
+from buy_low_sell_high.reporting.official_explorer import build_official_explorer
+from buy_low_sell_high.reporting.official_matrix import (
     build_official_matrix,
     compare_to_reference,
     default_explorer_reference_path,
@@ -55,7 +55,7 @@ class OfficialMatrixTest(unittest.TestCase):
         ]
         config = StrategyConfig.from_mapping(
             {
-                "profile_id": "ddeolsao_pal_official_v1",
+                "profile_id": "soxl_official_ddeolsao_pal_v1",
                 "thread_count": 5,
                 "stop_sessions": 40,
                 "initial_capital": 1000,
@@ -96,7 +96,7 @@ class OfficialMatrixTest(unittest.TestCase):
         ]
         config = StrategyConfig.from_mapping(
             {
-                "profile_id": "ddeolsao_pal_official_v1",
+                "profile_id": "soxl_official_ddeolsao_pal_v1",
                 "thread_count": 5,
                 "stop_sessions": 40,
                 "initial_capital": 1000,

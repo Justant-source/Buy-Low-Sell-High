@@ -12,7 +12,6 @@ class ExecutionModel(str, Enum):
     IDEAL_SAME_CLOSE = "ideal_same_close"
     NEXT_OPEN = "next_open"
     NEXT_CLOSE = "next_close"
-    MANUAL_FILL = "manual_fill"
 
 
 class PriceBasis(str, Enum):
@@ -53,11 +52,3 @@ class SizingMode(str, Enum):
     FIXED_PRINCIPAL = "fixed_principal"
     THREAD_COMPOUND = "thread_compound"
     PORTFOLIO_REBALANCE_COMPOUND = "portfolio_rebalance_compound"
-
-
-class RecommendationAction(str, Enum):
-    BUY = "BUY"
-    TAKE_PROFIT = "TAKE_PROFIT"
-    TIME_STOP = "TIME_STOP"
-    HOLD = "HOLD"
-    NO_ACTION = "NO_ACTION"

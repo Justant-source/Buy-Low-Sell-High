@@ -1,12 +1,12 @@
-name: soxlmania
+name: buylowsellhigh
 
 services:
   postgres:
-    container_name: soxlmania-postgres
+    container_name: buylowsellhigh-postgres
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-soxl_mania}
-      POSTGRES_USER: ${POSTGRES_USER:-soxl_mania}
+      POSTGRES_DB: ${POSTGRES_DB:-buy_low_sell_high}
+      POSTGRES_USER: ${POSTGRES_USER:-buy_low_sell_high}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -14,12 +14,12 @@ services:
       - postgres-data:/var/lib/postgresql/data
 
   engine-worker:
-    container_name: soxlmania-engine-worker
+    container_name: buylowsellhigh-engine-worker
     build:
       context: .
       dockerfile: engine/Dockerfile
     working_dir: /app
-    command: ["python", "-m", "soxl_mania.cli", "worker", "smoke"]
+    command: ["python", "-m", "buy_low_sell_high.cli", "worker", "smoke"]
     environment:
       PYTHONPATH: /app/engine/src
     volumes:
@@ -28,12 +28,12 @@ services:
       - postgres
 
   engine-cli:
-    container_name: soxlmania-engine-cli
+    container_name: buylowsellhigh-engine-cli
     build:
       context: .
       dockerfile: engine/Dockerfile
     working_dir: /app
-    command: ["python", "-m", "soxl_mania.cli", "bootstrap-check"]
+    command: ["python", "-m", "buy_low_sell_high.cli", "bootstrap-check"]
     environment:
       PYTHONPATH: /app/engine/src
     volumes:
@@ -42,7 +42,7 @@ services:
       - postgres
 
   dashboard:
-    container_name: soxlmania-dashboard
+    container_name: buylowsellhigh-dashboard
     build:
       context: .
       dockerfile: dashboard/Dockerfile
@@ -50,7 +50,7 @@ services:
     command: ["node", "--experimental-strip-types", "src/server.ts"]
     environment:
       PORT: ${DASHBOARD_PORT:-3232}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-soxl_mania}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-soxl_mania}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-buy_low_sell_high}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-buy_low_sell_high}
     ports:
       - "${DASHBOARD_PORT:-3232}:3232"
     volumes:
@@ -60,4 +60,4 @@ services:
 
 volumes:
   postgres-data:
-    name: soxlmania-postgres-data
+    name: buylowsellhigh-postgres-data

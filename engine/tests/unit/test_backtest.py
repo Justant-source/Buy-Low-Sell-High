@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import date
 import unittest
 
-from soxl_mania.backtest.engine import run_backtest
-from soxl_mania.backtest.sweep import run_grid
-from soxl_mania.domain.models import MarketBar, StrategyConfig
-from soxl_mania.domain.money import D
+from buy_low_sell_high.backtest.engine import run_backtest
+from buy_low_sell_high.backtest.sweep import run_grid
+from buy_low_sell_high.domain.models import MarketBar, StrategyConfig
+from buy_low_sell_high.domain.money import D
 
 
 def make_bar(day: int, close: str) -> MarketBar:

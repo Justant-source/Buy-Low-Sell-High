@@ -2,18 +2,19 @@
 
 현재 저장소가 다루는 범위는 다음과 같다.
 
-- 버전 관리되는 SOXL 시세 바는 Python 객체로 표현되며 CSV fixture에서 적재된다.
-- 표준 로컬 SOXL 스냅샷 경로는 `data/raw/soxl_daily_2011_present.csv`이며, `2011-01-01` 이후 데이터로 채워진다.
-- 표준 로컬 SOXL 스냅샷의 공식 소스는 Yahoo chart sync다.
-- 표준 로컬 SOXL 스냅샷의 매니페스트는 `data/manifests/soxl_daily_2011_present.json`에 기록한다.
+- 버전 관리되는 종목 시세 바는 Python 객체로 표현되며 CSV fixture에서 적재된다.
+- 표준 스냅샷 경로는 `data/raw/{symbol_lower}_daily_2011_present.csv`다.
+- 표준 매니페스트 경로는 `data/manifests/{symbol_lower}_daily_2011_present.json`이다.
+- 현재 공식 SOXL 기준선은 `data/raw/soxl_daily_2011_present.csv`와 `data/manifests/soxl_daily_2011_present.json`이다.
 - 네트워크 동기화는 Yahoo, Investing, Stooq를 소스로 사용할 수 있으며, 동시에 백테스트용 버전 관리 CSV 스냅샷을 유지한다.
+- Investing provider 메타데이터가 없는 종목은 Yahoo/Stooq fallback만 사용한다.
 - Yahoo 동기화는 `range=max` 대신 기간 chunk 요청을 사용하고, 성공한 raw JSON chunk를 `data/snapshots/yahoo_chart/` 아래에 캐시한다.
 - Yahoo가 이후 `429 Too Many Requests`를 반환해도 동일 chunk 캐시가 있으면 그 캐시를 재사용할 수 있어야 한다.
 - 기본 연구용 가격 기준으로는 `adj_close`가 필요하다. 동기화된 스냅샷이 전체 구간에서 `close`를 그대로 `adj_close`에 복제했다면, 적재 요약에서 adjusted-close parity를 지원할 수 없다는 경고가 나와야 한다.
 - snapshot manifest에는 `symbol`, `source`, `generated_at`, `rows`, `start`, `end`, `data_hash`, `output_csv`, `warnings`, `errors`를 저장한다.
 - `db/migrations/0001_initial.sql`에 PostgreSQL 마이그레이션 스켈레톤이 존재한다.
-- 수동 체결 기록은 시뮬레이션 백테스트와 분리되어야 한다.
-- 백테스트 trade의 `entry shares`와 수동 장부 `quantity`는 항상 양의 정수다. 소수 수량은 신규 진입과 수동 fill에서 허용하지 않는다.
+- 백테스트 trade의 `shares`는 항상 양의 정수다. 진입 예산이 1주 미만이면 해당 진입은 `ENTRY_SKIPPED`로 기록한다.
+- open thread equity는 미투자 현금과 mark-to-market 포지션 가치를 함께 보존해야 한다.
 - 모든 백테스트 실행과 연구 산출물은 `config_hash`, `data_hash`, `code_commit`를 함께 보관해야 한다.
 - `backtest_research_artifacts`는 `Strategy Explorer`와 `Sweep Explorer`의 정규화된 저장소다.
   - 공통 메타데이터: `artifact_key`, `artifact_kind`, `profile_id`, `symbol`, `csv_path`, `execution_model`, `price_basis`, `data_hash`, `code_commit`, `created_at`

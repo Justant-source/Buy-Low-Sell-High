@@ -25,7 +25,7 @@ function cliEnv(): NodeJS.ProcessEnv {
 
 function invokeCli(args: string[]): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn("python3", ["-m", "soxl_mania.cli", ...args], {
+    const child = spawn("python3", ["-m", "buy_low_sell_high.cli", ...args], {
       cwd: repoRoot,
       env: cliEnv(),
       stdio: ["ignore", "pipe", "pipe"],

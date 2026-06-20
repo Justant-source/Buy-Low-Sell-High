@@ -1,6 +1,6 @@
 # 떨사오팔 전략 SSOT
 
-> **Single Source of Truth.** 백테스트 엔진, 대시보드, 수동 장부, parity 검증 모두 이 문서를 준거로 삼는다.
+> **Single Source of Truth.** 백테스트 엔진, 대시보드, parity 검증 모두 이 문서를 준거로 삼는다.
 > 전략 의미론이 바뀌면 코드보다 이 문서를 먼저 갱신하고, 이 문서를 따라 코드를 수정한다.
 
 ---
@@ -14,14 +14,14 @@
 - **오** → 매수가보다 상승 시 익절 신호 발생
 - **팔** → 해당 세션에 매도
 
-SOXL(반도체 3배 레버리지 ETF) 일봉 데이터만 사용하며, 브로커 연동 없이 수동 결정 지원 목적으로만 운용한다.
+현재 기본 워크스페이스는 SOXL(반도체 3배 레버리지 ETF) 일봉 데이터이며, 같은 구조로 다른 종목 백테스트를 확장할 수 있어야 한다.
 
 ---
 
 ## 2. 공식 연구 기준선
 
 - 공식 제품 baseline은 `data/raw/soxl_daily_2011_present.csv` Yahoo 스냅샷을 사용한다.
-- 공식 프로필은 `configs/strategies/ddeolsao_pal_official_v1.yaml`이다.
+- 공식 프로필은 `configs/strategies/soxl_official_ddeolsao_pal_v1.yaml`이다.
 - 공식 프로필 파라미터는 `thread_count=5`, `stop_sessions=40`, `price_basis=adjusted_close`, `execution_model=ideal_same_close`, `sizing_mode=fixed_principal`이다.
 - 공식 프로필은 코어 9조합을 `mean_segment_return desc`, `segment_stddev asc`, `full_return desc` 기준으로 정렬해 현재 1위를 고정한 결과다.
 - 공식 CI 게이트는 `official-explorer`와 `official-matrix` golden fixture다.
@@ -170,9 +170,8 @@ session_price <= entry_price × (1 - stop_loss_pct / 100)
 | `ideal_same_close` | 신호 발생 당일 종가로 즉시 체결 | 공식 연구 baseline |
 | `next_open` | 다음 거래일 시가로 체결 | 현실적 체결 시뮬레이션 |
 | `next_close` | 다음 거래일 종가로 체결 | 현실적 체결 시뮬레이션 |
-| `manual_fill` | 수동 장부 체결가만 사용 | 실제 수동 운용 기록 |
 
-**주의:** `ideal_same_close`는 공식 연구 baseline이다. 실제 수동 운용 결과와 비교할 때는 `manual_fill`을 사용한다.
+**주의:** `ideal_same_close`는 공식 연구 baseline이다. 실제 체결 기대값으로 표현하지 않는다.
 
 ---
 
@@ -279,32 +278,19 @@ session_price <= entry_price × (1 - stop_loss_pct / 100)
 
 ### 10-3. 실전 수동매매 규칙
 
-종가 기준 신호와 실제 체결 사이의 시간 괴리를 다음 절차로 처리한다.
-
-| 단계 | 행동 |
-|---|---|
-| **1. 종가 확정 후** | 정규장 종료 뒤 대시보드에서 당일 Thread별 신호 확인 |
-| **2. 신호 확인** | 매수 / 익절 / 손절 신호 해당 Thread 식별 |
-| **3. 애프터장 체결 (1순위)** | 애프터장 가격이 종가와 큰 차이 없으면 **지정가 주문 (종가 근방)** |
-| **4. 다음 거래일 처리 (대안)** | 애프터장 괴리가 크거나 체결 미성사 → 다음 거래일 정규장 시초/초반 지정가로 처리 |
-| **5. 체결가 수동 입력** | 실제 체결된 가격을 수동 장부에 반드시 입력 |
-
-**핵심 원칙:**
-- 신호는 종가 기준이지만, 체결은 애프터장 또는 다음 거래일 초반까지 허용한다.
-- 시장가 주문을 사용하지 않는다. 항상 지정가로 원하는 가격을 명시한다.
-- 체결 여부와 실제 체결가는 반드시 수동 입력한다. 자동 기록 없음.
+종가 기준 신호와 현실적 체결 비교는 `next_open`, `next_close` 리포트로 구분한다. 제품은 주문 기록이나 체결 입력을 관리하지 않는다.
 - 다음 거래일 처리 시 그 사이 새로운 신호가 발생할 수 있다. 대시보드를 재확인한다.
 
 ### 10-4. 백테스트 vs 실전 괴리 인식
 
-| 항목 | 백테스트 (`ideal_same_close`) | 실전 수동매매 |
+| 항목 | 백테스트 (`ideal_same_close`) | 현실적 체결 비교 |
 |---|---|---|
 | 신호 기준 | 당일 종가 | 당일 종가 (동일) |
 | 체결 가정 | 당일 종가에 즉시 체결 | 애프터장 또는 익일 정규장 초반 |
 | 체결가 | 종가 = 체결가 | 종가와 다를 수 있음 |
-| 기록 방식 | 자동 계산 | 수동 입력 (`manual_fill`) |
+| 기록 방식 | 자동 계산 | `next_open` / `next_close` 비교 리포트 |
 
-백테스트 수익률과 실전 수익률의 차이는 이 괴리에서 발생한다. 이 차이를 줄이기 위해 가능한 한 종가 근방 지정가를 사용한다.
+백테스트 수익률과 현실 체결 비교 결과의 차이는 이 괴리에서 발생한다.
 
 ---
 
@@ -333,7 +319,7 @@ session_price <= entry_price × (1 - stop_loss_pct / 100)
 | `docs/90-adr/0002-tunable-threshold-overrides.md` | 진입/청산 임계값 오버라이드 (ADR) |
 | `docs/70-policy/mentor-vs-implemented-strategy.md` | 멘토 vs 구현 갭 리포트 |
 | `docs/70-policy/strategy.md` | 제품 경계 (브로커 연동 금지 등) |
-| `engine/src/soxl_mania/strategies/ddeolsao_pal.py` | 전략 실행 코드 (구현체) |
+| `engine/src/buy_low_sell_high/strategies/ddeolsao_pal.py` | 전략 실행 코드 (구현체) |
 | `engine/tests/fixtures/official_reference_matrix.json` | 공식 matrix golden fixture |
 | `engine/tests/fixtures/official_explorer_summary.json` | 공식 explorer golden fixture |
 | `engine/tests/fixtures/mentor_reference_matrix.yaml` | 멘토 레퍼런스 수치 fixture |

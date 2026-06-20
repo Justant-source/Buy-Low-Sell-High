@@ -16,7 +16,7 @@ trap cleanup EXIT
 cd "${ROOT_DIR}"
 
 npm --prefix dashboard run build >/dev/null
-PORT="${PORT}" node dashboard/dist/server.js >/tmp/soxl-mania-risk-e2e.log 2>&1 &
+PORT="${PORT}" node dashboard/dist/server.js >/tmp/buy-low-sell-high-risk-e2e.log 2>&1 &
 SERVER_PID="$!"
 
 python3 - <<'PY'
@@ -40,7 +40,7 @@ for _ in range(40):
 else:
     raise SystemExit("dashboard health check failed")
 
-html = fetch(f"http://127.0.0.1:{port}/backtests")
+html = fetch(f"http://127.0.0.1:{port}/backtests/soxl")
 required_markers = [
     "실행 모델 리스크 비교",
     "비용 민감도",
@@ -51,7 +51,7 @@ for marker in required_markers:
     if marker not in html:
         raise SystemExit(f"missing risk UI marker: {marker}")
 
-risk = json.loads(fetch(f"http://127.0.0.1:{port}/api/backtests/risk?profileId=mentor_default_5x30"))
+risk = json.loads(fetch(f"http://127.0.0.1:{port}/api/backtests/risk?profileId=soxl_default_5x30"))
 if len(risk.get("model_comparison", [])) != 3:
     raise SystemExit("risk model comparison size mismatch")
 if len(risk.get("cost_sensitivity", [])) != 3:

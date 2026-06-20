@@ -14,7 +14,9 @@
   };
   const state = {
     activeTab: "strategy",
-    profileId: "ddeolsao_pal_official_v1",
+    workspaceId: "soxl",
+    workspaces: [],
+    profileId: "soxl_official_ddeolsao_pal_v1",
     profiles: [],
     dataStatus: null,
     officialExplorer: null,
@@ -191,11 +193,59 @@
     return state.profiles.find((profile) => profile.profileId === state.profileId) || null;
   }
 
+  function currentWorkspace() {
+    return state.workspaces.find((workspace) => workspace.workspaceId === state.workspaceId) || null;
+  }
+
+  function currentWorkspaceSlug() {
+    const parts = window.location.pathname.split("/").filter(Boolean);
+    return parts[0] === "backtests" && parts[1] ? parts[1] : null;
+  }
+
+  function renderWorkspaceNav() {
+    const target = document.getElementById("workspace-nav");
+    if (!target) {
+      return;
+    }
+    const activeSlug = currentWorkspace()?.routeSlug;
+    target.innerHTML = state.workspaces
+      .map((workspace) => {
+        const active = workspace.routeSlug === activeSlug ? " active" : "";
+        return `<a class="nav-item${active}" href="/backtests/${ui.escapeHtml(workspace.routeSlug)}">${ui.escapeHtml(workspace.navLabel)}</a>`;
+      })
+      .join("");
+  }
+
+  function renderWorkspaceSummary(workspace) {
+    if (!workspace) {
+      return;
+    }
+    ui.setText("sb-nav-label", workspace.navLabel);
+    ui.setText("sb-description", workspace.summary);
+    ui.setText("page-title", workspace.navLabel);
+    ui.setText("page-subtitle", workspace.description);
+    const tags = document.getElementById("workspace-tags");
+    if (tags) {
+      tags.innerHTML = (workspace.warningTags || [])
+        .map((tag) => `<span class="badge info">${ui.escapeHtml(tag)}</span>`)
+        .join("");
+    }
+    const mentorButton = document.getElementById("mentor-tab-button");
+    const mentorPanel = document.querySelector('[data-tab-panel="mentor"]');
+    const mentorEnabled = workspace.referenceMode === "soxl_reference";
+    if (mentorButton) {
+      mentorButton.style.display = mentorEnabled ? "" : "none";
+    }
+    if (mentorPanel instanceof HTMLElement) {
+      mentorPanel.style.display = mentorEnabled ? "" : "none";
+    }
+    if (!mentorEnabled && state.activeTab === "mentor") {
+      activateTab("strategy");
+    }
+  }
+
   function renderDataStatus(status) {
     state.dataStatus = status;
-    ui.setText("hero-rows", ui.formatNumber(status.rows));
-    ui.setText("hero-period", `${status.start} - ${status.end}`);
-    ui.setText("hero-hash", ui.shortHash(status.data_hash));
     ui.setText("sb-range", `${status.start} - ${status.end}`);
   }
 
@@ -204,9 +254,7 @@
       return;
     }
     state.profileId = profile.profileId;
-    ui.setText("sb-profile", profile.profileId);
     ui.setText("sb-model", profile.executionModel || "ideal_same_close");
-    ui.setText("official-profile-badge", profile.profileId);
   }
 
   function activateTab(tabId) {
@@ -1856,14 +1904,20 @@
 
   async function loadStrategyData() {
     const csvPath = state.dataStatus?.snapshot_path || "";
-    const [officialExplorer, strategyExplorer] = await Promise.all([
-      ui.fetchJson(`/api/backtests/official-explorer?${new URLSearchParams({ profileId: state.profileId, csvPath }).toString()}`),
+    const workspace = currentWorkspace();
+    const requests = [
       ui.fetchJson(`/api/backtests/strategy-explorer?${new URLSearchParams({ profileId: state.profileId, csvPath, executionModel: "ideal_same_close", priceBasis: "adjusted_close" }).toString()}`),
-    ]);
-    state.officialExplorer = officialExplorer;
+    ];
+    if (workspace?.referenceMode === "soxl_reference") {
+      requests.unshift(
+        ui.fetchJson(`/api/backtests/official-explorer?${new URLSearchParams({ profileId: state.profileId, csvPath }).toString()}`),
+      );
+    }
+    const [firstPayload, secondPayload] = await Promise.all(requests);
+    state.officialExplorer = workspace?.referenceMode === "soxl_reference" ? firstPayload : null;
     state.officialMatrix = null;
     renderOfficialMeta();
-    renderStrategyExplorer(strategyExplorer);
+    renderStrategyExplorer(workspace?.referenceMode === "soxl_reference" ? secondPayload : firstPayload);
     await loadThreadTimeline();
   }
 
@@ -1881,9 +1935,25 @@
   }
 
   async function bootstrap() {
+    const workspacePayload = await ui.fetchJson("/api/workspaces");
+    state.workspaces = workspacePayload.workspaces || [];
+    const defaultWorkspace = state.workspaces.find((workspace) => workspace.workspaceId === workspacePayload.defaultWorkspaceId) || state.workspaces[0];
+    const requestedSlug = currentWorkspaceSlug();
+    const workspace =
+      state.workspaces.find((item) => item.routeSlug === requestedSlug) || defaultWorkspace;
+    if (!workspace) {
+      throw new Error("No workspace definitions available");
+    }
+    if (requestedSlug !== workspace.routeSlug) {
+      window.location.replace(`/backtests/${workspace.routeSlug}`);
+      return;
+    }
+    state.workspaceId = workspace.workspaceId;
+    renderWorkspaceNav();
+    renderWorkspaceSummary(workspace);
     const [profilesPayload, dataStatus] = await Promise.all([
-      ui.fetchJson("/api/profiles"),
-      ui.fetchJson("/api/data/status"),
+      ui.fetchJson(`/api/profiles?${new URLSearchParams({ workspaceId: workspace.workspaceId }).toString()}`),
+      ui.fetchJson(`/api/data/status?${new URLSearchParams({ workspaceId: workspace.workspaceId }).toString()}`),
     ]);
     state.profiles = profilesPayload.profiles || [];
     state.profileId = profilesPayload.defaultProfileId || state.profileId;

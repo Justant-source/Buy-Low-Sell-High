@@ -1,24 +1,29 @@
 ---
-title: "SOXL-Mania — Codex 구현 계획"
+title: "Buy-Low-Sell-High — Codex 구현 계획"
 status: "ready-for-implementation"
 created_at: "2026-06-18"
 source_repository: "Justant-source/Bit-Mania"
-target_repository: "Justant-source/SOXL-Mania"
+target_repository: "Justant-source/Buy-Low-Sell-High"
 owner_language: "ko-KR"
 ---
 
-# SOXL-Mania — Codex 구현 계획
+# Buy-Low-Sell-High — Codex 구현 계획
 
 > 이 문서는 Codex가 단계별로 구현할 수 있도록 작성한 실행 명세다.  
-> **자동 주문·브로커 연동은 범위에서 제외한다.** 시스템은 SOXL 일봉 데이터를 이용해 백테스트하고, 수동 매매를 위한 권고와 장부를 제공한다.
+> **자동 주문·브로커 연동은 범위에서 제외한다.**
+>
+> 2026-06-20 현재 유효 범위:
+> - 제품은 `백테스트 전용`이다.
+> - 기본 워크스페이스는 `SOXL`이며, 이후 다른 종목은 `/backtests/:symbolSlug` 구조로 확장한다.
+> - `시스템 모니터`, `수동 장부`, 수동 권고/체결/복원 API는 제거 대상이며, 이 문서의 이후 구간에 남아 있는 관련 항목은 역사적 초안으로 간주한다.
 
 ## 0. 가장 중요한 안전 원칙
 
 1. 현재 `Bit-Mania`는 실거래 자동매매 코드와 운영 설정을 포함하므로 **원본 저장소에서 개발하지 않는다**.
-2. 새 저장소 `SOXL-Mania`를 생성한 뒤 필요한 구조와 문서 원칙만 이식한다.
+2. 새 저장소 `Buy-Low-Sell-High`를 생성한 뒤 필요한 구조와 문서 원칙만 이식한다.
 3. `.git`, `.env`, API 키, 거래소 설정, 운영 DB 덤프, Redis 비밀번호, Telegram 토큰을 복사하지 않는다.
-4. `SOXL-Mania`에는 주문 제출 코드, 브로커 SDK, Redis, 자동매매 실행 엔진을 넣지 않는다.
-5. 백테스트 결과와 실제 수동 체결 내역을 분리한다. 시뮬레이션 거래를 실제 체결로 표시하지 않는다.
+4. `Buy-Low-Sell-High`에는 주문 제출 코드, 브로커 SDK, Redis, 자동매매 실행 엔진을 넣지 않는다.
+5. 백테스트 결과만 제품 범위에 포함한다. 실제 체결, 장부, 주문 입력은 다루지 않는다.
 6. 첨부 스프레드시트 결과와 일치하지 않으면 테스트 기준을 완화하거나 참조값을 수정하지 말고, 차이를 보고한다.
 
 ---
@@ -34,7 +39,7 @@ owner_language: "ko-KR"
 - 단리와 풀복리 결과 모두 지원
 - 연도별 성과, 누적 성과, MDD, 거래 수, 보유 기간, Thread 상태를 대시보드에서 조회
 - 첨부 이미지의 9개 조합을 한 번에 비교하는 매트릭스
-- 수동 매매용 오늘의 권고, Thread 장부, 실제 체결 입력, 백업/복원
+- SOXL 기본 화면을 기반으로 한 다종목 백테스트 워크스페이스
 - PostgreSQL 기반 결과 저장
 - Docker Compose로 로컬 실행
 - Codex가 한 Phase씩 구현하고 검증할 수 있는 테스트·문서·명령 체계
@@ -52,17 +57,16 @@ owner_language: "ko-KR"
 
 ## 1.3 제품 성격
 
-SOXL-Mania는 다음 세 기능으로 한정한다.
+Buy-Low-Sell-High는 다음 두 기능으로 한정한다.
 
 1. **Research**: 재현 가능한 백테스트와 파라미터 비교
-2. **Decision Support**: 확정된 일봉을 바탕으로 한 수동 매매 권고
-3. **Manual Ledger**: 사용자가 직접 입력한 실제 체결과 Thread 상태 관리
+2. **Dashboard**: 워크스페이스 기반 백테스트 조회, 비교, 리스크 시각화
 
 ---
 
 # 2. Bit-Mania에서 가져올 것과 버릴 것
 
-| Bit-Mania 영역 | SOXL-Mania 처리 | 이유 |
+| Bit-Mania 영역 | Buy-Low-Sell-High 처리 | 이유 |
 |---|---|---|
 | `docs/` C4 계층과 Doc-Sync 원칙 | 유지·단순화 | Codex가 구조와 정본을 빠르게 파악할 수 있음 |
 | `backtest/`, `results/`, `dashboards/` 분리 | 유지 | 연구 산출물과 운영 UI 분리 |
@@ -227,9 +231,9 @@ costs:
 
 | 프로필 | Thread | 손절 | 목적 |
 |---|---:|---:|---|
-| `mentor_default_5x30` | 5 | 30 | 기본 UI·거래 수 참조가 가장 풍부한 기준 프로필 |
-| `mentor_grid_best_avg_5x40` | 5 | 40 | 첨부 표에서 연평균이 가장 높았던 조합의 재현용; 투자 추천 의미 없음 |
-| `mentor_low_vol_7x10` | 7 | 10 | 첨부 표에서 연도별 표준편차가 가장 낮았던 조합 비교용 |
+| `soxl_default_5x30` | 5 | 30 | 기본 UI·거래 수 참조가 가장 풍부한 기준 프로필 |
+| `soxl_best_avg_5x40` | 5 | 40 | 첨부 표에서 연평균이 가장 높았던 조합의 재현용; 투자 추천 의미 없음 |
+| `soxl_low_vol_7x10` | 7 | 10 | 첨부 표에서 연도별 표준편차가 가장 낮았던 조합 비교용 |
 
 대시보드의 “최고” 표시는 단일 수익률이 아니라 MDD, 변동성, 현실 체결 모델을 함께 비교해야 한다.
 
@@ -336,7 +340,7 @@ flowchart LR
     PROVIDER["SOXL EOD 데이터 공급자\nCSV · Yahoo adapter · 유료 provider adapter"]
     BROKER["사용자 증권사\n시스템 외부 · 수동 주문"]
 
-    subgraph SOXL["SOXL-Mania"]
+    subgraph SOXL["Buy-Low-Sell-High"]
       ENGINE["Python Strategy & Backtest Engine"]
       WORKER["PostgreSQL Job Worker\nRedis 없음"]
       DB[("PostgreSQL 16")]
@@ -370,7 +374,7 @@ flowchart LR
 ## 5.3 디렉터리 구조
 
 ```text
-SOXL-Mania/
+Buy-Low-Sell-High/
 ├── AGENTS.md
 ├── CLAUDE.md                    # AGENTS.md를 가리키는 짧은 호환 문서
 ├── README.md
@@ -382,9 +386,9 @@ SOXL-Mania/
 ├── package-lock.json
 ├── configs/
 │   ├── strategies/
-│   │   ├── mentor_default_5x30.yaml
-│   │   ├── mentor_grid_best_avg_5x40.yaml
-│   │   └── mentor_low_vol_7x10.yaml
+│   │   ├── soxl_default_5x30.yaml
+│   │   ├── soxl_best_avg_5x40.yaml
+│   │   └── soxl_low_vol_7x10.yaml
 │   └── providers/
 ├── docs/
 │   ├── _index.md
@@ -399,7 +403,7 @@ SOXL-Mania/
 │   ├── 70-policy/manual-operations.md
 │   └── 90-adr/
 ├── engine/
-│   ├── src/soxl_mania/
+│   ├── src/buy_low_sell_high/
 │   │   ├── cli.py
 │   │   ├── config.py
 │   │   ├── domain/
@@ -696,7 +700,7 @@ stateDiagram-v2
 
 ## 8.3 의미론 보정 도구
 
-`python -m soxl_mania.backtest.parity calibrate` 명령을 만든다.
+`python -m buy_low_sell_high.backtest.parity calibrate` 명령을 만든다.
 
 탐색 대상은 성과 파라미터가 아니라 **해석의 모호성**만 포함한다.
 
@@ -806,7 +810,7 @@ stateDiagram-v2
 
 ### 작업
 
-- [ ] `SOXL-Mania` 새 저장소 생성
+- [ ] `Buy-Low-Sell-High` 새 저장소 생성
 - [ ] Bit-Mania의 라이브 코드나 Git 이력을 직접 복제하지 않고 필요한 문서 구조만 이식
 - [ ] `AGENTS.md`, `docs/_index.md`, `README.md`, `Makefile` 생성
 - [ ] Python/Node/Docker 기본 구조 생성
@@ -830,7 +834,7 @@ python scripts/verify_no_autotrading.py
 
 ### 권장 커밋
 
-`chore: bootstrap SOXL-Mania research and manual-trading stack`
+`chore: bootstrap Buy-Low-Sell-High research and manual-trading stack`
 
 ---
 
@@ -861,7 +865,7 @@ python scripts/verify_no_autotrading.py
 ```bash
 make migrate
 make test-data
-uv run soxl-mania data validate --symbol SOXL
+uv run buy-low-sell-high data validate --symbol SOXL
 ```
 
 ### 권장 커밋
@@ -945,10 +949,10 @@ make typecheck
 
 ```bash
 make test-backtest
-uv run soxl-mania backtest run \
-  --profile configs/strategies/mentor_default_5x30.yaml \
+uv run buy-low-sell-high backtest run \
+  --profile configs/strategies/soxl_default_5x30.yaml \
   --start 2020-01-01 --end 2024-12-31
-uv run soxl-mania backtest grid --threads 5,6,7 --stops 10,30,40
+uv run buy-low-sell-high backtest grid --threads 5,6,7 --stops 10,30,40
 ```
 
 ### 권장 커밋
@@ -974,7 +978,7 @@ uv run soxl-mania backtest grid --threads 5,6,7 --stops 10,30,40
 
 ```bash
 make reference-check
-uv run soxl-mania parity report --reference mentor-2011-2024
+uv run buy-low-sell-high parity report --reference mentor-2011-2024
 ```
 
 성공 조건:
@@ -1139,7 +1143,7 @@ make backup-restore-test
 
 ### 권장 커밋
 
-`release: SOXL-Mania v1.0 manual decision-support and backtesting`
+`release: Buy-Low-Sell-High v1.0 manual decision-support and backtesting`
 
 ---
 
@@ -1220,12 +1224,12 @@ restore-test
 새 저장소 루트에 아래 내용을 기반으로 `AGENTS.md`를 만든다.
 
 ```markdown
-# SOXL-Mania Agent Guide
+# Buy-Low-Sell-High Agent Guide
 
 ## Read first
 1. docs/_index.md
 2. docs/70-policy/strategy.md
-3. SOXL_MANIA_CODEX_IMPLEMENTATION_PLAN.md
+3. BUY_LOW_SELL_HIGH_CODEX_IMPLEMENTATION_PLAN.md
 
 ## Product boundary
 - Research, dashboard, and manual ledger only.
@@ -1261,8 +1265,8 @@ restore-test
 각 Phase 작업을 시작할 때 아래 템플릿을 사용한다.
 
 ```text
-Repository: Justant-source/SOXL-Mania
-Plan: SOXL_MANIA_CODEX_IMPLEMENTATION_PLAN.md
+Repository: Justant-source/Buy-Low-Sell-High
+Plan: BUY_LOW_SELL_HIGH_CODEX_IMPLEMENTATION_PLAN.md
 Target phase: Phase <N> — <name>
 
 Before editing:
@@ -1291,9 +1295,9 @@ Final response:
 ## 14.1 첫 Codex 작업 권장 프롬프트
 
 ```text
-Implement Phase 0 from SOXL_MANIA_CODEX_IMPLEMENTATION_PLAN.md.
+Implement Phase 0 from BUY_LOW_SELL_HIGH_CODEX_IMPLEMENTATION_PLAN.md.
 Treat the existing Bit-Mania repository only as a read-only architectural reference.
-Create a clean SOXL-Mania skeleton with AGENTS.md, C4 docs index, Python engine package,
+Create a clean Buy-Low-Sell-High skeleton with AGENTS.md, C4 docs index, Python engine package,
 TypeScript Express dashboard, PostgreSQL-only Docker Compose, Makefile gates, and a
 static verification script that fails if Redis, Bybit, Telegram trading, or broker order
 submission code is introduced. Do not add strategy logic yet. Run all Phase 0 gates.
@@ -1322,7 +1326,7 @@ Never mark parity PASS when the data hash or annual boundary prices do not match
 
 # 15. Definition of Done
 
-SOXL-Mania v1.0은 아래 조건을 모두 만족해야 한다.
+Buy-Low-Sell-High v1.0은 아래 조건을 모두 만족해야 한다.
 
 - [ ] 원본 Bit-Mania 운영 저장소와 비밀정보를 건드리지 않음
 - [ ] Redis 의존성 0개

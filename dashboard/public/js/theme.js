@@ -1,5 +1,5 @@
 (function () {
-  const KEY = "soxlmania-theme";
+  const KEY = "buylowsellhigh-theme";
   const root = document.documentElement;
 
   function applyTheme(theme) {

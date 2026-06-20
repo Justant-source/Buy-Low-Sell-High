@@ -1,4 +1,4 @@
-"""SOXL-Mania engine package."""
+"""Buy-Low-Sell-High engine package."""
 
 __all__ = ["__version__"]
 

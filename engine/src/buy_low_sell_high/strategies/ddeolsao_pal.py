@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from ..backtest.execution import ScheduledAction, apply_costs, fill_price, signal_price
 from ..backtest.sizing import entry_budget
-from ..domain.enums import CloseReason, EventOrder, ExecutionModel, RecommendationAction, ThreadSelector, ThreadState
+from ..domain.enums import CloseReason, EventOrder, ExecutionModel, ThreadSelector, ThreadState
 from ..domain.models import (
     BacktestRun,
     CapitalThread,
@@ -81,8 +81,6 @@ def _apply_split(thread: CapitalThread, split_ratio: Decimal) -> None:
 
 def _entry_shares(budget: Decimal, executed_price: Decimal) -> Decimal:
     shares = quantize_entry_shares(D(budget) / D(executed_price))
-    if shares <= ZERO:
-        raise ValueError("Entry budget is insufficient to buy one whole share")
     return shares
 
 
@@ -128,12 +126,26 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                     )
                     budget = entry_budget(config, thread, _equity(threads, session_price), initial_thread_principal)
                     shares = _entry_shares(D(budget), D(executed_price))
+                    if shares <= ZERO:
+                        skipped_entries += 1
+                        events.append(
+                            StrategyEvent(
+                                session_date=bar.session_date,
+                                session_index=index,
+                                thread_id=thread.thread_id,
+                                event_type="ENTRY_SKIPPED",
+                                price=D(executed_price),
+                                detail="INSUFFICIENT_BUDGET",
+                            )
+                        )
+                        continue
                     thread.state = ThreadState.OPEN
                     thread.entry_price = D(executed_price)
                     thread.shares = shares
                     thread.entry_session_index = index
                     thread.entry_date = bar.session_date
                     thread.invested_amount = quantize_money(shares * D(executed_price))
+                    thread.reserve_pnl = quantize_money(thread.free_equity - thread.invested_amount)
                     open_trades[thread.thread_id] = Trade(
                         run_id=run_id,
                         thread_id=thread.thread_id,
@@ -171,11 +183,12 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                     trade.holding_sessions = index - (thread.entry_session_index or index)
                     trade.close_reason = CloseReason(action.reason or CloseReason.END_OF_TEST.value)
                     compute_trade_pnl(trade)
+                    proceeds = quantize_money(trade.shares * D(executed_price))
                     trades.append(trade)
                     realized_pnl += trade.pnl
                     thread.state = ThreadState.FREE
-                    thread.reserve_pnl += trade.pnl
-                    thread.free_equity = thread.invested_amount + thread.reserve_pnl
+                    thread.free_equity = quantize_money(thread.reserve_pnl + proceeds)
+                    thread.reserve_pnl = ZERO
                     thread.last_closed_session_index = index
                     thread.entry_price = ZERO
                     thread.shares = ZERO
@@ -239,11 +252,12 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                 trade.holding_sessions = index - (thread.entry_session_index or index)
                 trade.close_reason = reason
                 compute_trade_pnl(trade)
+                proceeds = quantize_money(trade.shares * D(executed_price))
                 trades.append(trade)
                 realized_pnl += trade.pnl
                 thread.state = ThreadState.FREE
-                thread.reserve_pnl += trade.pnl
-                thread.free_equity = thread.invested_amount + thread.reserve_pnl
+                thread.free_equity = quantize_money(thread.reserve_pnl + proceeds)
+                thread.reserve_pnl = ZERO
                 thread.last_closed_session_index = index
                 thread.entry_price = ZERO
                 thread.shares = ZERO
@@ -277,7 +291,7 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                 )
 
         def open_thread(thread: CapitalThread) -> None:
-            nonlocal entries
+            nonlocal entries, skipped_entries
             if config.execution_model == ExecutionModel.IDEAL_SAME_CLOSE:
                 executed_price = apply_costs(
                     session_price,
@@ -287,12 +301,26 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                 )
                 budget = entry_budget(config, thread, _equity(threads, session_price), initial_thread_principal)
                 shares = _entry_shares(D(budget), D(executed_price))
+                if shares <= ZERO:
+                    skipped_entries += 1
+                    events.append(
+                        StrategyEvent(
+                            session_date=bar.session_date,
+                            session_index=index,
+                            thread_id=thread.thread_id,
+                            event_type="ENTRY_SKIPPED",
+                            price=D(executed_price),
+                            detail="INSUFFICIENT_BUDGET",
+                        )
+                    )
+                    return
                 thread.state = ThreadState.OPEN
                 thread.entry_price = D(executed_price)
                 thread.shares = shares
                 thread.entry_session_index = index
                 thread.entry_date = bar.session_date
                 thread.invested_amount = quantize_money(shares * D(executed_price))
+                thread.reserve_pnl = quantize_money(thread.free_equity - thread.invested_amount)
                 open_trades[thread.thread_id] = Trade(
                     run_id=run_id,
                     thread_id=thread.thread_id,
@@ -418,34 +446,3 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
         yearly={},
         metrics={},
     )
-
-
-def recommend_actions(bars: list[MarketBar], config: StrategyConfig, open_positions: dict[int, tuple[Decimal, int]]) -> list[tuple[int, RecommendationAction, str]]:
-    if len(bars) < 2:
-        return []
-    latest = bars[-1]
-    previous = bars[-2]
-    price = latest.price_for_basis(config.price_basis)
-    previous_price = previous.price_for_basis(config.price_basis)
-    recommendations: list[tuple[int, RecommendationAction, str]] = []
-    buy_candidates: set[int] = set()
-    if _entry_signal(price, previous_price, config):
-        free_threads = [thread_id for thread_id in range(1, config.thread_count + 1) if thread_id not in open_positions]
-        buy_candidates = set(free_threads[: config.max_entries_per_session])
-    for thread_id in range(1, config.thread_count + 1):
-        if thread_id not in open_positions:
-            if thread_id in buy_candidates:
-                recommendations.append((thread_id, RecommendationAction.BUY, "Entry threshold met and free thread"))
-            else:
-                recommendations.append((thread_id, RecommendationAction.NO_ACTION, "No entry allocated"))
-            continue
-        entry_price, age = open_positions[thread_id]
-        if _take_profit_signal(price, entry_price, config):
-            recommendations.append((thread_id, RecommendationAction.TAKE_PROFIT, "Take-profit threshold reached"))
-        elif _price_stop_signal(price, entry_price, config):
-            recommendations.append((thread_id, RecommendationAction.TIME_STOP, "Price stop threshold reached"))
-        elif age >= config.stop_sessions:
-            recommendations.append((thread_id, RecommendationAction.TIME_STOP, "Holding age reached stop sessions"))
-        else:
-            recommendations.append((thread_id, RecommendationAction.HOLD, "Position remains open"))
-    return recommendations

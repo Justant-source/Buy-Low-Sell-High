@@ -7,15 +7,15 @@ import unittest
 from unittest.mock import patch
 from urllib.error import HTTPError
 
-from soxl_mania.data.normalize import normalize_bars
-from soxl_mania.data.providers.csv_provider import CsvMarketDataProvider
-from soxl_mania.data.providers.investing_provider import InvestingMarketDataProvider
-from soxl_mania.data.providers.stooq_provider import StooqMarketDataProvider
-from soxl_mania.data.providers.yahoo_provider import YahooMarketDataProvider
-from soxl_mania.data.quality import apply_split_to_position, compute_data_hash, summarize_import, validate_bars
-from soxl_mania.data.sync import snapshot_manifest_path, write_snapshot_manifest
-from soxl_mania.domain.models import MarketBar
-from soxl_mania.domain.money import D
+from buy_low_sell_high.data.normalize import normalize_bars
+from buy_low_sell_high.data.providers.csv_provider import CsvMarketDataProvider
+from buy_low_sell_high.data.providers.investing_provider import InvestingMarketDataProvider
+from buy_low_sell_high.data.providers.stooq_provider import StooqMarketDataProvider
+from buy_low_sell_high.data.providers.yahoo_provider import YahooMarketDataProvider
+from buy_low_sell_high.data.quality import apply_split_to_position, compute_data_hash, summarize_import, validate_bars
+from buy_low_sell_high.data.sync import snapshot_manifest_path, write_snapshot_manifest
+from buy_low_sell_high.domain.models import MarketBar
+from buy_low_sell_high.domain.money import D
 
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "sample_soxl.csv"

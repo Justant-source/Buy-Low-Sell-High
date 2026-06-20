@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import unittest
 
-from soxl_mania.cli import bootstrap_check
+from buy_low_sell_high.cli import bootstrap_check
 
 
 class BootstrapSmokeTest(unittest.TestCase):
@@ -12,7 +12,7 @@ class BootstrapSmokeTest(unittest.TestCase):
 
     def test_repository_layout_exists(self) -> None:
         root = Path(__file__).resolve().parents[3]
-        self.assertTrue((root / "engine/src/soxl_mania").exists())
+        self.assertTrue((root / "engine/src/buy_low_sell_high").exists())
         self.assertTrue((root / "dashboard/public").exists())
 
 

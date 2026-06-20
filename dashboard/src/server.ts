@@ -7,8 +7,9 @@ import { HttpError } from "./lib/http.js";
 import { publicRoot, repoRoot } from "./lib/paths.js";
 import { createBacktestsRouter } from "./routes/backtests.js";
 import { createDataRouter } from "./routes/data.js";
-import { createManualRouter } from "./routes/manual.js";
 import { createProfilesRouter } from "./routes/profiles.js";
+import { createWorkspacesRouter } from "./routes/workspaces.js";
+import { defaultWorkspaceDefinition } from "./lib/workspaces.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? process.env.DASHBOARD_PORT ?? 3232);
@@ -20,7 +21,7 @@ app.use(express.static(publicRoot));
 
 app.get("/api/health", (_req, res) => {
   res.json({
-    service: "soxl-mania-dashboard",
+    service: "buy-low-sell-high-dashboard",
     status: "ok",
     phase: "dashboard-v1",
     uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
@@ -28,24 +29,20 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/data", createDataRouter());
+app.use("/api/workspaces", createWorkspacesRouter());
 app.use("/api/profiles", createProfilesRouter());
 app.use("/api/backtests", createBacktestsRouter(backtestService));
-app.use("/api/manual", createManualRouter());
 
 app.get("/", (_req, res) => {
-  res.sendFile(path.join(publicRoot, "backtests.html"));
-});
-
-app.get("/monitor", (_req, res) => {
-  res.sendFile(path.join(publicRoot, "monitor.html"));
+  res.redirect(`/backtests/${defaultWorkspaceDefinition().routeSlug}`);
 });
 
 app.get("/backtests", (_req, res) => {
-  res.sendFile(path.join(publicRoot, "backtests.html"));
+  res.redirect(`/backtests/${defaultWorkspaceDefinition().routeSlug}`);
 });
 
-app.get("/manual", (_req, res) => {
-  res.sendFile(path.join(publicRoot, "manual.html"));
+app.get("/backtests/:workspaceSlug", (_req, res) => {
+  res.sendFile(path.join(publicRoot, "backtests.html"));
 });
 
 app.get("/assets/mentor-reference.jpg", (_req, res) => {
@@ -67,5 +64,5 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 app.listen(port, () => {
-  console.log(`SOXL-Mania dashboard listening on ${port}`);
+  console.log(`Buy-Low-Sell-High dashboard listening on ${port}`);
 });
