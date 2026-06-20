@@ -50,6 +50,7 @@ PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile co
 ./scripts/docker_init.sh
 ./scripts/docker_sync_symbol.sh
 ./scripts/docker_backtest_default.sh
+./scripts/migrate_to_wsl_server.sh
 ```
 
 Docker helper containers use the `buylowsellhigh-` prefix, including `buylowsellhigh-postgres`, `buylowsellhigh-dashboard`, `buylowsellhigh-engine-sync`, and `buylowsellhigh-engine-backtest`.
