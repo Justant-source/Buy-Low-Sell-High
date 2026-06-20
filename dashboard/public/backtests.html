@@ -7,10 +7,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/tokens.css?v=20260620-15">
-<link rel="stylesheet" href="/css/components.css?v=20260620-15">
-<link rel="stylesheet" href="/css/dashboard.css?v=20260620-15">
-<script src="/js/theme.js?v=20260620-15"></script>
+<link rel="stylesheet" href="/css/tokens.css?v=20260620-16">
+<link rel="stylesheet" href="/css/components.css?v=20260620-16">
+<link rel="stylesheet" href="/css/dashboard.css?v=20260620-16">
+<script src="/js/theme.js?v=20260620-16"></script>
 </head>
 <body>
 <div class="app-shell">
@@ -58,10 +58,150 @@
     </div>
 
     <div class="tab-strip" role="tablist" aria-label="백테스트 탭">
+      <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="guide">설명</button>
       <button class="tab-button active" type="button" role="tab" aria-selected="true" data-tab="strategy">전략</button>
       <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="parameter">파라미터 테스트</button>
       <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="mentor">멘토 래퍼런스</button>
     </div>
+
+    <section class="tab-panel" data-tab-panel="guide">
+      <div class="card guide-hero-card">
+        <div class="guide-kicker">처음 보는 사람용</div>
+        <div class="card-title">SOXL 떨사오팔이란?</div>
+        <div class="guide-lead">
+          아주 단순하게 말하면, <strong>SOXL이 전일보다 떨어진 날 한 칸씩 사고</strong>, <strong>매수가보다 다시 올라오면 파는</strong> 분할 매수 전략입니다.
+          한 번에 전부 사지 않고 자본을 여러 칸으로 나누기 때문에, 하락이 이어져도 다음 칸으로 대응할 수 있게 설계되어 있습니다.
+        </div>
+        <div class="guide-chip-row">
+          <span class="badge info">떨 = 떨어지면</span>
+          <span class="badge info">사 = 사고</span>
+          <span class="badge info">오 = 오르면</span>
+          <span class="badge info">팔 = 판다</span>
+        </div>
+      </div>
+
+      <div class="row row-3">
+        <div class="card guide-mini-card">
+          <div class="card-title">왜 SOXL인가</div>
+          <div class="guide-copy">
+            SOXL은 반도체 지수를 3배로 추종하는 레버리지 ETF라서 오를 때도 빠르고, 내릴 때도 빠릅니다.
+            그래서 짧은 반등을 노리는 분할 매수 전략과 잘 맞지만, 변동성이 매우 크기 때문에 리스크도 큽니다.
+          </div>
+        </div>
+        <div class="card guide-mini-card">
+          <div class="card-title">핵심 아이디어</div>
+          <div class="guide-copy">
+            가격이 하락할 때 공포에 한 번에 몰빵하지 않고, 미리 정해둔 여러 개의 Thread로 나눠서 천천히 진입합니다.
+            그리고 각 Thread는 자기 매수가만 기준으로 독립적으로 익절 또는 손절됩니다.
+          </div>
+        </div>
+        <div class="card guide-mini-card">
+          <div class="card-title">가장 중요한 전제</div>
+          <div class="guide-copy">
+            이 화면은 자동매매가 아니라 연구와 수동 판단 지원 도구입니다.
+            특히 기본 기준선인 <span class="mono">ideal_same_close</span> 는 당일 종가 체결을 가정하는 연구용 모델이라 실제 체결보다 낙관적일 수 있습니다.
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">전략은 이렇게 움직입니다</div>
+            <div class="card-sub">복잡한 수식 대신 실제 동작 순서로 이해하면 쉽습니다.</div>
+          </div>
+        </div>
+        <div class="guide-step-grid">
+          <section class="guide-step-card">
+            <div class="guide-step-no">1</div>
+            <div class="guide-step-body">
+              <h3>전일보다 하락하면 1개 Thread 진입</h3>
+              <p>오늘 종가가 어제 종가보다 낮고, 비어 있는 Thread가 있으면 그날은 최대 1개 Thread만 새로 매수합니다.</p>
+            </div>
+          </section>
+          <section class="guide-step-card">
+            <div class="guide-step-no">2</div>
+            <div class="guide-step-body">
+              <h3>매수가보다 올라오면 익절</h3>
+              <p>현재 기본값은 <span class="mono">take_profit_pct = 0</span> 이고 비교는 <span class="mono">&gt;</span> 입니다. 즉, 매수가를 초과하면 익절하고, 매수가와 같기만 해서는 익절하지 않습니다.</p>
+            </div>
+          </section>
+          <section class="guide-step-card">
+            <div class="guide-step-no">3</div>
+            <div class="guide-step-body">
+              <h3>오래 회복 못 하면 손절</h3>
+              <p>정해둔 손절 거래일 수에 도달했는데 아직 매수가를 회복하지 못하면 그 Thread는 손절됩니다. 여기서 보유 기간은 달력일이 아니라 실제 거래일 기준입니다.</p>
+            </div>
+          </section>
+          <section class="guide-step-card">
+            <div class="guide-step-no">4</div>
+            <div class="guide-step-body">
+              <h3>각 Thread는 따로 관리</h3>
+              <p>같은 날 들어간 포지션이 아니어도 됩니다. 어떤 Thread는 이미 익절했고, 다른 Thread는 손절 대기 중일 수 있습니다. 그래서 Thread Timeline이 중요합니다.</p>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div class="row row-2">
+        <div class="card">
+          <div class="card-title">가장 많이 보는 파라미터</div>
+          <div class="guide-param-list">
+            <div class="meta-item">
+              <span>Thread 수</span>
+              <strong>자본을 몇 칸으로 나눌지</strong>
+              <small>예: 5면 자본을 5개의 독립 슬롯으로 나눔</small>
+            </div>
+            <div class="meta-item">
+              <span>손절일</span>
+              <strong>몇 거래일 동안 회복을 기다릴지</strong>
+              <small>예: 40이면 40거래일이 지나도 회복 못 하면 손절</small>
+            </div>
+            <div class="meta-item">
+              <span>COMBO</span>
+              <strong>Thread 수 x 손절일</strong>
+              <small>예: 5x40 = Thread 5개, 손절 40거래일</small>
+            </div>
+            <div class="meta-item">
+              <span>기본 익절</span>
+              <strong>현재는 0%</strong>
+              <small>매수가 초과 시 바로 익절, 같으면 익절 아님</small>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">이 화면은 이렇게 읽습니다</div>
+          <div class="guide-reading-list">
+            <div class="stack-row"><span class="title">기간 설정</span><span class="muted">언제부터 언제까지 볼지 정합니다.</span></div>
+            <div class="stack-row"><span class="title">콤보 랭킹</span><span class="muted">어떤 Thread 수 / 손절일 조합이 좋았는지 비교합니다.</span></div>
+            <div class="stack-row"><span class="title">Rebased Equity</span><span class="muted">선택 기간의 누적 성과 흐름을 봅니다.</span></div>
+            <div class="stack-row"><span class="title">Thread Timeline</span><span class="muted">각 Thread가 언제 샀고 언제 팔렸는지 시간축으로 봅니다.</span></div>
+            <div class="stack-row"><span class="title">거래 이력</span><span class="muted">실제 trade row 단위로 진입가, 종료가, 수익, 보유 기간을 확인합니다.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card guide-roadmap-card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">다음 단계 예정: QQQ 레짐 파라미터</div>
+            <div class="card-sub">아직 적용된 기능은 아니고, 추가 예정인 설명입니다.</div>
+          </div>
+        </div>
+        <div class="guide-copy">
+          현재 기본 익절 기준은 <span class="mono">0%</span> 입니다. 즉, 매수가를 조금이라도 초과하면 익절하는 매우 단순한 규칙입니다.
+          앞으로는 QQQ를 기준으로 시장이 <strong>상승기인지 하락기인지 레짐을 판별</strong>하는 파라미터를 추가할 예정입니다.
+        </div>
+        <div class="guide-copy">
+          이 파라미터가 들어가면 익절 기준을 항상 똑같이 두지 않고, 시장 상태에 따라 다르게 줄 수 있습니다.
+          예를 들면 상승기에는 더 길게 보유하도록 익절 기준을 높이고, 하락기에는 더 짧고 보수적으로 익절하도록 만들 수 있습니다.
+        </div>
+        <div class="notice">
+          중요한 점: 지금 현재 엔진과 대시보드의 기본 동작은 여전히 <span class="mono">take_profit_pct = 0</span> 입니다.
+          QQQ 레짐 기반 익절은 설명에만 먼저 적어두는 예정 기능이며, 실제 코드에 들어가면 별도 파라미터와 검증 문서가 함께 추가되어야 합니다.
+        </div>
+      </div>
+    </section>
 
     <section class="tab-panel active" data-tab-panel="strategy">
       <div class="card">
@@ -419,7 +559,7 @@
   </main>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
-<script src="/js/common.js?v=20260620-15"></script>
-<script src="/js/backtests-dashboard.js?v=20260620-15"></script>
+<script src="/js/common.js?v=20260620-16"></script>
+<script src="/js/backtests-dashboard.js?v=20260620-16"></script>
 </body>
 </html>

@@ -78,6 +78,108 @@
   display: flex;
 }
 
+.guide-hero-card {
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--primary) 16%, transparent), transparent 38%),
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 10%, var(--surface)), var(--surface));
+}
+
+.guide-kicker {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  color: var(--primary-text);
+  font: var(--t-overline);
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+
+.guide-lead {
+  margin-top: 12px;
+  max-width: 900px;
+  color: var(--text);
+  font: 500 15px/1.75 var(--font-sans);
+}
+
+.guide-chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.guide-mini-card,
+.guide-roadmap-card {
+  min-height: 100%;
+}
+
+.guide-copy {
+  color: var(--text);
+  font: var(--t-body);
+  line-height: 1.7;
+}
+
+.guide-copy + .guide-copy {
+  margin-top: 12px;
+}
+
+.guide-step-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-4);
+}
+
+.guide-step-card {
+  display: flex;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+}
+
+.guide-step-no {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  color: var(--primary-text);
+  font: 700 14px/1 var(--font-mono);
+}
+
+.guide-step-body h3 {
+  margin: 0 0 6px;
+  font: var(--t-h3);
+}
+
+.guide-step-body p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.65;
+}
+
+.guide-param-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+
+.guide-param-list .meta-item small {
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.guide-reading-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .empty-state {
   position: absolute;
   inset: 0;
@@ -240,6 +342,11 @@
 
   .field-grid,
   .meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-step-grid,
+  .guide-param-list {
     grid-template-columns: 1fr;
   }
 }
