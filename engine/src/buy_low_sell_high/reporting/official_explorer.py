@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
+from ..code_version import current_code_commit
 from ..domain.models import MarketBar, StrategyConfig
 from .research_common import CORE_PROFILE_CATALOG, CORE_PROFILE_CATALOG_ID
 from .strategy_explorer import STRATEGY_RANKING_BASIS, build_strategy_explorer, combo_key
@@ -18,6 +19,7 @@ def build_official_explorer(
     catalog: tuple[dict[str, Any], ...] = CORE_PROFILE_CATALOG,
     catalog_id: str = CORE_PROFILE_CATALOG_ID,
 ) -> dict[str, Any]:
+    code_commit = current_code_commit()
     explorer = build_strategy_explorer(
         bars,
         base_config,
@@ -41,7 +43,7 @@ def build_official_explorer(
             "period_start": bars[0].session_date.isoformat(),
             "period_end": bars[-1].session_date.isoformat(),
             "data_hash": data_hash,
-            "code_commit": "workspace",
+            "code_commit": code_commit,
             "selection_basis": STRATEGY_RANKING_BASIS,
             "official_profile_id": base_config.profile_id,
             "official_combo_key": official_combo_key,

@@ -13,6 +13,7 @@
 - 표준 매니페스트 경로는 대응하는 `data/manifests/{csv_stem}.json`이다.
 - 현재 공식 SOXL 기준선은 `data/raw/soxl_daily_2011_present.csv`와 `data/manifests/soxl_daily_2011_present.json`이다.
 - 현재 공식 TQQQ 기준선은 `data/raw/tqqq_daily_2011_present.csv`와 `data/manifests/tqqq_daily_2011_present.json`이다.
+- SOXL 공식 기준선은 checked-in golden fixture와 결합된 제품 gate다.
 - TQQQ 공식 기준선은 runtime canonical profile이며, golden fixture/parity 기준은 계속 SOXL 전용 `official_reference_matrix.json`과 `official_explorer_summary.json`에 둔다.
 - `SOXL`, `TQQQ`는 Yahoo chart를 우선 소스로 사용하며 실패 시 Investing, Stooq fallback을 사용한다.
 - `000660`, `0193T0`, `233740`, `462330`는 네이버 일별시세를 소스로 사용한다.
@@ -33,10 +34,12 @@
 - 백테스트 trade의 `shares`는 항상 양의 정수다. 진입 예산이 1주 미만이면 해당 진입은 `ENTRY_SKIPPED`로 기록한다.
 - open thread equity는 미투자 현금과 mark-to-market 포지션 가치를 함께 보존해야 한다.
 - 모든 백테스트 실행과 연구 산출물은 `config_hash`, `data_hash`, `code_commit`를 함께 보관해야 한다.
-- `backtest_research_artifacts`는 `Strategy Explorer`와 `Sweep Explorer`의 정규화된 저장소다.
+- `code_commit`은 현재 저장소의 git HEAD를 기본으로 하고, 연구 관련 경로(`engine`, `dashboard`, `configs`, 루트 manifest`)에 미커밋 변경이 있으면 dirty fingerprint를 덧붙여 캐시 재사용 기준으로 사용한다.
+- `backtest_research_artifacts`는 `Strategy Explorer`, `Strategy Ranking`, `Sweep Explorer`의 정규화된 저장소다.
   - 공통 메타데이터: `artifact_key`, `artifact_kind`, `profile_id`, `symbol`, `csv_path`, `execution_model`, `price_basis`, `data_hash`, `code_commit`, `created_at`
   - 선택 메타데이터: `catalog_id`, `catalog_hash`, `sweep_id`, `sweep_hash`, `payload_hash`
   - 본문: `payload JSONB`
+- `Strategy Detail`과 `Thread Timeline`은 현재 저장형 연구 artifact가 아니라, slice-aware 메모리 캐시만 사용한다.
 - `backtest_research_sweep_rows`는 현재 `core4_v4` sweep 결과를 row 단위로 펼쳐 저장한다.
   - UI sweep 파라미터는 `thread_count`, `stop_sessions`, `buy_pct`, `sell_pct` 4개이며 총 726조합이다.
   - DB 호환 컬럼은 기존 스키마를 유지한다.
@@ -45,11 +48,13 @@
   - `stop_loss_pct`는 현재 고정값 `0`이다.
   - `max_entries_per_session`은 현재 고정값 `1`이다.
   - 대시보드의 현재 전략/스윕 랭킹 핵심 지표는 `full_return_pct`, `cagr_pct`, `max_drawdown_pct`다.
+  - `cagr_pct`는 항상 유한해야 한다. 종료 자산이 `0` 이하이거나 연환산 계산이 비정상이면 엔진은 총수익률을 대체 저장한다.
   - 강건성 컬럼: `mean_segment_return_pct`, `segment_stddev_pct`, `worst_segment_return_pct`, `positive_segment_ratio_pct`, `recent_segment_return_pct`
   - Pareto 컬럼: `pareto_return_mdd`, `pareto_return_stability`
 - 대시보드가 `DATABASE_URL`을 받으면 PostgreSQL을 공유 연구 저장소로 사용한다.
 - 대시보드가 `SQLITE_PATH`를 받으면 동일한 연구 산출물을 로컬 SQLite 파일에 저장한다.
 - `DATABASE_URL`과 `SQLITE_PATH`가 모두 없을 때만 in-memory fallback을 사용할 수 있으며, 공유 저장소로 간주하지 않는다.
+- 대시보드는 startup 시 strategy-ranking preset artifact를 미리 채울 수 있지만, 이 warmup 실패는 저장소 무결성 오류가 아니라 best-effort 캐시 실패로 취급한다.
 - 공식 제품 golden fixture는 `engine/tests/fixtures/official_reference_matrix.json`과 `engine/tests/fixtures/official_explorer_summary.json`에 위치한다.
 - 고정된 멘토 레퍼런스 화면 fixture는 `engine/tests/fixtures/mentor_reference_matrix.yaml`에 위치하며 `legacy comparison` 전용이다.
 - 멘토 매트릭스는 두 가지 결과 계열을 구분한다.

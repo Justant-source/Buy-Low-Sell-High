@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { codeCommitMatchesCurrent } from "./code-version.js";
 import { HttpError } from "./http.js";
 import { getDataStatus } from "./data-service.js";
 import { defaultCsvPathForSymbol } from "./paths.js";
@@ -108,6 +109,8 @@ export interface StrategyDetailInput {
   csvPath?: string;
   initialCapital?: number;
   strategyId: string;
+  sliceStart?: string;
+  sliceEnd?: string;
   executionModel?: string;
   priceBasis?: string;
 }
@@ -123,6 +126,8 @@ export interface ThreadTimelineInput {
   csvPath?: string;
   initialCapital?: number;
   strategyId: string;
+  sliceStart?: string;
+  sliceEnd?: string;
   executionModel?: string;
   priceBasis?: string;
 }
@@ -555,6 +560,8 @@ function makeStrategyDetailCacheKey(input: {
   executionModel: string;
   priceBasis: string;
   strategyId: string;
+  sliceStart?: string;
+  sliceEnd?: string;
 }): string {
   return shortDigest([
     STRATEGY_DETAIL_VERSION,
@@ -565,6 +572,8 @@ function makeStrategyDetailCacheKey(input: {
     input.executionModel,
     input.priceBasis,
     input.strategyId,
+    input.sliceStart,
+    input.sliceEnd,
   ]);
 }
 
@@ -576,6 +585,8 @@ function makeThreadTimelineCacheKey(input: {
   executionModel: string;
   priceBasis: string;
   strategyId: string;
+  sliceStart?: string;
+  sliceEnd?: string;
 }): string {
   return shortDigest([
     THREAD_TIMELINE_VERSION,
@@ -586,7 +597,18 @@ function makeThreadTimelineCacheKey(input: {
     input.executionModel,
     input.priceBasis,
     input.strategyId,
+    input.sliceStart,
+    input.sliceEnd,
   ]);
+}
+
+function isReusableResearchArtifact<TPayload>(
+  artifact: ResearchArtifactRecord<TPayload> | null | undefined,
+): artifact is ResearchArtifactRecord<TPayload> {
+  if (!artifact) {
+    return false;
+  }
+  return codeCommitMatchesCurrent(artifact.codeCommit);
 }
 
 async function saveStrategyArtifact(
@@ -759,11 +781,12 @@ export class BacktestService {
       sweepId,
     });
     const cached = await store.findByKey<ParameterSweepPayload>(artifactKey);
+    const reusableCached = isReusableResearchArtifact(cached);
     const now = new Date().toISOString();
     const job: DashboardJobRecord = {
       jobId: newJobId(),
       kind: "BACKTEST_SWEEP",
-      status: cached ? "COMPLETED" : "QUEUED",
+      status: reusableCached ? "COMPLETED" : "QUEUED",
       profileId: input.profileId,
       symbol: profile.symbol,
       csvPath,
@@ -771,18 +794,18 @@ export class BacktestService {
       configHash: profilePayload.configHash,
       dataHash: dataStatus.data_hash,
       requestedAt: now,
-      startedAt: cached ? now : null,
-      finishedAt: cached ? now : null,
-      progress: cached ? 100 : 0,
+      startedAt: reusableCached ? now : null,
+      finishedAt: reusableCached ? now : null,
+      progress: reusableCached ? 100 : 0,
       runId: null,
-      artifactId: cached?.artifactId ?? null,
+      artifactId: reusableCached ? cached.artifactId : null,
       error: null,
       sweepId,
       executionModel,
       priceBasis,
     };
     await saveJob(job);
-    if (!cached) {
+    if (!reusableCached) {
       this.queuedJobIds.add(job.jobId);
       void this.drainQueue();
     }
@@ -805,7 +828,7 @@ export class BacktestService {
       catalogId,
     });
     const cached = await store.findByKey<StrategyExplorerPayload>(artifactKey);
-    if (cached) {
+    if (isReusableResearchArtifact(cached)) {
       this.queueStrategyRankingPresetWarmup(
         {
           profileId: input.profileId,
@@ -877,7 +900,7 @@ export class BacktestService {
       return applyStrategyRankingLimit(await pending, limit);
     }
     const stored = await store.findByKey<StrategyRankingPayload>(cacheKey);
-    if (stored?.payload && isCompleteStrategyRankingPayload(stored.payload)) {
+    if (isReusableResearchArtifact(stored) && isCompleteStrategyRankingPayload(stored.payload)) {
       this.strategyRankingCache.set(cacheKey, stored.payload);
       return applyStrategyRankingLimit(stored.payload, limit);
     }
@@ -975,6 +998,8 @@ export class BacktestService {
       executionModel,
       priceBasis,
       strategyId: input.strategyId,
+      sliceStart: input.sliceStart,
+      sliceEnd: input.sliceEnd,
     });
     const cached = this.strategyDetailCache.get(cacheKey);
     if (cached) {
@@ -997,6 +1022,8 @@ export class BacktestService {
       String(initialCapital),
       "--strategy-id",
       input.strategyId,
+      ...(input.sliceStart ? ["--slice-start", input.sliceStart] : []),
+      ...(input.sliceEnd ? ["--slice-end", input.sliceEnd] : []),
       "--execution-model",
       executionModel,
       "--price-basis",
@@ -1041,6 +1068,8 @@ export class BacktestService {
       executionModel,
       priceBasis,
       strategyId: input.strategyId,
+      sliceStart: input.sliceStart,
+      sliceEnd: input.sliceEnd,
     });
     const cached = this.threadTimelineCache.get(cacheKey);
     if (cached) {
@@ -1061,6 +1090,8 @@ export class BacktestService {
       profile.symbol,
       "--strategy-id",
       input.strategyId,
+      ...(input.sliceStart ? ["--slice-start", input.sliceStart] : []),
+      ...(input.sliceEnd ? ["--slice-end", input.sliceEnd] : []),
       "--initial-capital",
       String(initialCapital),
       "--execution-model",
@@ -1079,23 +1110,22 @@ export class BacktestService {
   }
 
   async getLatestSweep(input: SweepJobInput): Promise<ResearchArtifactRecord<ParameterSweepPayload> | null> {
-    const profile = getProfileDefinition(input.profileId);
-    if (!profile) {
-      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
-    }
-    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
+    const { profile, csvPath, initialCapital } = await resolveProfileContext(input);
     const executionModel = input.executionModel ?? defaultSweepExecutionModel();
     const priceBasis = input.priceBasis ?? defaultSweepPriceBasis(profile);
     const sweepId = input.sweepId ?? DEFAULT_SWEEP_ID;
     const [dataStatus, store] = await Promise.all([getDataStatus(csvPath, profile.symbol), getResearchStore()]);
-    const artifact = await store.loadLatestSweep<ParameterSweepPayload>({
-      sweepId,
+    const artifactKey = makeSweepArtifactKey({
+      profileId: input.profileId,
       csvPath,
+      dataHash: dataStatus.data_hash,
+      initialCapital,
       executionModel,
       priceBasis,
-      dataHash: dataStatus.data_hash,
+      sweepId,
     });
-    if (!artifact) {
+    const artifact = await store.findByKey<ParameterSweepPayload>(artifactKey);
+    if (!isReusableResearchArtifact(artifact)) {
       return null;
     }
     return {

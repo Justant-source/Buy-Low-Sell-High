@@ -6,6 +6,7 @@ from itertools import product
 from typing import Any
 
 from ..backtest.engine import run_backtest
+from ..code_version import current_code_commit
 from ..domain.enums import ExecutionModel, PriceBasis, SizingMode, ThreadSelector
 from ..domain.models import MarketBar, StrategyConfig
 from ..domain.money import D
@@ -125,6 +126,7 @@ def build_parameter_sweep(
 ) -> dict[str, Any]:
     period_start = bars[0].session_date
     period_end = bars[-1].session_date
+    code_commit = current_code_commit()
     segment_presets = build_macro_segment_presets(period_start, period_end)
     rows: list[dict[str, Any]] = []
     fixed_values = definition.get("fixed_values", {})
@@ -229,7 +231,7 @@ def build_parameter_sweep(
             "period_start": period_start.isoformat(),
             "period_end": period_end.isoformat(),
             "data_hash": data_hash,
-            "code_commit": "workspace",
+            "code_commit": code_commit,
             "combo_count": len(rows),
             "segment_presets": segment_presets,
             "parameter_values": definition["parameter_values"],

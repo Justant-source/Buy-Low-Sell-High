@@ -8,6 +8,7 @@ import json
 from typing import Any
 from uuid import uuid4
 
+from ..code_version import current_code_commit
 from .enums import CloseReason, EndOfTestMode, EventOrder, ExecutionModel, PriceBasis, SizingMode, ThreadSelector, ThreadState, YearBoundary
 from .money import D, ZERO, quantize_money, quantize_shares
 
@@ -199,7 +200,7 @@ class BacktestRun:
     daily: list[DailySnapshot]
     yearly: dict[int, dict[str, Any]]
     metrics: dict[str, Decimal | int | str]
-    code_commit: str = "workspace"
+    code_commit: str = field(default_factory=current_code_commit)
 
 
 @dataclass

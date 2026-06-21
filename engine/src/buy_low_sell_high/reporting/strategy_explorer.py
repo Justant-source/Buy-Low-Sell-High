@@ -8,6 +8,7 @@ import os
 from typing import Any
 
 from ..backtest.engine import run_backtest
+from ..code_version import current_code_commit
 from ..domain.enums import PriceBasis
 from ..domain.models import MarketBar, StrategyConfig
 from ..domain.money import D, ZERO
@@ -212,6 +213,7 @@ def build_slice_strategy_rankings(
 ) -> dict[str, Any]:
     period_start = bars[0].session_date
     period_end = bars[-1].session_date
+    code_commit = current_code_commit()
     segment_presets = build_macro_segment_presets(period_start, period_end)
     strategy_specs = iter_parameter_strategy_specs(PARAMETER_SWEEP_DEFINITION)
     resolved_workers = _resolve_strategy_ranking_workers(max_workers, len(strategy_specs))
@@ -277,7 +279,7 @@ def build_slice_strategy_rankings(
             "period_start": period_start.isoformat(),
             "period_end": period_end.isoformat(),
             "data_hash": data_hash,
-            "code_commit": "workspace",
+            "code_commit": code_commit,
             "ranking_basis": SLICE_RANKING_BASIS,
             "segment_presets": segment_presets,
             "combo_count": len(rows),
@@ -298,6 +300,7 @@ def build_strategy_explorer(
 ) -> dict[str, Any]:
     period_start = bars[0].session_date
     period_end = bars[-1].session_date
+    code_commit = current_code_commit()
     slice_presets = build_slice_presets(period_start, period_end)
     macro_presets = build_macro_segment_presets(period_start, period_end)
     resolved_price_basis = PriceBasis(price_basis)
@@ -340,7 +343,7 @@ def build_strategy_explorer(
             "period_start": period_start.isoformat(),
             "period_end": period_end.isoformat(),
             "data_hash": data_hash,
-            "code_commit": "workspace",
+            "code_commit": code_commit,
             "ranking_basis": STRATEGY_RANKING_BASIS,
             "slice_presets": slice_presets,
             "segment_presets": macro_presets,

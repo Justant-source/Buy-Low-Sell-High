@@ -339,9 +339,14 @@ def _backtest_strategy_ranking(args: argparse.Namespace) -> int:
 def _backtest_strategy_detail(args: argparse.Namespace) -> int:
     config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
     bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
+    sliced_bars = filter_bars_to_slice(
+        bars,
+        slice_start=date.fromisoformat(args.slice_start) if args.slice_start else None,
+        slice_end=date.fromisoformat(args.slice_end) if args.slice_end else None,
+    )
     return _print_json(
         build_strategy_detail(
-            bars,
+            sliced_bars,
             config,
             strategy_id=args.strategy_id,
             data_hash=data_hash,
@@ -393,9 +398,14 @@ def _backtest_official_matrix(args: argparse.Namespace) -> int:
 def _backtest_thread_timeline(args: argparse.Namespace) -> int:
     config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
     bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
+    sliced_bars = filter_bars_to_slice(
+        bars,
+        slice_start=date.fromisoformat(args.slice_start) if args.slice_start else None,
+        slice_end=date.fromisoformat(args.slice_end) if args.slice_end else None,
+    )
     return _print_json(
         build_thread_timeline(
-            bars,
+            sliced_bars,
             config,
             strategy_id=args.strategy_id,
             data_hash=data_hash,
@@ -569,6 +579,8 @@ def main() -> int:
     backtest_strategy_detail_parser.add_argument("--symbol")
     backtest_strategy_detail_parser.add_argument("--initial-capital", type=float, default=10000.0)
     backtest_strategy_detail_parser.add_argument("--strategy-id", required=True)
+    backtest_strategy_detail_parser.add_argument("--slice-start")
+    backtest_strategy_detail_parser.add_argument("--slice-end")
     backtest_strategy_detail_parser.add_argument(
         "--execution-model",
         default="ideal_same_close",
@@ -619,6 +631,8 @@ def main() -> int:
     backtest_thread_timeline_parser.add_argument("--strategy-id", required=True)
     backtest_thread_timeline_parser.add_argument("--catalog-id", default="core_profiles_v2")
     backtest_thread_timeline_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    backtest_thread_timeline_parser.add_argument("--slice-start")
+    backtest_thread_timeline_parser.add_argument("--slice-end")
     backtest_thread_timeline_parser.add_argument(
         "--execution-model",
         default="ideal_same_close",

@@ -629,7 +629,9 @@
     state.strategyRankingError = "";
     state.selectedStrategyIds = [];
     state.focusedStrategyId = null;
+    state.strategyDetails = {};
     state.threadTimeline = null;
+    state.threadTimelineCache = {};
     state.strategyRankingOpenFilterKey = null;
     resetStrategyRankingPage();
     abortStrategyRankingRequest();
@@ -753,6 +755,7 @@
     if (!ids.length || !state.dataStatus) {
       return;
     }
+    const slice = currentStrategySlice();
     const executionModel = currentStrategyExecutionModel();
     const priceBasis = currentStrategyPriceBasis();
     const csvPath = state.dataStatus.snapshot_path || "";
@@ -768,6 +771,12 @@
           executionModel,
           priceBasis,
         });
+        if (slice?.start) {
+          params.set("sliceStart", slice.start);
+        }
+        if (slice?.end) {
+          params.set("sliceEnd", slice.end);
+        }
         const payload = await ui.fetchJson(`/api/backtests/strategy-detail?${params.toString()}`);
         state.strategyDetails[strategyId] = payload;
       }),
@@ -2417,9 +2426,10 @@
       return;
     }
     const csvPath = state.dataStatus.snapshot_path || "";
+    const slice = currentStrategySlice();
     const executionModel = currentStrategyExecutionModel();
     const priceBasis = currentStrategyPriceBasis();
-    const cacheKey = [state.focusedStrategyId, csvPath, executionModel, priceBasis].join(":");
+    const cacheKey = [state.focusedStrategyId, csvPath, executionModel, priceBasis, slice?.start || "", slice?.end || ""].join(":");
     if (state.threadTimelineCache[cacheKey]) {
       state.threadTimeline = state.threadTimelineCache[cacheKey];
       resetThreadHistoryPage();
@@ -2433,6 +2443,12 @@
       executionModel,
       priceBasis,
     });
+    if (slice?.start) {
+      params.set("sliceStart", slice.start);
+    }
+    if (slice?.end) {
+      params.set("sliceEnd", slice.end);
+    }
     try {
       const payload = await ui.fetchJson(`/api/backtests/thread-timeline?${params.toString()}`);
       state.threadTimelineCache[cacheKey] = payload;

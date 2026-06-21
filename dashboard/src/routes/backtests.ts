@@ -139,6 +139,8 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
       const csvPath = typeof req.query.csvPath === "string" && req.query.csvPath.trim() !== "" ? req.query.csvPath : undefined;
       const initialCapital = parseNumber(req.query.initialCapital, 10000);
       const strategyId = requireString(req.query.strategyId, "strategyId");
+      const sliceStart = typeof req.query.sliceStart === "string" && req.query.sliceStart.trim() !== "" ? req.query.sliceStart : undefined;
+      const sliceEnd = typeof req.query.sliceEnd === "string" && req.query.sliceEnd.trim() !== "" ? req.query.sliceEnd : undefined;
       const executionModel = parseOptionalEnumField(req.query.executionModel, "executionModel", [
         "ideal_same_close",
         "next_open",
@@ -154,6 +156,8 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
           csvPath,
           initialCapital,
           strategyId,
+          sliceStart,
+          sliceEnd,
           executionModel,
           priceBasis,
         }),
@@ -184,6 +188,8 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
       const csvPath = typeof req.query.csvPath === "string" && req.query.csvPath.trim() !== "" ? req.query.csvPath : undefined;
       const initialCapital = parseNumber(req.query.initialCapital, 10000);
       const strategyId = requireString(req.query.strategyId, "strategyId");
+      const sliceStart = typeof req.query.sliceStart === "string" && req.query.sliceStart.trim() !== "" ? req.query.sliceStart : undefined;
+      const sliceEnd = typeof req.query.sliceEnd === "string" && req.query.sliceEnd.trim() !== "" ? req.query.sliceEnd : undefined;
       const executionModel = parseOptionalEnumField(req.query.executionModel, "executionModel", [
         "ideal_same_close",
         "next_open",
@@ -199,6 +205,8 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
           csvPath,
           initialCapital,
           strategyId,
+          sliceStart,
+          sliceEnd,
           executionModel,
           priceBasis,
         }),

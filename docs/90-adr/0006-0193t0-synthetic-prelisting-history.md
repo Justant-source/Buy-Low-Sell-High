@@ -20,6 +20,7 @@
 - synthetic row는 `source=synthetic_naver`로 저장하고 manifest와 `data status` 경고에 synthetic 기간을 남긴다.
 
 ## 결과
-- `/backtests/0193T0`는 SOXL와 같은 9콤보 연구 UI를 재사용할 수 있다.
+- `/backtests/0193T0`는 다른 workspace와 같은 공통 연구 UI shell을 재사용할 수 있다.
 - `0193T0`는 `raw_close_with_actions`를 기본 가격 기준으로 사용한다.
-- `SOXL` 전용 공식/멘토 참조 탭은 `referenceMode=backtest_only`로 숨긴다.
+- 4번째 공식/멘토 참조 탭은 `referenceMode=backtest_only`로 숨긴다.
+- 이 workspace는 `TQQQ` official reference, `SOXL` mentor reference와 같은 제품 셸 안에 공존하지만 synthetic 경고를 항상 유지해야 한다.

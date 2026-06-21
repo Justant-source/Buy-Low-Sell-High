@@ -5,18 +5,19 @@
 
 ## 배경
 멘토 백테스트 이미지는 `/backtests` 멘토 매트릭스의 권위 있는 화면 레퍼런스다. 저장소에는 이미 부분 전사 JSON이 있었지만, 현재 런타임 엔진과 로컬 SOXL 스냅샷은 이 이미지에 대한 parity를 만족하지 않는다.
+이 ADR의 적용 범위는 `workspace.referenceMode=mentor_reference`, 현재는 `SOXL` 하나다. `TQQQ`는 official reference만 노출하고, `backtest_only` workspace는 이 화면을 숨긴다.
 
 Phase A에서는 런타임 코드에서 현재 엔진 동작을 직접 검증했다.
 
 - `year_boundary`는 `StrategyConfig`에 존재하지만 `run_strategy()`는 이를 소비하지 않는다. 현재 동작은 사실상 모든 실행에서 `carry`다.
-- `end_of_test=force_close`는 전체 백테스트 종료 시점에만 구현되어 있으며, 연도 경계에는 적용되지 않는다.
+- 기본 `end_of_test`는 `mark_to_market`이며, `force_close`는 전체 백테스트 마지막 세션에만 opt-in으로 구현되어 있다. 연도 경계에는 적용되지 않는다.
 - `sizing_mode=fixed_principal`는 신규 진입마다 초기 스레드 원금을 사용한다.
 - `sizing_mode=thread_compound`는 신규 진입마다 각 스레드의 현재 free equity를 사용한다.
 - `sizing_mode=portfolio_rebalance_compound`는 신규 진입마다 `total_equity / thread_count`를 사용한다.
 - 현재 변동성 helper는 일별 equity 수익률의 모집단 표준편차를 계산하는데, 이것은 멘토 매트릭스의 연간 수익률 표준편차 행과 같은 지표가 아니다.
 - `price_basis=adjusted_close`는 `MarketBar.adj_close`를 읽지만, 현재 표준 로컬 스냅샷은 전체 구간에서 `adj_close`가 `close`를 그대로 복제하기 때문에 adjusted-close parity를 지원하지 못한다는 경고를 낸다.
 
-2026-06-19 기준 로컬 스냅샷 관측 상태:
+2026-06-21 기준 로컬 스냅샷 관측 상태:
 
 - 전체 스냅샷 `data_hash`: `87c5a8bd35006c7a2624d99d0609ba5302e97807d332a567db121be1ff668aca`
 - 2011-2024 구간 `data_hash`: `ce269809b8ce2eb0140935980842607bb21c9e994d43983b38f3e3109245633f`
@@ -76,3 +77,4 @@ Phase A에서는 런타임 코드에서 현재 엔진 동작을 직접 검증했
   - `PASS`: 값이 맞고 `data_hash`도 일치
   - `FAIL`: 권위 있는 데이터셋을 사용했지만 값이 다름
   - `DATA_MISMATCH`: 현재 데이터셋으로는 parity 자체를 주장할 수 없음
+- 대시보드 4번째 탭 라벨은 workspace에 따라 달라질 수 있지만, 이 ADR이 규정하는 legacy mentor card는 `mentor_reference` workspace에서만 렌더되어야 한다.

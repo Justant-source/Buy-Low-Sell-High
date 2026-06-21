@@ -9,7 +9,15 @@ import json
 import unittest
 
 from buy_low_sell_high.backtest.parity import ParityResult
-from buy_low_sell_high.cli import _data_status, _load_strategy_config_with_overrides, _parity_exit_code, _serialize_config, default_market_data_csv
+from buy_low_sell_high.cli import (
+    _backtest_strategy_detail,
+    _backtest_thread_timeline,
+    _data_status,
+    _load_strategy_config_with_overrides,
+    _parity_exit_code,
+    _serialize_config,
+    default_market_data_csv,
+)
 from buy_low_sell_high.data.providers.yahoo_provider import write_bars_to_csv
 from buy_low_sell_high.data.sync import write_snapshot_manifest
 from buy_low_sell_high.domain.models import MarketBar
@@ -18,6 +26,54 @@ from buy_low_sell_high.domain.models import StrategyConfig
 
 
 class CliDefaultsTest(unittest.TestCase):
+    def test_strategy_detail_cli_respects_slice_boundaries(self) -> None:
+        profile = Path(__file__).resolve().parents[3] / "configs" / "strategies" / "soxl_official_ddeolsao_pal_v1.yaml"
+        csv_path = Path(__file__).resolve().parents[1] / "fixtures" / "sample_soxl.csv"
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            exit_code = _backtest_strategy_detail(
+                Namespace(
+                    profile=str(profile),
+                    csv=str(csv_path),
+                    symbol="SOXL",
+                    initial_capital=10000.0,
+                    strategy_id="t5-s40-buy-2-sell+0",
+                    slice_start="2024-01-03",
+                    slice_end="2024-01-04",
+                    execution_model="ideal_same_close",
+                    price_basis="adjusted_close",
+                )
+            )
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["daily"][0]["session_date"], "2024-01-03")
+        self.assertEqual(payload["daily"][-1]["session_date"], "2024-01-04")
+
+    def test_thread_timeline_cli_respects_slice_boundaries(self) -> None:
+        profile = Path(__file__).resolve().parents[3] / "configs" / "strategies" / "soxl_official_ddeolsao_pal_v1.yaml"
+        csv_path = Path(__file__).resolve().parents[1] / "fixtures" / "sample_soxl.csv"
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            exit_code = _backtest_thread_timeline(
+                Namespace(
+                    profile=str(profile),
+                    csv=str(csv_path),
+                    symbol="SOXL",
+                    initial_capital=10000.0,
+                    strategy_id="t5-s40-buy-2-sell+0",
+                    catalog_id="core_profiles_v2",
+                    slice_start="2024-01-03",
+                    slice_end="2024-01-04",
+                    execution_model="ideal_same_close",
+                    price_basis="adjusted_close",
+                )
+            )
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["meta"]["period_start"], "2024-01-03")
+        self.assertEqual(payload["meta"]["period_end"], "2024-01-04")
+        self.assertTrue(all("2024-01-03" <= row["session_date"] <= "2024-01-04" for row in payload["sessions"]))
+
     def test_default_market_data_csv_points_to_repo_snapshot(self) -> None:
         path = Path(default_market_data_csv())
         self.assertEqual(path.name, "soxl_daily_2011_present.csv")

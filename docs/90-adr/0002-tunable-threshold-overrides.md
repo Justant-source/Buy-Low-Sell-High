@@ -4,7 +4,7 @@
 승인됨
 
 ## 배경
-이제 대시보드 워크벤치는 사용자가 선택한 `thread_count`, `stop_sessions`, 익절 임계값, 진입 하락 임계값, 가격 손절, 사이징 모드, 가격 기준으로 멘토 전략을 실행할 수 있어야 한다. 이 값들은 결정성을 유지해야 하며, `config_hash`에 포함되어야 하고, 백테스트 실행 경로 사이에서 조용히 어긋나면 안 된다.
+이제 대시보드 워크벤치는 사용자가 선택한 `thread_count`, `stop_sessions`, 익절 임계값, 진입 하락 임계값, 가격 손절, 사이징 모드, 가격 기준으로 떨사오팔 전략을 실행할 수 있어야 한다. 이 값들은 결정성을 유지해야 하며, `config_hash`에 포함되어야 하고, `SOXL` mentor reference, `TQQQ` official reference, `backtest_only` workspace 사이에서 조용히 어긋나면 안 된다.
 
 ## 결정
 - `thread_count` 기본값은 `7`이다.
@@ -17,6 +17,8 @@
 - `profit_precedes_stop=true`이면 여러 청산 조건이 동시에 참일 때 가격 손절과 시간 손절보다 익절을 우선한다.
 - parity 리포트와 대시보드 요약에서는 기존 `time_stop_count` 집계 안에 `PRICE_STOP`을 포함해, 별도의 손절 열을 추가하지 않고도 총 손절 수가 일관되게 보이도록 한다.
 - 동일한 임계값 로직은 `run_strategy()`와 각 리포트 빌더가 공유하는 실행 경로에서 일관되게 적용되어야 한다.
+- 이 오버라이드 경로는 `strategy-detail`, `compare`, `risk`, queued `jobs` 실행에 공통 적용되어야 한다.
+- 반면 `strategy-ranking`과 `sweep`의 726조합 탐색은 현재 `thread_count`, `stop_sessions`, `buy_pct`, `sell_pct`만 가변으로 두고 나머지는 고정값으로 유지한다.
 
 ## 결과
 - 서로 다른 임계값 설정은 서로 다른 `config_hash`와 별도의 대시보드 캐시 키를 만든다.

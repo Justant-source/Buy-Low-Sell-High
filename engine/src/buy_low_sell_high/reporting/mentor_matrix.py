@@ -7,6 +7,7 @@ import json
 from typing import Any
 
 from ..backtest.engine import run_backtest
+from ..code_version import current_code_commit
 from ..domain.enums import SizingMode
 from ..domain.models import MarketBar, StrategyConfig
 from ..domain.money import D, ZERO
@@ -72,6 +73,7 @@ def build_mentor_matrix(
 ) -> dict[str, Any]:
     if not bars:
         raise ValueError("No bars provided")
+    code_commit = current_code_commit()
     windows = windows or DEFAULT_WINDOWS
     reference_payload = reference or load_reference_fixture()
     years = sorted({bar.session_date.year for bar in bars if 2011 <= bar.session_date.year <= 2024})
@@ -109,7 +111,7 @@ def build_mentor_matrix(
             "execution_model": base_config.execution_model.value,
             "config_hash": base_config.config_hash(),
             "data_hash": data_hash,
-            "code_commit": "workspace",
+            "code_commit": code_commit,
             "windows": {name: {"start_year": start, "end_year": end} for name, (start, end) in windows.items()},
             "reference_fixture_path": str(default_reference_path()),
             "reference_image_sha256": reference_payload["meta"]["source_image_sha256"],

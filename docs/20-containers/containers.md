@@ -6,7 +6,12 @@
 - `dashboard`: `/backtests/:symbolSlug`를 제공하는 TypeScript Express API 및 정적 UI 호스트
   - `DATABASE_URL`을 사용해 `backtest_research_artifacts`, `backtest_research_sweep_rows`를 PostgreSQL에 저장한다.
   - 컨테이너 밖에서 로컬 스크립트로 실행할 때는 `SQLITE_PATH`를 사용해 같은 연구 산출물을 단일 파일 SQLite DB에 저장할 수 있다.
-  - `Strategy Explorer`와 `Sweep Explorer`는 이 저장소를 사용해 재현성 메타데이터가 포함된 연구 산출물을 재사용한다.
+  - `Strategy Explorer`, `Strategy Ranking`, `Sweep Explorer`는 이 저장소를 사용해 재현성 메타데이터가 포함된 연구 산출물을 재사용한다.
+  - 저장된 연구 산출물은 `code_commit`이 현재 코드 fingerprint와 일치할 때만 재사용한다.
+  - `strategy-ranking` 캐시 미스는 Python daemon subprocess를 통해 처리되며, daemon 내부는 최대 `8-worker` 프로세스풀과 `1시간` idle timeout을 사용한다.
+  - `strategy-detail`과 `thread-timeline`은 slice-aware CLI 재실행 결과를 서버 메모리 캐시로만 재사용하며, 현재 PostgreSQL/SQLite 연구 산출물로 저장하지 않는다.
+  - startup preset warmup은 best-effort이며, warmup 실패는 로그로 남기되 컨테이너 liveness 실패로 승격하지 않는다.
+  - 로컬 실행 진입점은 `./scripts/dashboard_exec.sh build`, `./scripts/dashboard_exec.sh test`, `./scripts/dashboard_exec.sh start`다.
 
 Redis는 의도적으로 제외한다.
 

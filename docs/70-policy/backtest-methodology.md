@@ -3,14 +3,20 @@
 - 결정성은 필수다.
 - 단위 테스트와 레퍼런스 테스트는 네트워크에 의존하면 안 된다.
 - 모든 연구 실행과 golden fixture는 `config_hash`, `data_hash`, `code_commit`를 함께 남겨야 한다.
-- 기본 스냅샷 경로 규칙은 `data/raw/{symbol_lower}_daily_2011_present.csv`다.
-- 공식 제품 게이트는 `official_reference_matrix.json`과 `official_explorer_summary.json`에 대한 exact golden 비교다.
-- 공식 기준선은 `data/raw/soxl_daily_2011_present.csv` Yahoo 스냅샷, `price_basis=adjusted_close`, `execution_model=ideal_same_close`, `sizing_mode=fixed_principal`을 사용한다.
+- 저장된 연구 산출물은 `code_commit`이 현재 코드 fingerprint와 다르면 재사용하지 않는다. 랭킹과 상세 그래프가 서로 다른 엔진 결과를 섞어 보여주면 안 된다.
+- 기본 스냅샷 경로는 심볼 레지스트리가 결정한다. 대표 경로는 `SOXL/TQQQ=2011`, `0193T0/000660=2015`, `233740=2015-12-17`, `462330=2023-07-04` 계열이다.
+- 공식 제품 게이트는 현재 SOXL `official_reference_matrix.json`과 `official_explorer_summary.json`에 대한 exact golden 비교다.
+- 공식 기준선 계열은 Yahoo 스냅샷, `price_basis=adjusted_close`, `execution_model=ideal_same_close`, `sizing_mode=fixed_principal`을 사용한다.
+- checked-in 제품 게이트는 `SOXL`에 있고, `TQQQ`는 같은 공식 기준선 계열을 runtime canonical profile로만 사용한다.
 - 공식 기본 프로필은 `soxl_official_ddeolsao_pal_v1`이며, 현재 코어 6조합 중 `5x40`을 채택한다.
 - 공식 프로필 선정 기준은 `mean_segment_return desc`, `segment_stddev asc`, `full_return desc`다.
 - `official-explorer`와 `official-matrix`는 위 공식 기준선을 재현하는 canonical 리포트다.
 - 2026-06-20 기준 공식 golden은 idle-cash preservation과 `ENTRY_SKIPPED` semantics를 반영한 상태여야 한다.
 - `Strategy Explorer`와 `Sweep Explorer`의 일반 연구 경로는 계속 유지하되, 기본 스윕 평가는 `execution_model=next_open`, `price_basis=adjusted_close`를 사용한다.
+- slice 전략 랭킹과 스윕 랭킹의 UI 우선 정렬은 `cagr desc`, `max_drawdown desc`, `full_return desc`다.
+- 종료 자산이 `0` 이하인 slice에서는 CAGR을 수학적으로 정의하지 않고 총수익률 fallback을 사용한다.
+- 전략 탭에서 선택 구간을 바꾸면 `콤보 랭킹`, `Rebased Equity`, `월별`, `롤링`, `Thread Timeline`은 모두 같은 slice 바 집합으로 다시 실행한 결과를 기준으로 맞춰야 한다. 전체 기간 carry run을 잘라낸 곡선과 slice 재실행 랭킹을 섞으면 안 된다.
+- preset strategy-ranking warmup은 응답 성능 최적화용 precompute이며, 실패를 프로세스 치명 오류로 승격하지 않는다.
 - `next_open`, `next_close`, 비용 민감도, 갭 리스크 리포트는 현실 비교용이며 공식 채택 게이트가 아니다.
 - 멘토 parity와 `mentor_floor`는 `legacy comparison` 진단으로만 유지한다.
 - `mentor_floor` 기본 허용치는 멘토 대비 `-5.0` 퍼센트포인트지만, CI 실패 조건이 아니라 수동 triage 정보다.

@@ -5,10 +5,11 @@
 
 이 문서는 parity 선언이 아니라 갭 리포트다.
 공식 제품 게이트가 아니라 `legacy comparison` 조사 문서로만 유지한다.
+적용 범위는 현재 `SOXL` `mentor_reference` 워크스페이스다. `TQQQ` official reference와 `0193T0/233740/462330` backtest-only workspace는 이 문서의 직접 대상이 아니다.
 
 ## 상태
 - 멘토 전략: 멘토 이미지와 고정된 전사 fixture를 기반으로 추론
-- 구현 전략: 2026-06-19 기준 런타임 코드와 실제 CLI 출력으로 검증
+- 구현 전략: 2026-06-21 기준 런타임 코드와 실제 CLI 출력으로 검증
 - 현재 parity 상태: `DATA_MISMATCH`
 
 ## 멘토 전략
@@ -62,6 +63,7 @@
 - `current_close > entry_price`이면 익절
 - `holding_sessions >= stop_sessions` 이고 `price <= entry_price`이면 시간 손절
 - 동일 세션 내 스레드 재사용은 기본 활성화
+- 기본 스레드 선택 기준은 `round_robin`
 - 기본 실행 모델은 `ideal_same_close`
 
 ### B. 사이징 모드
@@ -75,7 +77,8 @@
 - 따라서 상위 호출부가 연도별로 바를 잘라주지 않는 한, 실제 런타임 동작은 carry-only다.
 
 ### D. 테스트 종료 처리
-- `end_of_test=force_close`는 전체 실행 끝에서만 적용된다.
+- 기본값은 `end_of_test=mark_to_market`이다.
+- `config.end_of_test=force_close`를 명시했을 때만 전체 실행 마지막 bar에서 강제청산한다.
 - 코어 엔진 안에는 연말 강제청산 동작이 없다.
 
 ### E. 현재 데이터 동작
@@ -135,6 +138,7 @@
 해석:
 - 현재 구현의 `thread_compound`는 멘토 시트가 의미하는 복리 성장과 일치하지 않는다.
 - 이것은 반올림 문제가 아니다.
+- 현재 전략 랭킹 API는 이런 극단 조합에서 프로세스가 죽지 않도록 non-positive terminal equity slice의 CAGR을 총수익률 fallback으로 보호하지만, 이 보호는 멘토 의미론 격차를 해소하지는 않는다.
 
 ### G. 연도 리셋만으로는 격차가 해소되지 않음
 현재 데이터셋에서 `5x30`, `ideal_same_close`, 연도별 독립 실행을 별도로 계산하면 일부 해는 멘토 값에 가까워진다.

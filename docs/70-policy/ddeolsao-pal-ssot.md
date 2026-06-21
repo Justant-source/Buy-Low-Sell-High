@@ -14,18 +14,20 @@
 - **오** → 매수가보다 상승 시 익절 신호 발생
 - **팔** → 해당 세션에 매도
 
-현재 기본 워크스페이스는 SOXL(반도체 3배 레버리지 ETF) 일봉 데이터이며, 같은 구조로 다른 종목 백테스트를 확장할 수 있어야 한다.
+현재 워크스페이스는 `SOXL`, `TQQQ`, `0193T0`, `233740`, `462330`다. `SOXL`은 `mentor_reference`, `TQQQ`는 `official_reference`, 나머지는 `backtest_only`로 같은 화면 구조를 재사용한다.
 
 ---
 
 ## 2. 공식 연구 기준선
 
-- 공식 제품 baseline은 `data/raw/soxl_daily_2011_present.csv` Yahoo 스냅샷을 사용한다.
-- 공식 프로필은 `configs/strategies/soxl_official_ddeolsao_pal_v1.yaml`이다.
-- 공식 프로필 파라미터는 `thread_count=5`, `stop_sessions=40`, `price_basis=adjusted_close`, `execution_model=ideal_same_close`, `sizing_mode=fixed_principal`이다.
-- 공식 프로필은 현재 코어 6조합을 `mean_segment_return desc`, `segment_stddev asc`, `full_return desc` 기준으로 정렬해 현재 1위를 고정한 결과다.
-- 공식 CI 게이트는 `official-explorer`와 `official-matrix` golden fixture다.
-- 멘토 매트릭스와 parity는 `legacy comparison` 진단으로만 유지한다.
+- 공식 연구 기준선 계열은 Yahoo 스냅샷, `price_basis=adjusted_close`, `execution_model=ideal_same_close`, `sizing_mode=fixed_principal`을 사용한다.
+- SOXL checked-in 제품 baseline은 `data/raw/soxl_daily_2011_present.csv`와 `configs/strategies/soxl_official_ddeolsao_pal_v1.yaml`이다.
+- TQQQ runtime official baseline은 `data/raw/tqqq_daily_2011_present.csv`와 `configs/strategies/tqqq_official_ddeolsao_pal_v1.yaml`이다.
+- 현재 두 official profile YAML은 모두 `thread_count=5`, `stop_sessions=40` 조합을 사용한다.
+- 공식 profile 선정 기준은 코어 6조합을 `mean_segment_return desc`, `segment_stddev asc`, `full_return desc`로 정렬하는 방식이다.
+- 공식 CI 게이트는 현재 SOXL `official-explorer`와 `official-matrix` golden fixture다.
+- TQQQ official reference는 canonical runtime report지만 checked-in parity fixture를 강제하지 않는다.
+- 멘토 매트릭스와 parity는 계속 SOXL `legacy comparison` 진단으로만 유지한다.
 
 ---
 
@@ -41,7 +43,7 @@ thread_principal = initial_capital / thread_count
 - 스레드가 FREE 상태일 때만 신규 진입이 가능하다.
 - **기본 진입 수:** 세션당 최대 1개 스레드 (`max_entries_per_session=1`)
 - **스레드 재사용:** 같은 세션에 청산된 스레드를 즉시 재사용 허용 (`allow_same_session_thread_reuse=true`)
-- **스레드 선택 기준:** 기본값은 LOWEST_ID (가장 낮은 번호 우선)
+- **스레드 선택 기준:** 기본값은 `round_robin`
 
 ### 표준 스레드 구성
 
@@ -54,8 +56,9 @@ thread_principal = initial_capital / thread_count
 | 7x30 | 7 | 30 |
 | 7x40 | 7 | 40 |
 
-현재 전략 탐색기와 멘토 매트릭스 런타임 기본 조합은 위 6개다.
-공식 baseline은 위 6개 중 `5x40`을 채택한다.
+현재 전략 탐색기 런타임 기본 조합은 위 6개다.
+SOXL 멘토 매트릭스 legacy 비교도 이 6조합을 중심으로 해석한다.
+SOXL checked-in official baseline과 현재 TQQQ official profile은 모두 `5x40`을 사용한다.
 
 ### 현재 파라미터 스윕 정의
 
@@ -65,6 +68,8 @@ thread_principal = initial_capital / thread_count
 - `sell_pct`: `0`부터 `+10`까지 1단위
 - 고정값: `stop_loss_pct = 0`, `max_entries_per_session = 1`
 - 총 조합 수: `3 × 2 × 11 × 11 = 726`
+- 전략 탭 현재 우선 정렬: `cagr desc`, `max_drawdown desc`, `full_return desc`
+- 종료 자산이 `0` 이하인 slice에서는 CAGR을 정의하지 않고 총수익률 fallback을 사용한다.
 
 ---
 
@@ -122,7 +127,7 @@ session_price <= entry_price × (1 - stop_loss_pct / 100)
 
 ### 3-6. 이벤트 처리 순서
 
-기본: `EXITS_THEN_ENTRY`
+기본: `exits_then_entry`
 
 1. 열린 스레드 청산 처리 (익절 / 가격 손절 / 시간 손절)
 2. 신규 진입 처리 (앞서 청산된 스레드 포함, 이번 세션 FREE 스레드 활용 가능)
@@ -143,13 +148,13 @@ session_price <= entry_price × (1 - stop_loss_pct / 100)
 | `max_entries_per_session` | 1 | 세션당 최대 신규 진입 스레드 수 |
 | `allow_same_session_thread_reuse` | true | 같은 세션 청산 스레드 즉시 재사용 허용 |
 | `profit_precedes_stop` | true | 익절이 손절보다 우선 |
-| `event_order` | `EXITS_THEN_ENTRY` | 청산→진입 순서 |
+| `event_order` | `exits_then_entry` | 청산→진입 순서 |
 | `price_basis` | `adjusted_close` | 가격 기준 컬럼 |
 | `execution_model` | `ideal_same_close` | 체결 모델 |
 | `sizing_mode` | `fixed_principal` | 스레드 예산 계산 방식 |
 | `year_boundary` | `carry` | 연도 경계 처리 (현재 엔진 미소비) |
-| `thread_selector` | `LOWEST_ID` | 진입할 스레드 선택 방식 |
-| `end_of_test` | `force_close` | 백테스트 종료 처리 |
+| `thread_selector` | `round_robin` | 진입할 스레드 선택 방식 |
+| `end_of_test` | `mark_to_market` | 백테스트 종료 처리 |
 | `commission_bps` | 0 | 수수료 (basis points) |
 | `slippage_bps` | 0 | 슬리피지 (basis points) |
 
@@ -173,7 +178,7 @@ session_price <= entry_price × (1 - stop_loss_pct / 100)
 
 | 모델 | 설명 | 용도 |
 |---|---|---|
-| `ideal_same_close` | 신호 발생 당일 종가로 즉시 체결 | 공식 연구 baseline |
+| `ideal_same_close` | 신호 발생 당일 종가로 즉시 체결 | `SOXL`, `TQQQ` 공식 연구 baseline |
 | `next_open` | 다음 거래일 시가로 체결 | 현실적 체결 시뮬레이션 |
 | `next_close` | 다음 거래일 종가로 체결 | 현실적 체결 시뮬레이션 |
 
@@ -186,10 +191,11 @@ session_price <= entry_price × (1 - stop_loss_pct / 100)
 | 기준 | 컬럼 | 설명 |
 |---|---|---|
 | `adjusted_close` | `adj_close` | 기업행위(주식분할·배당) 반영 조정 종가 |
-| `close` | `close` | 미조정 종가 |
+| `raw_close_with_actions` | `close` | 미조정 종가 기반. 필요하면 기업행위 metadata를 별도 함께 본다 |
 
-공식 baseline은 Yahoo `adjusted_close`를 사용한다.
-현재 표준 로컬 CSV 스냅샷은 Yahoo sync 산출물이며 `close`, `adj_close`, source metadata를 함께 유지한다.
+`SOXL`, `TQQQ` official_reference는 Yahoo `adjusted_close`를 기본으로 사용한다.
+`0193T0`, `233740`, `462330` backtest_only workspace는 `raw_close_with_actions`를 기본으로 사용한다.
+현재 표준 로컬 CSV 스냅샷은 `close`, `adj_close`, source metadata를 함께 유지한다.
 
 ---
 
@@ -231,10 +237,12 @@ session_price <= entry_price × (1 - stop_loss_pct / 100)
 
 1. `Rebased Equity`, `Slice Drawdown`
    - 전체 구간/선택 구간의 선형 성과 레벨
+   - 선택 구간은 전체 기간 곡선을 잘라내는 방식이 아니라 해당 slice 바 집합으로 다시 실행한 결과를 기준으로 한다
 2. `Thread Timeline`, `Session Activity Strip`
    - `focus` 전략 1개에 대한 swimlane/Gantt 레벨
    - lane 하나가 thread 하나이며, 박스 하나가 보유 구간이다
    - entry는 숫자 없는 아이콘, multi-exit는 strip badge 숫자로 표현한다
+   - `Thread Timeline`도 같은 slice 바 집합으로 다시 실행한 결과를 사용한다
 3. `Thread Drawer`
    - 선택 세션의 `exit_batch`, `open_positions`, 선택 trade의 entry/exit detail을 보여주는 drill-down 레벨
 
@@ -312,6 +320,8 @@ session_price <= entry_price × (1 - stop_loss_pct / 100)
 8. **연도 경계는 현재 엔진에서 `carry`다.** `year_boundary = reset` 지원 전까지 연도별 독립 실행은 호출부가 바를 잘라서 처리한다.
 9. **`PRICE_STOP`은 집계 카운트에서 `TIME_STOP`과 합산 표시한다.** 별도 열 추가 금지 (parity 표 호환성).
 10. **공식 golden fixture와 멘토 fixture를 임의 수정하지 않는다.** drift를 숨기기 위해 fixture를 바꾸는 행위는 레퍼런스 무결성 원칙 위반이다.
+11. **slice 랭킹용 CAGR은 항상 유한해야 한다.** 종료 자산이 `0` 이하인 slice에서는 총수익률 fallback을 사용한다.
+12. **전략 탭 slice 비교는 동일한 바 집합 재실행으로 맞춘다.** `콤보 랭킹`, `Rebased Equity`, `월별`, `롤링`, `Thread Timeline`이 전체 기간 carry run 일부와 slice 재실행 결과를 섞어 쓰면 안 된다.
 
 ---
 

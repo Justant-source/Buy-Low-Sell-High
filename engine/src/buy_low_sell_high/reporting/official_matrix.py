@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 from typing import Any
 
+from ..code_version import current_code_commit
 from ..domain.models import MarketBar, StrategyConfig
 from .official_explorer import build_official_explorer
 from .mentor_matrix import (
@@ -41,6 +42,7 @@ def build_official_matrix(
 ) -> dict[str, Any]:
     if not bars:
         raise ValueError("No bars provided")
+    code_commit = current_code_commit()
     years = sorted({bar.session_date.year for bar in bars})
     windows = _official_windows(years)
     benchmark_yearly = _actual_benchmark_yearly(bars, years, base_config)
@@ -57,7 +59,7 @@ def build_official_matrix(
             "execution_model": base_config.execution_model.value,
             "config_hash": base_config.config_hash(),
             "data_hash": data_hash,
-            "code_commit": "workspace",
+            "code_commit": code_commit,
             "windows": {name: {"start_year": start, "end_year": end} for name, (start, end) in windows.items()},
             "official_profile_id": base_config.profile_id,
             "official_combo_key": official_combo_key,
@@ -80,16 +82,30 @@ def build_official_matrix(
 
 
 def compare_to_reference(actual: dict[str, Any], reference: dict[str, Any]) -> dict[str, Any]:
-    if actual == reference:
+    normalized_actual = _strip_runtime_metadata(actual)
+    normalized_reference = _strip_runtime_metadata(reference)
+    if normalized_actual == normalized_reference:
         return {
             "status": "PASS",
             "first_mismatch": None,
         }
-    mismatch = _first_mismatch(actual, reference, path=())
+    mismatch = _first_mismatch(normalized_actual, normalized_reference, path=())
     return {
         "status": "FAIL",
         "first_mismatch": mismatch,
     }
+
+
+def _strip_runtime_metadata(payload: Any) -> Any:
+    if isinstance(payload, dict):
+        return {
+            key: _strip_runtime_metadata(value)
+            for key, value in payload.items()
+            if key != "code_commit"
+        }
+    if isinstance(payload, list):
+        return [_strip_runtime_metadata(value) for value in payload]
+    return payload
 
 
 def _official_windows(years: list[int]) -> dict[str, tuple[int, int]]:
