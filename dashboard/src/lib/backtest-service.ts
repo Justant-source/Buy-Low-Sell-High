@@ -32,23 +32,27 @@ import type {
   MentorMatrixPayload,
   ParameterSweepPayload,
   PersistedRunArtifact,
+  ParameterSweepRowPayload,
   ProfilePayload,
   ProfileShowPayload,
   ResearchArtifactRecord,
   StrategyExplorerPayload,
   StrategyExplorerStrategyPayload,
   StrategyRankingPayload,
+  StrategyRankingRowPayload,
   ThreadTimelinePayload,
 } from "./types.js";
 
 const STRATEGY_EXPLORER_VERSION = "strategy-explorer-v4";
-const STRATEGY_RANKING_VERSION = "strategy-ranking-v6";
+const STRATEGY_RANKING_VERSION = "strategy-ranking-v7";
 const STRATEGY_DETAIL_VERSION = "strategy-detail-v1";
 const THREAD_TIMELINE_VERSION = "thread-timeline-v1";
-const PARAMETER_SWEEP_VERSION = "parameter-sweep-v4";
+const PARAMETER_SWEEP_VERSION = "parameter-sweep-v5";
 const DEFAULT_RESEARCH_EXECUTION_MODEL = "next_open";
 const DEFAULT_STRATEGY_CATALOG_ID = "core_profiles_v2";
 const DEFAULT_SWEEP_ID = "core4_v4";
+const STRATEGY_RANKING_BASIS = "cagr desc, max_drawdown desc, full_return desc, combo_key asc";
+const SWEEP_RANKING_BASIS = "cagr desc, max_drawdown desc, full_return desc";
 
 function resolveCsvPath(csvPath: string | undefined, symbol: string): string {
   return csvPath ?? defaultCsvPathForSymbol(symbol);
@@ -213,6 +217,110 @@ function defaultSweepExecutionModel(): string {
 
 function defaultSweepPriceBasis(profile: ProfilePayload | ReturnType<typeof getProfileDefinition>): string {
   return profile?.priceBasis ?? "adjusted_close";
+}
+
+function roundMetric(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function annualizedReturnPct(fullReturnPct: number, periodStart: string, periodEnd: string): number {
+  if (!Number.isFinite(fullReturnPct)) {
+    return 0;
+  }
+  const startAt = Date.parse(`${periodStart}T00:00:00Z`);
+  const endAt = Date.parse(`${periodEnd}T00:00:00Z`);
+  if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || endAt <= startAt) {
+    return roundMetric(fullReturnPct);
+  }
+  const growthRatio = 1 + (fullReturnPct / 100);
+  if (growthRatio <= 0) {
+    return -100;
+  }
+  const elapsedDays = (endAt - startAt) / (1000 * 60 * 60 * 24);
+  if (elapsedDays <= 0) {
+    return roundMetric(fullReturnPct);
+  }
+  return roundMetric((Math.pow(growthRatio, 365 / elapsedDays) - 1) * 100);
+}
+
+function compareStrategyRankingRows(left: StrategyRankingRowPayload, right: StrategyRankingRowPayload): number {
+  if (right.cagr_pct !== left.cagr_pct) {
+    return right.cagr_pct - left.cagr_pct;
+  }
+  if (right.max_drawdown_pct !== left.max_drawdown_pct) {
+    return right.max_drawdown_pct - left.max_drawdown_pct;
+  }
+  if (right.full_return_pct !== left.full_return_pct) {
+    return right.full_return_pct - left.full_return_pct;
+  }
+  return left.combo_key.localeCompare(right.combo_key);
+}
+
+function compareSweepRows(left: ParameterSweepRowPayload, right: ParameterSweepRowPayload): number {
+  if (right.metrics.cagr_pct !== left.metrics.cagr_pct) {
+    return right.metrics.cagr_pct - left.metrics.cagr_pct;
+  }
+  if (right.metrics.max_drawdown_pct !== left.metrics.max_drawdown_pct) {
+    return right.metrics.max_drawdown_pct - left.metrics.max_drawdown_pct;
+  }
+  if (right.metrics.full_return_pct !== left.metrics.full_return_pct) {
+    return right.metrics.full_return_pct - left.metrics.full_return_pct;
+  }
+  return left.combo_key.localeCompare(right.combo_key);
+}
+
+function normalizeSweepWarnings(
+  payload: ParameterSweepPayload,
+  bestFull: ParameterSweepRowPayload | null,
+  bestRobust: ParameterSweepRowPayload | null,
+): string[] {
+  const warnings = (payload.warnings || []).filter(
+    (warning) => !/(최근|구간 표준편차|drift|segment std|recent)/i.test(warning),
+  );
+  if (bestFull && bestFull.metrics.max_drawdown_pct < -60) {
+    warnings.push(`최고 전체수익 조합 ${bestFull.combo_key} 는 MDD가 ${bestFull.metrics.max_drawdown_pct.toFixed(2)}% 입니다.`);
+  }
+  if (bestRobust && bestRobust.metrics.cagr_pct < 0) {
+    warnings.push(`CAGR 기준 상위 조합 ${bestRobust.combo_key} 는 연환산 수익률이 ${bestRobust.metrics.cagr_pct.toFixed(2)}% 입니다.`);
+  }
+  return [...new Set(warnings)];
+}
+
+function normalizeSweepPayload(payload: ParameterSweepPayload): ParameterSweepPayload {
+  const rows = (payload.rows || [])
+    .map((row) => ({
+      ...row,
+      metrics: {
+        ...row.metrics,
+        cagr_pct: Number.isFinite(row.metrics?.cagr_pct)
+          ? row.metrics.cagr_pct
+          : annualizedReturnPct(row.metrics.full_return_pct, payload.meta.period_start, payload.meta.period_end),
+      },
+    }))
+    .sort(compareSweepRows);
+  const bestFull = rows.reduce<ParameterSweepRowPayload | null>((best, row) => {
+    if (!best) {
+      return row;
+    }
+    if (row.metrics.full_return_pct !== best.metrics.full_return_pct) {
+      return row.metrics.full_return_pct > best.metrics.full_return_pct ? row : best;
+    }
+    return compareSweepRows(row, best) < 0 ? row : best;
+  }, null);
+  const bestRobust = rows[0] ?? null;
+  return {
+    ...payload,
+    summary: {
+      ...payload.summary,
+      best_full_return_combo: bestFull?.combo_key ?? payload.summary.best_full_return_combo,
+      best_robust_combo: bestRobust?.combo_key ?? payload.summary.best_robust_combo,
+      pareto_return_mdd_count: rows.filter((row) => row.flags.pareto_return_mdd).length,
+      pareto_return_stability_count: rows.filter((row) => row.flags.pareto_return_stability).length,
+      ranking_basis: SWEEP_RANKING_BASIS,
+    },
+    warnings: normalizeSweepWarnings(payload, bestFull, bestRobust),
+    rows,
+  };
 }
 
 async function resolveProfileContext(input: {
@@ -590,6 +698,23 @@ export class BacktestService {
   private readonly threadTimelinePending = new Map<string, Promise<ThreadTimelinePayload>>();
   private running = false;
 
+  private queueStrategyRankingPresetWarmup(
+    input: {
+      profileId: string;
+      csvPath: string;
+      initialCapital: number;
+      executionModel: string;
+      priceBasis: string;
+    },
+    slicePresets: Array<{ preset_id: string; start: string; end: string }>,
+    dataHash: string,
+  ): void {
+    void this.ensureStrategyRankingPresets(input, slicePresets, dataHash).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`Preset ranking warmup failed for ${input.profileId}: ${message}`);
+    });
+  }
+
   async createJob(input: BacktestJobInput): Promise<DashboardJobRecord> {
     const { profile, profilePayload, csvPath, initialCapital } = await resolveProfileContext(input);
     const dataStatus = await getDataStatus(csvPath, profile.symbol);
@@ -681,7 +806,7 @@ export class BacktestService {
     });
     const cached = await store.findByKey<StrategyExplorerPayload>(artifactKey);
     if (cached) {
-      void this.ensureStrategyRankingPresets(
+      this.queueStrategyRankingPresetWarmup(
         {
           profileId: input.profileId,
           csvPath,
@@ -713,7 +838,7 @@ export class BacktestService {
       symbol: profile.symbol,
       csvPath,
     });
-    void this.ensureStrategyRankingPresets(
+    this.queueStrategyRankingPresetWarmup(
       {
         profileId: input.profileId,
         csvPath,
@@ -770,7 +895,7 @@ export class BacktestService {
         sweepId: DEFAULT_SWEEP_ID,
       });
       if (latestSweep?.payload) {
-          return {
+        return {
           meta: {
             symbol: latestSweep.payload.meta.symbol,
             initial_capital: latestSweep.payload.meta.initial_capital,
@@ -780,7 +905,7 @@ export class BacktestService {
             period_end: latestSweep.payload.meta.period_end,
             data_hash: latestSweep.payload.meta.data_hash,
             code_commit: latestSweep.payload.meta.code_commit,
-            ranking_basis: "full_return desc, mean_segment_return desc, segment_stddev asc, combo_key asc",
+            ranking_basis: STRATEGY_RANKING_BASIS,
             segment_presets: latestSweep.payload.meta.segment_presets,
             combo_count: latestSweep.payload.meta.combo_count,
           },
@@ -798,25 +923,11 @@ export class BacktestService {
               buy_pct: row.params.buy_pct,
               sell_pct: row.params.sell_pct,
               full_return_pct: row.metrics.full_return_pct,
-              mean_segment_return_pct: row.metrics.mean_segment_return_pct,
-              segment_stddev_pct: row.metrics.segment_stddev_pct,
-              worst_segment_return_pct: row.metrics.worst_segment_return_pct,
-              positive_segment_ratio_pct: row.metrics.positive_segment_ratio_pct,
-              recent_segment_return_pct: row.metrics.recent_segment_return_pct,
+              cagr_pct: row.metrics.cagr_pct,
+              max_drawdown_pct: row.metrics.max_drawdown_pct,
               rank: 0,
             }))
-            .sort((left, right) => {
-              if (right.full_return_pct !== left.full_return_pct) {
-                return right.full_return_pct - left.full_return_pct;
-              }
-              if (right.mean_segment_return_pct !== left.mean_segment_return_pct) {
-                return right.mean_segment_return_pct - left.mean_segment_return_pct;
-              }
-              if (left.segment_stddev_pct !== right.segment_stddev_pct) {
-                return left.segment_stddev_pct - right.segment_stddev_pct;
-              }
-              return left.combo_key.localeCompare(right.combo_key);
-            })
+            .sort(compareStrategyRankingRows)
             .map((row, index) => ({ ...row, rank: index + 1 })),
         };
       }
@@ -977,13 +1088,20 @@ export class BacktestService {
     const priceBasis = input.priceBasis ?? defaultSweepPriceBasis(profile);
     const sweepId = input.sweepId ?? DEFAULT_SWEEP_ID;
     const [dataStatus, store] = await Promise.all([getDataStatus(csvPath, profile.symbol), getResearchStore()]);
-    return store.loadLatestSweep<ParameterSweepPayload>({
+    const artifact = await store.loadLatestSweep<ParameterSweepPayload>({
       sweepId,
       csvPath,
       executionModel,
       priceBasis,
       dataHash: dataStatus.data_hash,
     });
+    if (!artifact) {
+      return null;
+    }
+    return {
+      ...artifact,
+      payload: normalizeSweepPayload(artifact.payload),
+    };
   }
 
   async warmStrategyPresetRankings(input: StrategyExplorerInput): Promise<void> {
@@ -1075,7 +1193,10 @@ export class BacktestService {
     if (!artifact) {
       throw new HttpError(404, `Unknown sweep artifactId: ${artifactId}`);
     }
-    return artifact;
+    return {
+      ...artifact,
+      payload: normalizeSweepPayload(artifact.payload),
+    };
   }
 
   async getJob(jobId: string): Promise<DashboardJobRecord> {

@@ -1,0 +1,7 @@
+profile_id: tqqq_default_5x30
+symbol: TQQQ
+thread_count: 5
+stop_sessions: 30
+price_basis: adjusted_close
+execution_model: ideal_same_close
+sizing_mode: fixed_principal

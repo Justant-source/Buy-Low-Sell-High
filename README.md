@@ -4,14 +4,17 @@ Buy-Low-Sell-High is a clean-room backtesting stack for daily-close "ddeolsao-pa
 
 ## Current Scope
 - Python engine, Docker runtime, and safety guardrails are implemented.
-- Symbol snapshots follow the symbol registry filename, including `soxl_daily_2011_present.csv`, `000660_daily_2015_present.csv`, and `0193t0_daily_2015_present.csv`.
+- Symbol snapshots follow the symbol registry filename, including `soxl_daily_2011_present.csv`, `tqqq_daily_2011_present.csv`, `000660_daily_2015_present.csv`, `0193t0_daily_2015_present.csv`, `233740_daily_2015_present.csv`, and `462330_daily_2023_present.csv`.
 - SOXL remains the default workspace and reference dataset at `data/raw/soxl_daily_2011_present.csv`.
+- `TQQQ` uses Yahoo-adjusted daily history as the canonical `data/raw/tqqq_daily_2011_present.csv` snapshot.
 - `0193T0` uses Naver daily history plus synthetic pre-listing rows anchored to the actual `2026-05-27` listing-day close.
+- `233740` and `462330` use direct Naver daily history snapshots with no synthetic pre-listing rows.
 - `0193T0` profiles default to `initial_capital: 10000000` because the canonical dataset is KRW-priced and the SOXL baseline `10000` capital would stop producing whole-share entries once the ETF price exceeds a single thread budget.
-- Network sync currently uses `Naver` for `000660`/`0193T0` and falls back in the order `Yahoo chart -> Investing historical API -> Stooq` for SOXL-like symbols.
+- Korean ETF profiles for `0193T0`, `233740`, and `462330` default to `initial_capital: 10000000`.
+- Network sync currently uses `Naver` for `000660`/`0193T0`/`233740`/`462330` and falls back in the order `Yahoo chart -> Investing historical API -> Stooq` for SOXL/TQQQ-like symbols.
 - Strategy logic, parity fixtures, and symbol-aware backtest workflows are available in the Python CLI.
 - The Express dashboard serves workspace-based backtest pages at `/backtests/:symbolSlug`.
-- The `backtests` workspace includes `Strategy Explorer`, `Sweep Explorer`, official SOXL reference views, and risk comparison.
+- The `backtests` workspace includes `Strategy Explorer`, `Sweep Explorer`, official SOXL/TQQQ reference views, and risk comparison.
 - Ongoing UI and methodology reference must continue to use `/home/justant/Data/Bit-Mania`, especially `/home/justant/Data/Bit-Mania/backtest/dashboards/strategy_dashboard.html` and `/home/justant/Data/Bit-Mania/backtest/dashboards/supertrend_sweep_dashboard.html`.
 
 ## 8 Workstreams
@@ -45,9 +48,15 @@ make ci
 PORT=3232 ./scripts/dashboard_exec.sh start
 python3 scripts/verify_no_autotrading.py
 PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli data sync --symbol SOXL
+PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli data sync --symbol TQQQ
 PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli data sync --symbol 0193T0
+PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli data sync --symbol 233740
+PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli data sync --symbol 462330
 PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile configs/strategies/soxl_default_5x30.yaml --symbol SOXL
+PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile configs/strategies/tqqq_default_5x30.yaml --symbol TQQQ
 PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile configs/strategies/0193t0_default_5x30.yaml --symbol 0193T0
+PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile configs/strategies/233740_default_5x30.yaml --symbol 233740
+PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile configs/strategies/462330_default_5x30.yaml --symbol 462330
 ```
 
 ## Dashboard Toolchain
@@ -77,7 +86,10 @@ In the current Codex snap environment, the Docker CLI can be installed locally, 
 - Default dashboard port: `3232`
 - `http://localhost:3232/backtests`
 - `http://localhost:3232/backtests/soxl`
+- `http://localhost:3232/backtests/tqqq`
 - `http://localhost:3232/backtests/0193T0`
+- `http://localhost:3232/backtests/233740`
+- `http://localhost:3232/backtests/462330`
 
 The default landing page redirects to `/backtests/soxl`.
 

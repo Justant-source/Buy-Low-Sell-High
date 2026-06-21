@@ -22,6 +22,12 @@ _SYMBOLS: dict[str, SymbolDefinition] = {
         dataset_start_date="2011-01-01",
         sync_mode="market_fallback",
     ),
+    "TQQQ": SymbolDefinition(
+        symbol="TQQQ",
+        csv_filename="tqqq_daily_2011_present.csv",
+        dataset_start_date="2011-01-01",
+        sync_mode="market_fallback",
+    ),
     "000660": SymbolDefinition(
         symbol="000660",
         csv_filename="000660_daily_2015_present.csv",
@@ -36,6 +42,18 @@ _SYMBOLS: dict[str, SymbolDefinition] = {
         actual_start_date="2026-05-27",
         underlying_symbol="000660",
         leverage_factor="2",
+    ),
+    "233740": SymbolDefinition(
+        symbol="233740",
+        csv_filename="233740_daily_2015_present.csv",
+        dataset_start_date="2015-12-17",
+        sync_mode="naver_daily",
+    ),
+    "462330": SymbolDefinition(
+        symbol="462330",
+        csv_filename="462330_daily_2023_present.csv",
+        dataset_start_date="2023-07-04",
+        sync_mode="naver_daily",
     ),
 }
 
@@ -58,4 +76,3 @@ def get_symbol_definition(symbol: str) -> SymbolDefinition:
 def default_market_data_csv(symbol: str = "SOXL") -> str:
     definition = get_symbol_definition(symbol)
     return str(repo_root() / "data" / "raw" / definition.csv_filename)
-

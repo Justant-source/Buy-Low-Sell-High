@@ -72,26 +72,85 @@ for marker in required_markers:
 
 workspaces = json.loads(get(f"http://127.0.0.1:{port}/api/workspaces"))
 workspace_ids = {row["workspaceId"] for row in workspaces.get("workspaces", [])}
-if "0193t0" not in workspace_ids:
-    raise SystemExit("workspace list missing 0193t0")
+expected_workspace_ids = {"tqqq", "0193t0", "233740", "462330"}
+missing_workspace_ids = expected_workspace_ids - workspace_ids
+if missing_workspace_ids:
+    raise SystemExit(f"workspace list missing: {sorted(missing_workspace_ids)}")
+workspace_order = [row["workspaceId"] for row in workspaces.get("workspaces", [])]
+if "soxl" not in workspace_order or "tqqq" not in workspace_order:
+    raise SystemExit("workspace order missing soxl or tqqq")
+if workspace_order.index("tqqq") != workspace_order.index("soxl") + 1:
+    raise SystemExit("tqqq workspace is not directly below soxl")
+
+def assert_profile_bundle(workspace_id: str, default_profile_id: str, expected_profile_ids: set[str]):
+    payload = json.loads(get(f"http://127.0.0.1:{port}/api/profiles?workspaceId={workspace_id}"))
+    if payload.get("defaultProfileId") != default_profile_id:
+        raise SystemExit(f"{workspace_id} default profile mismatch")
+    actual_profile_ids = {row["profileId"] for row in payload.get("profiles", [])}
+    if actual_profile_ids != expected_profile_ids:
+        raise SystemExit(f"{workspace_id} profile set mismatch: {sorted(actual_profile_ids)}")
 
 workspace_0193t0 = next(row for row in workspaces["workspaces"] if row["workspaceId"] == "0193t0")
 if workspace_0193t0.get("referenceMode") != "backtest_only":
     raise SystemExit("0193t0 workspace referenceMode mismatch")
-
-profiles_0193t0 = json.loads(
-    get(f"http://127.0.0.1:{port}/api/profiles?workspaceId=0193t0")
+assert_profile_bundle(
+    "0193t0",
+    "0193t0_default_5x30",
+    {"0193t0_default_5x30", "0193t0_default_7x30", "0193t0_best_avg_5x40"},
 )
-if profiles_0193t0.get("defaultProfileId") != "0193t0_default_5x30":
-    raise SystemExit("0193t0 default profile mismatch")
-if len(profiles_0193t0.get("profiles", [])) != 4:
-    raise SystemExit("0193t0 profile count mismatch")
-
 data_0193t0 = json.loads(get(f"http://127.0.0.1:{port}/api/data/status?workspaceId=0193t0"))
 if data_0193t0.get("symbol") != "0193T0":
     raise SystemExit("0193t0 data status symbol mismatch")
 if not any("Synthetic pre-listing history present" in warning for warning in data_0193t0.get("warnings", [])):
     raise SystemExit("0193t0 data status missing synthetic warning")
+
+workspace_tqqq = next(row for row in workspaces["workspaces"] if row["workspaceId"] == "tqqq")
+if workspace_tqqq.get("referenceMode") != "official_reference":
+    raise SystemExit("tqqq workspace referenceMode mismatch")
+assert_profile_bundle(
+    "tqqq",
+    "tqqq_official_ddeolsao_pal_v1",
+    {
+        "tqqq_official_ddeolsao_pal_v1",
+        "tqqq_default_5x30",
+        "tqqq_default_7x30",
+        "tqqq_best_avg_5x40",
+    },
+)
+data_tqqq = json.loads(get(f"http://127.0.0.1:{port}/api/data/status?workspaceId=tqqq"))
+if data_tqqq.get("symbol") != "TQQQ":
+    raise SystemExit("tqqq data status symbol mismatch")
+if data_tqqq.get("source") != "yahoo_chart":
+    raise SystemExit("tqqq data status source mismatch")
+if any("Synthetic pre-listing history present" in warning for warning in data_tqqq.get("warnings", [])):
+    raise SystemExit("tqqq data status should not contain synthetic warning")
+
+for workspace_id, symbol, default_profile_id in [
+    ("233740", "233740", "233740_default_5x30"),
+    ("462330", "462330", "462330_default_5x30"),
+]:
+    html = get(f"http://127.0.0.1:{port}/backtests/{workspace_id}")
+    if "Buy-Low-Sell-High" not in html:
+        raise SystemExit(f"{workspace_id} backtest page missing app shell")
+    workspace = next(row for row in workspaces["workspaces"] if row["workspaceId"] == workspace_id)
+    if workspace.get("referenceMode") != "backtest_only":
+        raise SystemExit(f"{workspace_id} workspace referenceMode mismatch")
+    assert_profile_bundle(
+        workspace_id,
+        default_profile_id,
+        {
+            f"{workspace_id}_default_5x30",
+            f"{workspace_id}_default_7x30",
+            f"{workspace_id}_best_avg_5x40",
+        },
+    )
+    data_status = json.loads(get(f"http://127.0.0.1:{port}/api/data/status?workspaceId={workspace_id}"))
+    if data_status.get("symbol") != symbol:
+        raise SystemExit(f"{workspace_id} data status symbol mismatch")
+    if data_status.get("source") != "naver":
+        raise SystemExit(f"{workspace_id} data status source mismatch")
+    if any("Synthetic pre-listing history present" in warning for warning in data_status.get("warnings", [])):
+        raise SystemExit(f"{workspace_id} data status should not contain synthetic warning")
 
 strategy_explorer = json.loads(
     get(
@@ -99,10 +158,10 @@ strategy_explorer = json.loads(
         f"&csvPath={urllib.parse.quote(csv_path, safe='')}&executionModel=next_open&priceBasis=adjusted_close"
     )
 )
-if strategy_explorer.get("meta", {}).get("catalog_id") != "core_profiles_v1":
+if strategy_explorer.get("meta", {}).get("catalog_id") != "core_profiles_v2":
     raise SystemExit("strategy explorer did not return the expected catalog_id")
-if len(strategy_explorer.get("strategies", [])) != 9:
-    raise SystemExit("strategy explorer did not return the 9 preset strategies")
+if len(strategy_explorer.get("strategies", [])) != 6:
+    raise SystemExit("strategy explorer did not return the 6 preset strategies")
 if not strategy_explorer["strategies"][0].get("segments"):
     raise SystemExit("strategy explorer payload missing segment summaries")
 if not strategy_explorer["strategies"][0].get("daily"):
@@ -206,11 +265,11 @@ sweep_artifact = json.loads(get(f"http://127.0.0.1:{port}/api/backtests/sweeps/r
 sweep_payload = sweep_artifact.get("payload", {})
 if sweep_artifact.get("kind") != "PARAMETER_SWEEP":
     raise SystemExit("sweep artifact kind mismatch")
-if sweep_payload.get("meta", {}).get("sweep_id") != "core6_v1":
-    raise SystemExit("sweep payload missing core6_v1 metadata")
-if sweep_payload.get("meta", {}).get("combo_count") != 648:
+if sweep_payload.get("meta", {}).get("sweep_id") != "core4_v4":
+    raise SystemExit("sweep payload missing core4_v4 metadata")
+if sweep_payload.get("meta", {}).get("combo_count") != 726:
     raise SystemExit("sweep payload combo count mismatch")
-if len(sweep_payload.get("rows", [])) != 648:
+if len(sweep_payload.get("rows", [])) != 726:
     raise SystemExit("sweep payload rows mismatch")
 if not sweep_payload.get("summary", {}).get("best_robust_combo"):
     raise SystemExit("sweep payload missing robust summary")

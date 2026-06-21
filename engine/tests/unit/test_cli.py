@@ -31,6 +31,8 @@ class CliDefaultsTest(unittest.TestCase):
     def test_default_market_data_csv_uses_symbol_registry_filename(self) -> None:
         self.assertEqual(Path(default_market_data_csv("0193T0")).name, "0193t0_daily_2015_present.csv")
         self.assertEqual(Path(default_market_data_csv("000660")).name, "000660_daily_2015_present.csv")
+        self.assertEqual(Path(default_market_data_csv("233740")).name, "233740_daily_2015_present.csv")
+        self.assertEqual(Path(default_market_data_csv("462330")).name, "462330_daily_2023_present.csv")
 
     def test_override_loader_merges_profile_and_cli_values(self) -> None:
         profile = Path(__file__).resolve().parents[3] / "configs" / "strategies" / "soxl_default_5x30.yaml"

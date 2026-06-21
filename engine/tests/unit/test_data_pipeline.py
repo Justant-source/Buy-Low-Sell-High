@@ -193,6 +193,34 @@ class DataPipelineTest(unittest.TestCase):
         report = summarize_import("0193T0", "naver_synthetic", bars)
         self.assertTrue(any("Synthetic pre-listing history present" in warning for warning in report.warnings))
 
+    def test_import_summary_does_not_warn_when_history_is_naver_only(self) -> None:
+        bars = [
+            MarketBar(
+                symbol="233740",
+                session_date=date(2024, 1, 2),
+                open=D("10000"),
+                high=D("10100"),
+                low=D("9900"),
+                close=D("10050"),
+                adj_close=D("10050"),
+                volume=100000,
+                source="naver",
+            ),
+            MarketBar(
+                symbol="233740",
+                session_date=date(2024, 1, 3),
+                open=D("10050"),
+                high=D("10150"),
+                low=D("9950"),
+                close=D("10000"),
+                adj_close=D("10000"),
+                volume=110000,
+                source="naver",
+            ),
+        ]
+        report = summarize_import("233740", "naver", bars)
+        self.assertFalse(any("Synthetic pre-listing history present" in warning for warning in report.warnings))
+
     def test_naver_provider_loads_multi_page_history_in_ascending_order(self) -> None:
         page1 = """
         <html><body>
@@ -393,6 +421,90 @@ class DataPipelineTest(unittest.TestCase):
             written = output_csv.read_text(encoding="utf-8")
             self.assertIn("synthetic_naver", written)
             self.assertIn("2026-05-28", written)
+
+    def test_sync_history_builds_naver_daily_snapshot_without_synthetic_warning(self) -> None:
+        direct_bars = [
+            MarketBar(
+                symbol="462330",
+                session_date=date(2023, 7, 4),
+                open=D("10000"),
+                high=D("10150"),
+                low=D("9950"),
+                close=D("10140"),
+                adj_close=D("10140"),
+                volume=1000000,
+                source="naver",
+            ),
+            MarketBar(
+                symbol="462330",
+                session_date=date(2023, 7, 5),
+                open=D("10140"),
+                high=D("10250"),
+                low=D("9800"),
+                close=D("9890"),
+                adj_close=D("9890"),
+                volume=1200000,
+                source="naver",
+            ),
+        ]
+
+        def fake_load_bars(symbol: str, *, start_date: str = "2011-01-01", end_date: str | None = None) -> list[MarketBar]:
+            self.assertEqual(symbol, "462330")
+            self.assertEqual(start_date, "2023-07-04")
+            self.assertIsNone(end_date)
+            return direct_bars
+
+        with TemporaryDirectory() as temp_dir:
+            output_csv = Path(temp_dir) / "462330.csv"
+            with patch("buy_low_sell_high.data.sync.NaverMarketDataProvider.load_bars", side_effect=fake_load_bars):
+                result = sync_history(output_csv, symbol="462330")
+            self.assertEqual(result["source"], "naver")
+            self.assertEqual(result["rows"], 2)
+            self.assertFalse(any("synthetic" in warning.lower() for warning in result["warnings"]))
+            written = output_csv.read_text(encoding="utf-8")
+            self.assertIn("2023-07-04", written)
+            self.assertNotIn("synthetic_naver", written)
+
+    def test_sync_history_prefers_yahoo_for_tqqq_market_fallback(self) -> None:
+        yahoo_bars = [
+            MarketBar(
+                symbol="TQQQ",
+                session_date=date(2011, 1, 3),
+                open=D("10"),
+                high=D("11"),
+                low=D("9"),
+                close=D("10"),
+                adj_close=D("10"),
+                volume=1000000,
+                source="yahoo_chart",
+            ),
+            MarketBar(
+                symbol="TQQQ",
+                session_date=date(2011, 1, 4),
+                open=D("10"),
+                high=D("12"),
+                low=D("9"),
+                close=D("11"),
+                adj_close=D("11"),
+                volume=1100000,
+                source="yahoo_chart",
+            ),
+        ]
+
+        with TemporaryDirectory() as temp_dir:
+            output_csv = Path(temp_dir) / "tqqq.csv"
+            with patch("buy_low_sell_high.data.sync.YahooMarketDataProvider.load_bars", return_value=yahoo_bars) as yahoo_loader:
+                with patch("buy_low_sell_high.data.sync.InvestingMarketDataProvider.load_bars") as investing_loader:
+                    with patch("buy_low_sell_high.data.sync.StooqMarketDataProvider.load_bars") as stooq_loader:
+                        result = sync_history(output_csv, symbol="TQQQ")
+            yahoo_loader.assert_called_once_with("TQQQ", start_date="2011-01-01")
+            investing_loader.assert_not_called()
+            stooq_loader.assert_not_called()
+            self.assertEqual(result["source"], "yahoo_chart")
+            self.assertEqual(result["rows"], 2)
+            written = output_csv.read_text(encoding="utf-8")
+            self.assertIn("2011-01-03", written)
+            self.assertIn("yahoo_chart", written)
 
     def test_yahoo_provider_falls_back_to_query2(self) -> None:
         payload = yahoo_payload(date(2024, 1, 1), "10")

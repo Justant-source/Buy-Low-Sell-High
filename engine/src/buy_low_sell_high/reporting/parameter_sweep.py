@@ -152,6 +152,7 @@ def build_parameter_sweep(
             },
             "metrics": {
                 "full_return_pct": as_number(run.metrics["total_return_pct"]),
+                "cagr_pct": as_number(run.metrics["cagr_pct"]),
                 "max_drawdown_pct": as_number(run.metrics["max_drawdown_pct"]),
                 "volatility_pct": as_number(run.metrics["volatility_pct"]),
                 "trade_count": int(run.metrics["trade_count"]),
@@ -199,26 +200,22 @@ def build_parameter_sweep(
     ranked_rows = sorted(
         rows,
         key=lambda row: (
-            -D(str(row["metrics"]["mean_segment_return_pct"])),
-            D(str(row["metrics"]["segment_stddev_pct"])),
+            -D(str(row["metrics"]["cagr_pct"])),
+            -D(str(row["metrics"]["max_drawdown_pct"])),
             -D(str(row["metrics"]["full_return_pct"])),
+            str(row["combo_key"]),
         ),
     )
     best_full = max(rows, key=lambda row: D(str(row["metrics"]["full_return_pct"])))
     best_robust = ranked_rows[0]
     warnings: list[str] = []
-    if D(str(best_full["metrics"]["recent_segment_return_pct"])) < D("0"):
+    if D(str(best_full["metrics"]["max_drawdown_pct"])) < D("-60"):
         warnings.append(
-            f"최고 전체수익 조합 {best_full['combo_key']} 는 최근 구간 수익률이 {best_full['metrics']['recent_segment_return_pct']}% 입니다."
+            f"최고 전체수익 조합 {best_full['combo_key']} 는 MDD가 {best_full['metrics']['max_drawdown_pct']}% 입니다."
         )
-    drift = D(str(best_full["metrics"]["full_return_pct"])) - D(str(best_full["metrics"]["recent_segment_return_pct"]))
-    if drift > D("100"):
+    if D(str(best_robust["metrics"]["cagr_pct"])) < D("0"):
         warnings.append(
-            f"최고 전체수익 조합 {best_full['combo_key']} 는 전체 대비 최근 성과 드리프트가 {as_number(drift)}%p 입니다."
-        )
-    if D(str(best_robust["metrics"]["segment_stddev_pct"])) > D("25"):
-        warnings.append(
-            f"최상위 강건 조합 {best_robust['combo_key']} 도 구간 표준편차가 {best_robust['metrics']['segment_stddev_pct']}% 입니다."
+            f"CAGR 기준 상위 조합 {best_robust['combo_key']} 는 연환산 수익률이 {best_robust['metrics']['cagr_pct']}% 입니다."
         )
 
     return {
@@ -242,7 +239,7 @@ def build_parameter_sweep(
             "best_robust_combo": best_robust["combo_key"],
             "pareto_return_mdd_count": len(pareto_return_mdd),
             "pareto_return_stability_count": len(pareto_return_stability),
-            "ranking_basis": "mean_segment_return desc, segment_stddev asc, full_return desc",
+            "ranking_basis": "cagr desc, max_drawdown desc, full_return desc",
         },
         "warnings": warnings,
         "rows": ranked_rows,

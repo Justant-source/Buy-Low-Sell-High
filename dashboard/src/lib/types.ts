@@ -38,7 +38,7 @@ export interface WorkspaceDefinition {
   summary: string;
   defaultProfileId: string;
   csvPath: string;
-  referenceMode: "soxl_reference" | "backtest_only";
+  referenceMode: "mentor_reference" | "official_reference" | "backtest_only";
   warningTags: string[];
   defaultStrategyExecutionModel: string;
   defaultStrategyPriceBasis: string;
@@ -415,11 +415,8 @@ export interface StrategyRankingRowPayload {
   buy_pct: number;
   sell_pct: number;
   full_return_pct: number;
-  mean_segment_return_pct: number;
-  segment_stddev_pct: number;
-  worst_segment_return_pct: number;
-  positive_segment_ratio_pct: number;
-  recent_segment_return_pct: number;
+  cagr_pct: number;
+  max_drawdown_pct: number;
   rank: number;
 }
 
@@ -547,6 +544,7 @@ export interface ParameterSweepRowPayload {
   };
   metrics: {
     full_return_pct: number;
+    cagr_pct: number;
     max_drawdown_pct: number;
     volatility_pct: number;
     trade_count: number;

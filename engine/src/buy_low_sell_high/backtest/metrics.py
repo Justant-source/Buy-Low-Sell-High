@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from decimal import Decimal
-from math import sqrt
+from math import isfinite, sqrt
 
 from ..domain.models import BacktestRun, DailySnapshot, Trade
 from ..domain.money import D, ZERO, quantize_money
@@ -33,13 +33,35 @@ def _stddev(values: list[float]) -> Decimal:
     return D(str(sqrt(variance) * 100))
 
 
+def _annualized_return_pct(daily: list[DailySnapshot]) -> Decimal:
+    if len(daily) < 2:
+        return ZERO
+    start = daily[0].total_equity
+    end = daily[-1].total_equity
+    if start == ZERO:
+        return ZERO
+    elapsed_days = (daily[-1].session_date - daily[0].session_date).days
+    total_return_pct = ((end - start) / start) * D("100")
+    if elapsed_days <= 0:
+        return quantize_money(total_return_pct)
+    # CAGR is undefined once terminal equity falls to or below zero.
+    growth_ratio = end / start
+    if growth_ratio <= ZERO:
+        return quantize_money(total_return_pct)
+    annualized_return = (float(growth_ratio) ** (365 / elapsed_days) - 1) * 100
+    if not isfinite(annualized_return):
+        return quantize_money(total_return_pct)
+    return quantize_money(D(str(annualized_return)))
+
+
 def compute_metrics(run: BacktestRun) -> dict[str, Decimal | int | str]:
     daily = run.daily
     if not daily:
-        return {"total_return_pct": ZERO}
+        return {"total_return_pct": ZERO, "cagr_pct": ZERO}
     start = daily[0].total_equity
     end = daily[-1].total_equity
     total_return_pct = ZERO if start == ZERO else quantize_money(((end - start) / start) * D("100"))
+    cagr_pct = _annualized_return_pct(daily)
     max_drawdown = min((snapshot.drawdown for snapshot in daily), default=ZERO)
     returns = _series_returns(daily)
     volatility = _stddev(returns)
@@ -47,6 +69,7 @@ def compute_metrics(run: BacktestRun) -> dict[str, Decimal | int | str]:
     ts = sum(1 for trade in run.trades if _is_stop(trade))
     return {
         "total_return_pct": total_return_pct,
+        "cagr_pct": cagr_pct,
         "max_drawdown_pct": quantize_money(max_drawdown * D("100")),
         "volatility_pct": quantize_money(volatility),
         "trade_count": len(run.trades),

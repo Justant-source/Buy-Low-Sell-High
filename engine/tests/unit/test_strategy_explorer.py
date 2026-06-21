@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ProcessPoolExecutor
-from datetime import date
+from datetime import date, timedelta
 import unittest
 
 from buy_low_sell_high.domain.models import MarketBar, StrategyConfig
@@ -10,17 +10,21 @@ from buy_low_sell_high.reporting.strategy_explorer import build_slice_strategy_r
 from buy_low_sell_high.reporting.strategy_specs import parse_dynamic_strategy_id
 
 
-def bar(year: int, month: int, day: int, close: str) -> MarketBar:
+def dated_bar(session_date: date, close: str) -> MarketBar:
     price = D(close)
     return MarketBar(
         symbol="SOXL",
-        session_date=date(year, month, day),
+        session_date=session_date,
         open=price,
         high=price + D("1"),
         low=price - D("1"),
         close=price,
         adj_close=price,
     )
+
+
+def bar(year: int, month: int, day: int, close: str) -> MarketBar:
+    return dated_bar(date(year, month, day), close)
 
 
 class StrategyExplorerTest(unittest.TestCase):
@@ -134,9 +138,11 @@ class StrategyExplorerTest(unittest.TestCase):
         )
         self.assertEqual(payload["meta"]["combo_count"], 726)
         self.assertEqual(len(payload["rows"]), 10)
-        self.assertEqual(payload["meta"]["ranking_basis"], "full_return desc, mean_segment_return desc, segment_stddev asc, combo_key asc")
+        self.assertEqual(payload["meta"]["ranking_basis"], "cagr desc, max_drawdown desc, full_return desc, combo_key asc")
         self.assertTrue(payload["rows"][0]["strategy_id"].startswith("t"))
         self.assertIn("BUY", payload["rows"][0]["display_params"])
+        self.assertIn("cagr_pct", payload["rows"][0])
+        self.assertIn("max_drawdown_pct", payload["rows"][0])
 
     def test_slice_strategy_rankings_limit_zero_returns_all_dynamic_combos(self) -> None:
         bars = [
@@ -204,6 +210,25 @@ class StrategyExplorerTest(unittest.TestCase):
         self.assertEqual(parallel_payload["rows"], serial_payload["rows"])
         self.assertEqual(pooled_payload["meta"], serial_payload["meta"])
         self.assertEqual(pooled_payload["rows"], serial_payload["rows"])
+
+    def test_slice_strategy_rankings_parallel_handles_non_positive_terminal_equity(self) -> None:
+        bars = [
+            dated_bar(date(2024, 1, 2) + timedelta(days=offset), f"{100 - (offset * 1.3):.2f}")
+            for offset in range(70)
+        ]
+        payload = build_slice_strategy_rankings(
+            bars,
+            StrategyConfig.from_mapping({"thread_count": 5, "stop_sessions": 30, "initial_capital": 10000}),
+            data_hash="fixture-hash",
+            execution_model="ideal_same_close",
+            price_basis="adjusted_close",
+            limit=10,
+            max_workers=2,
+        )
+
+        self.assertEqual(payload["meta"]["combo_count"], 726)
+        self.assertEqual(len(payload["rows"]), 10)
+        self.assertEqual(payload["rows"][0]["rank"], 1)
 
 
 if __name__ == "__main__":

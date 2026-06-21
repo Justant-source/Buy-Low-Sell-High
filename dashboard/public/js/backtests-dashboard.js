@@ -18,7 +18,6 @@
   const SWEEP_PARETO_LABELS = {
     all: "all",
     return_mdd: "return / MDD",
-    return_stability: "return / stability",
   };
   const state = {
     activeTab: "strategy",
@@ -308,6 +307,14 @@
     return state.workspaces.find((workspace) => workspace.workspaceId === state.workspaceId) || null;
   }
 
+  function workspaceSupportsOfficialReference(workspace) {
+    return !!workspace && workspace.referenceMode !== "backtest_only";
+  }
+
+  function workspaceSupportsMentorReference(workspace) {
+    return !!workspace && workspace.referenceMode === "mentor_reference";
+  }
+
   function currentWorkspaceSlug() {
     const parts = window.location.pathname.split("/").filter(Boolean);
     return parts[0] === "backtests" && parts[1] ? parts[1] : null;
@@ -365,14 +372,30 @@
     }
     const mentorButton = document.getElementById("mentor-tab-button");
     const mentorPanel = document.querySelector('[data-tab-panel="mentor"]');
-    const mentorEnabled = workspace.referenceMode === "soxl_reference";
+    const mentorLegacyCard = document.getElementById("mentor-legacy-card");
+    const officialSubtitle = document.getElementById("official-reference-subtitle");
+    const officialNote = document.getElementById("official-reference-note");
+    const officialEnabled = workspaceSupportsOfficialReference(workspace);
+    const mentorEnabled = workspaceSupportsMentorReference(workspace);
     if (mentorButton) {
-      mentorButton.style.display = mentorEnabled ? "" : "none";
+      mentorButton.style.display = officialEnabled ? "" : "none";
+      mentorButton.textContent = mentorEnabled ? "멘토 래퍼런스" : "공식 기준선";
     }
     if (mentorPanel instanceof HTMLElement) {
-      mentorPanel.style.display = mentorEnabled ? "" : "none";
+      mentorPanel.style.display = officialEnabled ? "" : "none";
     }
-    if (!mentorEnabled && state.activeTab === "mentor") {
+    if (mentorLegacyCard instanceof HTMLElement) {
+      mentorLegacyCard.style.display = mentorEnabled ? "" : "none";
+    }
+    if (officialSubtitle) {
+      officialSubtitle.textContent = `${workspace.navLabel} Yahoo adjusted_close 기준 내부 공식 연구 기준선입니다.`;
+    }
+    if (officialNote) {
+      officialNote.textContent = mentorEnabled
+        ? "현재 워크스페이스의 공식 기준선과 레거시 멘토 원본 자료를 함께 보여줍니다. 멘토 이미지는 legacy comparison 전용입니다."
+        : "현재 워크스페이스의 대표 프로필을 내부 공식 기준선으로 고정해 같은 Yahoo 일봉 데이터셋에서 비교합니다.";
+    }
+    if (!officialEnabled && state.activeTab === "mentor") {
       activateTab("strategy");
     }
   }
@@ -442,38 +465,6 @@
     return strategyId === BUY_HOLD_STRATEGY_ID;
   }
 
-  function mean(values) {
-    if (!values.length) {
-      return 0;
-    }
-    return values.reduce((sum, value) => sum + value, 0) / values.length;
-  }
-
-  function stddev(values) {
-    if (values.length <= 1) {
-      return 0;
-    }
-    const avg = mean(values);
-    const variance = values.reduce((sum, value) => sum + ((value - avg) ** 2), 0) / values.length;
-    return Math.sqrt(variance);
-  }
-
-  function segmentPresetsForSlice(slice) {
-    if (!state.strategyExplorer || !slice) {
-      return [];
-    }
-    return (state.strategyExplorer.meta.segment_presets || [])
-      .map((preset) => {
-        const start = preset.start > slice.start ? preset.start : slice.start;
-        const end = preset.end < slice.end ? preset.end : slice.end;
-        if (start > end) {
-          return null;
-        }
-        return { ...preset, start, end };
-      })
-      .filter(Boolean);
-  }
-
   function buildStrategyBenchmarkRow(slice) {
     if (!state.strategyExplorer) {
       return null;
@@ -482,24 +473,16 @@
       start: state.strategyExplorer.meta.period_start,
       end: state.strategyExplorer.meta.period_end,
     };
-    const clippedSegments = segmentPresetsForSlice(activeSlice);
     const benchmarkStrategy = getStrategyById(BUY_HOLD_STRATEGY_ID);
     if (!benchmarkStrategy) {
       return null;
     }
     const sliceSeries = rebaseDaily(strategyDailySlice(benchmarkStrategy, activeSlice.start, activeSlice.end));
     const summary = summarizeRebasedSlice(sliceSeries);
+    const drawdownSummary = summarizeSliceDrawdown(sliceSeries);
     if (!summary) {
       return null;
     }
-    const segmentReturns = clippedSegments
-      .map((preset) => {
-        const segmentSeries = rebaseDaily(strategyDailySlice(benchmarkStrategy, preset.start, preset.end));
-        const segmentSummary = summarizeRebasedSlice(segmentSeries);
-        return segmentSummary ? segmentSummary.returnPct : null;
-      })
-      .filter((value) => value != null);
-    const effectiveSegmentReturns = segmentReturns.length ? segmentReturns : [summary.returnPct];
     return {
       combo_key: "Buy & Hold",
       strategy_id: BUY_HOLD_STRATEGY_ID,
@@ -510,12 +493,8 @@
       buy_pct: 0,
       sell_pct: 0,
       full_return_pct: summary.returnPct,
-      mean_segment_return_pct: mean(effectiveSegmentReturns),
-      segment_stddev_pct: stddev(effectiveSegmentReturns),
-      worst_segment_return_pct: Math.min(...effectiveSegmentReturns),
-      positive_segment_ratio_pct:
-        (effectiveSegmentReturns.filter((value) => value > 0).length / effectiveSegmentReturns.length) * 100,
-      recent_segment_return_pct: effectiveSegmentReturns[effectiveSegmentReturns.length - 1],
+      cagr_pct: summary.cagrPct,
+      max_drawdown_pct: drawdownSummary?.maxDrawdownPct ?? 0,
       rank: null,
       rank_display: "-",
       is_benchmark: true,
@@ -709,8 +688,19 @@
     }
     const start = series[0].equity;
     const end = series[series.length - 1].equity;
+    const elapsedDays = (parseDateValue(series[series.length - 1].date) - parseDateValue(series[0].date)) / (1000 * 60 * 60 * 24);
+    const growthRatio = start === 0 ? 0 : end / start;
+    const cagrPct =
+      start === 0
+      || !Number.isFinite(growthRatio)
+      || growthRatio <= 0
+      || !Number.isFinite(elapsedDays)
+      || elapsedDays <= 0
+        ? (start === 0 ? 0 : ((end - start) / start) * 100)
+        : ((growthRatio ** (365 / elapsedDays)) - 1) * 100;
     return {
       returnPct: start === 0 ? 0 : ((end - start) / start) * 100,
+      cagrPct,
       start: series[0].date,
       end: series[series.length - 1].date,
     };
@@ -813,7 +803,7 @@
     if (!body) {
       return;
     }
-    body.innerHTML = `<tr><td colspan="8" class="muted" style="text-align:center">${ui.escapeHtml(message)}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7" class="muted" style="text-align:center">${ui.escapeHtml(message)}</td></tr>`;
     document.getElementById("strategy-selector-note").textContent = `선택 ${state.selectedStrategyIds.length} / ${MAX_STRATEGY_SELECTION}`;
     ui.setText("strategy-ranking-meta", "총 0개");
     ui.setText("strategy-ranking-page-status", "1 / 1");
@@ -976,9 +966,8 @@
           <td class="num">${ui.escapeHtml(row.is_benchmark ? "-" : String(row.rank_display ?? row.rank ?? displayRank))}</td>
           <td>${ui.escapeHtml(row.display_params || row.combo_key)}</td>
           <td class="num">${ui.escapeHtml(ui.formatPercent(row.full_return_pct))}</td>
-          <td class="num">${ui.escapeHtml(ui.formatPercent(row.mean_segment_return_pct))}</td>
-          <td class="num">${ui.escapeHtml(ui.formatPercent(row.segment_stddev_pct))}</td>
-          <td class="num">${ui.escapeHtml(ui.formatPercent(row.recent_segment_return_pct))}</td>
+          <td class="num">${ui.escapeHtml(ui.formatPercent(row.cagr_pct))}</td>
+          <td class="num">${ui.escapeHtml(ui.formatPercent(row.max_drawdown_pct))}</td>
         </tr>`;
       })
       .join("");
@@ -2104,12 +2093,8 @@
   }
 
   function renderOfficialMeta() {
-    if (!state.officialExplorer) {
-      return;
-    }
-    const selection = state.officialExplorer;
-    ui.setText("official-combo", selection.official_profile.combo_key);
-    ui.setText("official-ranking-basis", selection.meta.selection_basis);
+    ui.setText("official-combo", state.officialExplorer?.official_profile?.combo_key || "-");
+    ui.setText("official-ranking-basis", state.officialExplorer?.meta?.selection_basis || "-");
   }
 
   function renderOfficialMatrix() {
@@ -2127,7 +2112,7 @@
     const header = `<tr>
       <th class="sticky-1">연도</th>
       <th class="sticky-2 benchmark-col">연간 주가 변화</th>
-      <th class="sticky-3 benchmark-col">SOXL</th>
+      <th class="sticky-3 benchmark-col">${ui.escapeHtml(payload.meta.symbol)}</th>
       ${comboKeys
         .map((comboKey) => `<th class="num${comboKey === officialCombo ? " representative-col" : ""}">${comboKey.replace("x", "/")}</th>`)
         .join("")}
@@ -2179,6 +2164,37 @@
     body.innerHTML = `${header}${yearlyRows}<tr class="section-row"><td colspan="${3 + comboKeys.length}">aggregate rows</td></tr>${aggregateRows}`;
   }
 
+  async function loadOfficialMatrix() {
+    const workspace = currentWorkspace();
+    if (!workspaceSupportsOfficialReference(workspace) || !state.dataStatus) {
+      state.officialMatrix = null;
+      renderOfficialMatrix();
+      return;
+    }
+    if (state.officialMatrix) {
+      renderOfficialMatrix();
+      return;
+    }
+    const body = document.getElementById("official-matrix-body");
+    if (body) {
+      body.innerHTML = '<tr><td class="muted" style="text-align:center">공식 매트릭스를 불러오는 중입니다.</td></tr>';
+    }
+    const csvPath = state.dataStatus.snapshot_path || "";
+    const profileId = workspace.defaultProfileId || state.profileId;
+    try {
+      state.officialMatrix = await ui.fetchJson(
+        `/api/backtests/official-matrix?${new URLSearchParams({ profileId, csvPath }).toString()}`,
+      );
+      renderOfficialMatrix();
+    } catch (error) {
+      state.officialMatrix = null;
+      if (body) {
+        const message = error instanceof Error ? error.message : "공식 매트릭스를 불러오지 못했습니다.";
+        body.innerHTML = `<tr><td class="muted" style="text-align:center">${ui.escapeHtml(message)}</td></tr>`;
+      }
+    }
+  }
+
   function renderStrategyExplorer(payload) {
     state.strategyExplorer = payload;
     const activePreset = payload.meta.slice_presets.find((preset) => preset.preset_id === state.selectedStrategyPresetId) || payload.meta.slice_presets[0];
@@ -2196,7 +2212,7 @@
     }
     const minReturn = Number(document.getElementById("sweep-filter-min-return").value || 0);
     const maxMdd = Number(document.getElementById("sweep-filter-max-mdd").value || -100);
-    const maxStd = Number(document.getElementById("sweep-filter-max-std").value || 100);
+    const minCagr = Number(document.getElementById("sweep-filter-min-cagr").value || -100);
     const paretoMode = document.getElementById("sweep-filter-pareto").value || "all";
     return payload.rows.filter((row) => {
       if (row.metrics.full_return_pct < minReturn) {
@@ -2205,13 +2221,10 @@
       if (row.metrics.max_drawdown_pct < maxMdd) {
         return false;
       }
-      if (row.metrics.segment_stddev_pct > maxStd) {
+      if (row.metrics.cagr_pct < minCagr) {
         return false;
       }
       if (paretoMode === "return_mdd" && !row.flags.pareto_return_mdd) {
-        return false;
-      }
-      if (paretoMode === "return_stability" && !row.flags.pareto_return_stability) {
         return false;
       }
       return true;
@@ -2222,7 +2235,7 @@
     ui.setText("sweep-kpi-count", ui.formatNumber(payload.meta.combo_count));
     ui.setText("sweep-kpi-best-full", payload.summary.best_full_return_combo);
     ui.setText("sweep-kpi-best-robust", payload.summary.best_robust_combo);
-    ui.setText("sweep-kpi-pareto", `${payload.summary.pareto_return_mdd_count} / ${payload.summary.pareto_return_stability_count}`);
+    ui.setText("sweep-kpi-pareto", ui.formatNumber(payload.summary.pareto_return_mdd_count));
     document.getElementById("sweep-meta-note").textContent = "";
   }
 
@@ -2230,12 +2243,11 @@
     const rows = payload.warnings.slice();
     if (filteredRows.length) {
       const leader = filteredRows[0];
-      const drift = leader.metrics.full_return_pct - leader.metrics.recent_segment_return_pct;
-      if (drift > 50) {
-        rows.push(`필터 기준 1위 ${leader.combo_key} 는 전체 대비 최근 성과 드리프트가 ${drift.toFixed(2)}%p 입니다.`);
+      if (leader.metrics.max_drawdown_pct < -60) {
+        rows.push(`필터 기준 1위 ${leader.combo_key} 의 MDD가 ${leader.metrics.max_drawdown_pct.toFixed(2)}% 입니다.`);
       }
-      if (leader.metrics.segment_stddev_pct > 20) {
-        rows.push(`필터 기준 1위 ${leader.combo_key} 의 구간 표준편차가 ${leader.metrics.segment_stddev_pct.toFixed(2)}% 입니다.`);
+      if (leader.metrics.cagr_pct < 0) {
+        rows.push(`필터 기준 1위 ${leader.combo_key} 의 CAGR이 ${leader.metrics.cagr_pct.toFixed(2)}% 입니다.`);
       }
     }
     const target = document.getElementById("sweep-warning-list");
@@ -2262,15 +2274,15 @@
           type: "scatter",
           marker: {
             size: 10,
-            color: filteredRows.map((row) => row.metrics.recent_segment_return_pct),
+            color: filteredRows.map((row) => row.metrics.cagr_pct),
             colorscale: "RdYlGn",
             line: {
               color: filteredRows.map((row) => (row.flags.pareto_return_mdd ? "#241d15" : "transparent")),
               width: 1.4,
             },
-            colorbar: { title: "recent %" },
+            colorbar: { title: "CAGR %" },
           },
-          hovertemplate: "%{text}<br>MDD %{x:.2f}%<br>Return %{y:.2f}%<extra></extra>",
+          hovertemplate: "%{text}<br>MDD %{x:.2f}%<br>Return %{y:.2f}%<br>CAGR %{marker.color:.2f}%<extra></extra>",
         },
       ],
       {
@@ -2293,18 +2305,18 @@
       [
         {
           x: filteredRows.map((row) => String(row.params[axis])),
-          y: filteredRows.map((row) => row.metrics.mean_segment_return_pct),
+          y: filteredRows.map((row) => row.metrics.cagr_pct),
           type: "box",
           boxpoints: "outliers",
           marker: { color: "#d78a4b" },
           line: { color: "#91502d" },
-          hovertemplate: `${axis}=%{x}<br>mean segment %{y:.2f}%<extra></extra>`,
+          hovertemplate: `${axis}=%{x}<br>CAGR %{y:.2f}%<extra></extra>`,
         },
       ],
       {
         ...chartLayoutBase(),
         xaxis: { ...chartLayoutBase().xaxis, title: axis },
-        yaxis: { ...chartLayoutBase().yaxis, title: "Mean Segment Return %" },
+        yaxis: { ...chartLayoutBase().yaxis, title: "CAGR %" },
       },
       { displayModeBar: false, responsive: true },
     );
@@ -2321,10 +2333,10 @@
         {
           type: "parcoords",
           line: {
-            color: filteredRows.map((row) => row.metrics.recent_segment_return_pct),
+            color: filteredRows.map((row) => row.metrics.cagr_pct),
             colorscale: "RdYlGn",
             showscale: true,
-            colorbar: { title: "recent %" },
+            colorbar: { title: "CAGR %" },
           },
           dimensions: [
             { label: "thread", values: filteredRows.map((row) => row.params.thread_count) },
@@ -2332,9 +2344,8 @@
             { label: "buy %", values: filteredRows.map((row) => row.params.buy_pct) },
             { label: "sell %", values: filteredRows.map((row) => row.params.sell_pct) },
             { label: "full return", values: filteredRows.map((row) => row.metrics.full_return_pct) },
+            { label: "CAGR", values: filteredRows.map((row) => row.metrics.cagr_pct) },
             { label: "MDD", values: filteredRows.map((row) => row.metrics.max_drawdown_pct) },
-            { label: "mean seg", values: filteredRows.map((row) => row.metrics.mean_segment_return_pct) },
-            { label: "seg std", values: filteredRows.map((row) => row.metrics.segment_stddev_pct) },
           ],
         },
       ],
@@ -2350,7 +2361,7 @@
   function renderSweepTable(filteredRows) {
     const tbody = document.getElementById("sweep-table-body");
     if (!filteredRows.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center">필터 결과가 없습니다.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center">필터 결과가 없습니다.</td></tr>';
       return;
     }
     tbody.innerHTML = filteredRows.slice(0, 10).map((row) => {
@@ -2358,17 +2369,12 @@
       if (row.flags.pareto_return_mdd) {
         pareto.push("R/MDD");
       }
-      if (row.flags.pareto_return_stability) {
-        pareto.push("R/STAB");
-      }
       return `<tr>
         <td class="mono">${ui.escapeHtml(row.combo_key)}</td>
         <td class="num">${ui.escapeHtml(`T${row.params.thread_count} S${row.params.stop_sessions} BUY${formatSignedSweepPercent(row.params.buy_pct)} SELL${formatSignedSweepPercent(row.params.sell_pct)}`)}</td>
         <td class="num">${ui.escapeHtml(ui.formatPercent(row.metrics.full_return_pct))}</td>
+        <td class="num">${ui.escapeHtml(ui.formatPercent(row.metrics.cagr_pct))}</td>
         <td class="num">${ui.escapeHtml(ui.formatPercent(row.metrics.max_drawdown_pct))}</td>
-        <td class="num">${ui.escapeHtml(ui.formatPercent(row.metrics.mean_segment_return_pct))}</td>
-        <td class="num">${ui.escapeHtml(ui.formatPercent(row.metrics.segment_stddev_pct))}</td>
-        <td class="num">${ui.escapeHtml(ui.formatPercent(row.metrics.recent_segment_return_pct))}</td>
         <td class="num">${pareto.length ? pareto.map((label) => `<span class="badge info">${ui.escapeHtml(label)}</span>`).join(" ") : '<span class="badge neutral">-</span>'}</td>
       </tr>`;
     }).join("");
@@ -2387,7 +2393,7 @@
       setEmptyChart("sweep-box-chart", "최신 스윕 산출물이 없습니다.");
       setEmptyChart("sweep-parcoords-chart", "최신 스윕 산출물이 없습니다.");
       document.getElementById("sweep-table-body").innerHTML =
-        '<tr><td colspan="8" class="muted" style="text-align:center">스윕 결과를 불러오지 않았습니다.</td></tr>';
+        '<tr><td colspan="6" class="muted" style="text-align:center">스윕 결과를 불러오지 않았습니다.</td></tr>';
       document.getElementById("sweep-warning-list").innerHTML =
         '<div class="stack-row"><span class="title">최신 스윕 산출물이 없습니다.</span><span class="badge neutral">empty</span></div>';
       return;
@@ -2552,10 +2558,11 @@
     const workspace = currentWorkspace();
     const executionModel = workspace?.defaultStrategyExecutionModel || currentProfile()?.executionModel || "ideal_same_close";
     const priceBasis = workspace?.defaultStrategyPriceBasis || currentProfile()?.priceBasis || "adjusted_close";
+    const officialEnabled = workspaceSupportsOfficialReference(workspace);
     const requests = [
       ui.fetchJson(`/api/backtests/strategy-explorer?${new URLSearchParams({ profileId: state.profileId, csvPath, executionModel, priceBasis }).toString()}`),
     ];
-    if (workspace?.referenceMode === "soxl_reference") {
+    if (officialEnabled) {
       requests.unshift(
         ui.fetchJson(`/api/backtests/official-explorer?${new URLSearchParams({ profileId: state.profileId, csvPath }).toString()}`),
       );
@@ -2563,10 +2570,10 @@
     const [firstPayload, secondPayload] = await Promise.all(requests);
     state.strategyDetails = {};
     state.threadTimelineCache = {};
-    state.officialExplorer = workspace?.referenceMode === "soxl_reference" ? firstPayload : null;
+    state.officialExplorer = officialEnabled ? firstPayload : null;
     state.officialMatrix = null;
     renderOfficialMeta();
-    renderStrategyExplorer(workspace?.referenceMode === "soxl_reference" ? secondPayload : firstPayload);
+    renderStrategyExplorer(officialEnabled ? secondPayload : firstPayload);
     const ranking = await loadStrategyRanking(requestId);
     if (!ranking || state.strategySliceRequestId !== requestId) {
       return;
@@ -2629,6 +2636,9 @@
         const tabId = button.getAttribute("data-tab");
         if (tabId) {
           activateTab(tabId);
+          if (tabId === "mentor") {
+            void loadOfficialMatrix();
+          }
         }
       });
     });
@@ -2662,7 +2672,7 @@
           state.strategyRankingSortDirection = state.strategyRankingSortDirection === "asc" ? "desc" : "asc";
         } else {
           state.strategyRankingSortKey = sortKey;
-          state.strategyRankingSortDirection = sortKey === "segment_stddev_pct" ? "asc" : "desc";
+          state.strategyRankingSortDirection = sortKey === "rank" ? "asc" : "desc";
         }
         resetStrategyRankingPage();
         renderStrategyRanking();
@@ -2760,7 +2770,7 @@
     document.getElementById("sweep-filter-reset").addEventListener("click", () => {
       document.getElementById("sweep-filter-min-return").value = "0";
       document.getElementById("sweep-filter-max-mdd").value = "-100";
-      document.getElementById("sweep-filter-max-std").value = "100";
+      document.getElementById("sweep-filter-min-cagr").value = "-100";
       document.getElementById("sweep-filter-pareto").value = "all";
       if (state.sweepArtifact) {
         renderSweepArtifact(state.sweepArtifact);

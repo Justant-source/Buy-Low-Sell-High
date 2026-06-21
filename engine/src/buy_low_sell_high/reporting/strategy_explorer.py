@@ -31,7 +31,7 @@ from .research_common import (
 from .strategy_specs import build_strategy_config, format_strategy_label, iter_parameter_strategy_specs, resolve_strategy_spec
 
 STRATEGY_RANKING_BASIS = "mean_segment_return desc, segment_stddev asc, full_return desc"
-SLICE_RANKING_BASIS = "full_return desc, mean_segment_return desc, segment_stddev asc, combo_key asc"
+SLICE_RANKING_BASIS = "cagr desc, max_drawdown desc, full_return desc, combo_key asc"
 
 
 def combo_key(thread_count: int, stop_sessions: int) -> str:
@@ -148,16 +148,7 @@ def _slice_ranking_row(
         price_basis=price_basis,
     )
     run = run_backtest(bars, config, data_hash=data_hash)
-    segment_rows = segment_rows_from_daily(run.daily, segment_presets)
-    segment_returns = [D(row["return_pct"]) for row in segment_rows]
-    mean_segment_return = mean_decimal(segment_returns)
-    segment_stddev = stddev_decimal(segment_returns)
     full_return = D(str(run.metrics["total_return_pct"]))
-    worst_segment_return = min(segment_returns, default=D("0"))
-    recent_segment_return = segment_returns[-1] if segment_returns else D("0")
-    positive_ratio = 0.0
-    if segment_returns:
-        positive_ratio = round((sum(1 for value in segment_returns if value > D("0")) / len(segment_returns)) * 100, 2)
     return {
         "combo_key": strategy_spec["strategy_id"],
         "strategy_id": strategy_spec["strategy_id"],
@@ -168,11 +159,8 @@ def _slice_ranking_row(
         "buy_pct": as_number(D(strategy_spec.get("buy_pct", 0))),
         "sell_pct": as_number(D(strategy_spec.get("sell_pct", 0))),
         "full_return_pct": as_number(full_return),
-        "mean_segment_return_pct": as_number(mean_segment_return),
-        "segment_stddev_pct": as_number(segment_stddev),
-        "worst_segment_return_pct": as_number(worst_segment_return),
-        "positive_segment_ratio_pct": positive_ratio,
-        "recent_segment_return_pct": as_number(recent_segment_return),
+        "cagr_pct": as_number(D(str(run.metrics["cagr_pct"]))),
+        "max_drawdown_pct": as_number(D(str(run.metrics["max_drawdown_pct"]))),
     }
 
 
@@ -271,9 +259,9 @@ def build_slice_strategy_rankings(
 
     rows.sort(
         key=lambda row: (
+            -D(str(row["cagr_pct"])),
+            -D(str(row["max_drawdown_pct"])),
             -D(str(row["full_return_pct"])),
-            -D(str(row["mean_segment_return_pct"])),
-            D(str(row["segment_stddev_pct"])),
             str(row["combo_key"]),
         )
     )

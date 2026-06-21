@@ -17,11 +17,11 @@ from buy_low_sell_high.reporting.official_matrix import (
 )
 
 
-def bar(year: int, month: int, day: int, close: str, adj_close: str | None = None) -> MarketBar:
+def bar(year: int, month: int, day: int, close: str, adj_close: str | None = None, symbol: str = "SOXL") -> MarketBar:
     raw_price = D(close)
     adjusted_price = D(adj_close or close)
     return MarketBar(
-        symbol="SOXL",
+        symbol=symbol,
         session_date=date(year, month, day),
         open=raw_price,
         high=raw_price + D("1"),
@@ -84,6 +84,43 @@ class OfficialMatrixTest(unittest.TestCase):
         self.assertEqual(payload["official_profile"]["config_hash"], config.config_hash())
         self.assertEqual(payload["meta"]["execution_model"], "ideal_same_close")
         self.assertEqual(payload["meta"]["price_basis"], "adjusted_close")
+
+    def test_build_official_explorer_accepts_tqqq_official_profile(self) -> None:
+        bars = [
+            bar(2024, 1, 2, "10", "10.1", symbol="TQQQ"),
+            bar(2024, 1, 3, "9", "9.2", symbol="TQQQ"),
+            bar(2024, 1, 4, "11", "11.3", symbol="TQQQ"),
+        ]
+        config = StrategyConfig.from_mapping(
+            {
+                "profile_id": "tqqq_official_ddeolsao_pal_v1",
+                "symbol": "TQQQ",
+                "thread_count": 5,
+                "stop_sessions": 40,
+                "initial_capital": 1000,
+                "price_basis": "adjusted_close",
+                "execution_model": "ideal_same_close",
+                "sizing_mode": "fixed_principal",
+            }
+        )
+        payload = build_official_explorer(
+            bars,
+            config,
+            data_hash="fixture-hash",
+            catalog=(
+                {
+                    "strategy_id": "5x40",
+                    "label": "5T / 40S",
+                    "thread_count": 5,
+                    "stop_sessions": 40,
+                    "mentor_profiles": [],
+                },
+            ),
+            catalog_id="official-fixture",
+        )
+        self.assertEqual(payload["meta"]["symbol"], "TQQQ")
+        self.assertEqual(payload["meta"]["official_profile_id"], "tqqq_official_ddeolsao_pal_v1")
+        self.assertEqual(payload["official_profile"]["profile_id"], "tqqq_official_ddeolsao_pal_v1")
 
     def test_build_official_matrix_uses_dynamic_windows_and_selected_combo(self) -> None:
         bars = [

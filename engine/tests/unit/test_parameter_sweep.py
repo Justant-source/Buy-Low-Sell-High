@@ -64,7 +64,9 @@ class ParameterSweepTest(unittest.TestCase):
         self.assertIn("best_robust_combo", payload["summary"])
         self.assertIn("flags", payload["rows"][0])
         self.assertIn("pareto_return_mdd", payload["rows"][0]["flags"])
+        self.assertIn("cagr_pct", payload["rows"][0]["metrics"])
         self.assertIn("mean_segment_return_pct", payload["rows"][0]["metrics"])
+        self.assertEqual(payload["summary"]["ranking_basis"], "cagr desc, max_drawdown desc, full_return desc")
         self.assertEqual(set(payload["rows"][0]["params"].keys()), {"thread_count", "stop_sessions", "buy_pct", "sell_pct"})
         self.assertEqual(payload["meta"]["segment_presets"][0]["preset_id"], "2025-latest")
 

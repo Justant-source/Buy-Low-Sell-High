@@ -286,13 +286,12 @@
                   </div>
                 </th>
                 <th class="num" data-strategy-sort-key="full_return_pct" style="cursor:pointer">Full Return</th>
-                <th class="num" data-strategy-sort-key="mean_segment_return_pct" style="cursor:pointer">Mean Segment</th>
-                <th class="num" data-strategy-sort-key="segment_stddev_pct" style="cursor:pointer">Segment Std</th>
-                <th class="num" data-strategy-sort-key="recent_segment_return_pct" style="cursor:pointer">Recent</th>
+                <th class="num" data-strategy-sort-key="cagr_pct" style="cursor:pointer">CAGR</th>
+                <th class="num" data-strategy-sort-key="max_drawdown_pct" style="cursor:pointer">MDD</th>
               </tr>
             </thead>
             <tbody id="strategy-ranking-body">
-              <tr><td colspan="8" class="muted" style="text-align:center">전략 랭킹을 불러오는 중입니다.</td></tr>
+              <tr><td colspan="7" class="muted" style="text-align:center">전략 랭킹을 불러오는 중입니다.</td></tr>
             </tbody>
           </table>
         </div>
@@ -488,8 +487,8 @@
       <div class="row row-4">
         <div class="kpi"><span class="kpi-label">콤보 수</span><span class="kpi-value" id="sweep-kpi-count">-</span><div class="kpi-meta">core4_v4</div></div>
         <div class="kpi"><span class="kpi-label">최고 전체 수익</span><span class="kpi-value mono" id="sweep-kpi-best-full">-</span><div class="kpi-meta">combo key</div></div>
-        <div class="kpi"><span class="kpi-label">최고 강건 조합</span><span class="kpi-value mono" id="sweep-kpi-best-robust">-</span><div class="kpi-meta">mean segment return basis</div></div>
-        <div class="kpi"><span class="kpi-label">Pareto</span><span class="kpi-value" id="sweep-kpi-pareto">-</span><div class="kpi-meta">return/MDD + return/stability</div></div>
+        <div class="kpi"><span class="kpi-label">최고 CAGR 조합</span><span class="kpi-value mono" id="sweep-kpi-best-robust">-</span><div class="kpi-meta">cagr desc, mdd desc</div></div>
+        <div class="kpi"><span class="kpi-label">Pareto</span><span class="kpi-value" id="sweep-kpi-pareto">-</span><div class="kpi-meta">return / MDD frontier</div></div>
       </div>
 
       <div class="row row-2">
@@ -497,7 +496,7 @@
           <div class="card-head">
             <div>
               <div class="card-title">Pareto Scatter</div>
-              <div class="card-sub">전체 수익률 vs MDD, 색상은 recent segment return입니다.</div>
+              <div class="card-sub">전체 수익률 vs MDD, 색상은 CAGR입니다.</div>
             </div>
           </div>
           <div class="chart-wrap" id="sweep-scatter-chart"><div class="empty-state">스윕 결과가 준비되면 Pareto scatter가 표시됩니다.</div></div>
@@ -506,7 +505,7 @@
           <div class="card-head">
             <div>
               <div class="card-title">Parameter Box Plot</div>
-              <div class="card-sub">선택 파라미터 값별 mean segment return 분포입니다.</div>
+              <div class="card-sub">선택 파라미터 값별 CAGR 분포입니다.</div>
             </div>
             <select class="select" id="sweep-box-axis" style="width:180px">
               <option value="thread_count">thread_count</option>
@@ -533,7 +532,7 @@
         <div class="card-head">
           <div>
             <div class="card-title">상위 10 콤보</div>
-            <div class="card-sub">기본 정렬: mean segment return desc, segment stddev asc, full return desc</div>
+            <div class="card-sub">기본 정렬: cagr desc, max_drawdown desc, full return desc</div>
           </div>
         </div>
         <div class="sweep-filter-grid">
@@ -546,15 +545,14 @@
             <input class="input mono" id="sweep-filter-max-mdd" type="number" step="5" value="-100">
           </div>
           <div class="field">
-            <label for="sweep-filter-max-std">최대 구간 표준편차</label>
-            <input class="input mono" id="sweep-filter-max-std" type="number" step="5" value="100">
+            <label for="sweep-filter-min-cagr">최소 CAGR</label>
+            <input class="input mono" id="sweep-filter-min-cagr" type="number" step="5" value="-100">
           </div>
           <div class="field">
             <label for="sweep-filter-pareto">Pareto 필터</label>
             <select class="select" id="sweep-filter-pareto">
               <option value="all" selected>all</option>
               <option value="return_mdd">return / MDD</option>
-              <option value="return_stability">return / stability</option>
             </select>
           </div>
         </div>
@@ -572,15 +570,13 @@
                 <th>Combo</th>
                 <th class="num">Params</th>
                 <th class="num">Full Return</th>
+                <th class="num">CAGR</th>
                 <th class="num">MDD</th>
-                <th class="num">Mean Segment</th>
-                <th class="num">Segment Std</th>
-                <th class="num">Recent</th>
                 <th class="num">Pareto</th>
               </tr>
             </thead>
             <tbody id="sweep-table-body">
-              <tr><td colspan="8" class="muted" style="text-align:center">스윕 결과를 불러오지 않았습니다.</td></tr>
+              <tr><td colspan="6" class="muted" style="text-align:center">스윕 결과를 불러오지 않았습니다.</td></tr>
             </tbody>
           </table>
         </div>
@@ -589,6 +585,29 @@
 
     <section class="tab-panel" data-tab-panel="mentor">
       <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">공식 기준선</div>
+            <div class="card-sub" id="official-reference-subtitle">Yahoo adjusted_close 기준 내부 공식 연구 기준선입니다.</div>
+          </div>
+          <div class="sc-tags">
+            <span class="badge info mono" id="official-combo">-</span>
+            <span class="badge neutral mono" id="official-ranking-basis">-</span>
+          </div>
+        </div>
+        <div class="notice" style="margin-bottom:14px" id="official-reference-note">
+          현재 워크스페이스의 대표 프로필을 공식 기준선으로 고정해 같은 Yahoo 일봉 데이터셋에서 비교합니다.
+        </div>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <tbody id="official-matrix-body">
+              <tr><td class="muted" style="text-align:center">공식 매트릭스를 불러오는 중입니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" id="mentor-legacy-card">
         <div class="card-head">
           <div>
             <div class="card-title">멘토 원본 자료</div>
@@ -610,6 +629,6 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
 <script src="/js/common.js?v=20260621-01"></script>
-<script src="/js/backtests-dashboard.js?v=20260621-13"></script>
+<script src="/js/backtests-dashboard.js?v=20260621-14"></script>
 </body>
 </html>
