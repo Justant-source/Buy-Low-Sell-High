@@ -136,6 +136,21 @@ class ThreadTimelineTest(unittest.TestCase):
         self.assertEqual(len(last_session["open_positions"]), 2)
         self.assertTrue(any(interval["end_date"] is None for lane in payload["lanes"] for interval in lane["intervals"]))
 
+    def test_dynamic_four_parameter_strategy_id_is_supported(self) -> None:
+        payload = build_thread_timeline(
+            [
+                bar(2024, 1, 2, "10"),
+                bar(2024, 1, 3, "9"),
+                bar(2024, 1, 4, "11"),
+            ],
+            StrategyConfig.from_mapping({"thread_count": 5, "stop_sessions": 30, "initial_capital": 1000}),
+            data_hash="fixture-hash",
+            strategy_id="t5-s40-buy-2-sell+3",
+        )
+        self.assertEqual(payload["meta"]["strategy_id"], "t5-s40-buy-2-sell+3")
+        self.assertEqual(payload["meta"]["thread_count"], 5)
+        self.assertEqual(payload["meta"]["stop_sessions"], 40)
+
 
 if __name__ == "__main__":
     unittest.main()

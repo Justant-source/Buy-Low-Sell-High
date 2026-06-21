@@ -1,6 +1,7 @@
 PYTHON := python3
 NPM := npm
 PYTHONPATH := engine/src
+SYMBOL ?= SOXL
 
 .PHONY: bootstrap-check lint-docs test smoke test-data test-strategy test-backtest test-integration typecheck lint ci dashboard-build dashboard-test e2e clean-room migrate worker-smoke scenario-report e2e-backtest e2e-risk reference-check backtest-reference backtest-grid backtest-run official-explorer official-matrix official-reference-check legacy-mentor-compare mentor-matrix parity-mentor-matrix mentor-floor data-import data-sync data-validate dashboard worker docker-init docker-sync docker-backtest
 
@@ -23,13 +24,13 @@ data-import:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m buy_low_sell_high.cli data status --csv engine/tests/fixtures/sample_soxl.csv --symbol SOXL
 
 data-sync:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m buy_low_sell_high.cli data sync --symbol SOXL --start-date 2011-01-01
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m buy_low_sell_high.cli data sync --symbol $(SYMBOL)
 
 backtest-run:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m buy_low_sell_high.cli backtest run --profile configs/strategies/soxl_official_ddeolsao_pal_v1.yaml --symbol SOXL
 
 data-validate:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m buy_low_sell_high.cli data validate --symbol SOXL
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m buy_low_sell_high.cli data validate --symbol $(SYMBOL)
 
 test-data test-strategy test-backtest test-integration:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m unittest discover -s engine/tests/unit -p 'test_*.py'
@@ -86,10 +87,10 @@ docker-backtest:
 	./scripts/docker_backtest_default.sh
 
 dashboard-build:
-	$(NPM) --prefix dashboard run build
+	./scripts/dashboard_exec.sh build
 
 dashboard-test:
-	$(NPM) --prefix dashboard test
+	./scripts/dashboard_exec.sh test
 
 dashboard migrate typecheck lint worker:
 	@echo "Command scaffolded but not executable in this minimal environment"

@@ -12,13 +12,10 @@ from ..domain.models import MarketBar, StrategyConfig
 from ..domain.money import D, ZERO
 
 DEFAULT_COMBOS: tuple[tuple[int, int], ...] = (
-    (5, 10),
     (5, 30),
     (5, 40),
-    (6, 10),
     (6, 30),
     (6, 40),
-    (7, 10),
     (7, 30),
     (7, 40),
 )
@@ -28,7 +25,7 @@ DEFAULT_WINDOWS: dict[str, tuple[int, int]] = {
     "y3": (2022, 2024),
     "y1": (2024, 2024),
 }
-DEFAULT_SELECTED_COUNT_COMBOS: tuple[str, ...] = ("5x30", "6x10", "6x30", "7x30")
+DEFAULT_SELECTED_COUNT_COMBOS: tuple[str, ...] = ("5x30", "5x40", "6x30", "7x30")
 DISPLAY_PRICE = D("0.01")
 DISPLAY_PERCENT = D("0.1")
 COUNT_AVERAGE_QUANT = D("0.1")

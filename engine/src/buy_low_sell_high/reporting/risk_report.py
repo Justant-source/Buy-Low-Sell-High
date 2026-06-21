@@ -154,6 +154,12 @@ def build_risk_report(bars: list[MarketBar], config: StrategyConfig, *, data_has
         ),
     }
 
+    leverage_warning = (
+        f"{config.symbol} is a leveraged instrument; close-to-open gap risk can materially change realized outcomes."
+    )
+    if config.symbol == "SOXL":
+        leverage_warning = "SOXL is a leveraged ETF; close-to-open gap risk can materially change realized outcomes."
+
     return {
         "profile_id": config.profile_id,
         "symbol": config.symbol,
@@ -176,7 +182,7 @@ def build_risk_report(bars: list[MarketBar], config: StrategyConfig, *, data_has
         "summary": summary,
         "warnings": [
             "ideal_same_close is a research-only benchmark and should not be treated as a live fill expectation.",
-            "SOXL is a leveraged ETF; close-to-open gap risk can materially change realized outcomes.",
+            leverage_warning,
             "This dashboard is decision support only and is not investment advice.",
         ],
     }

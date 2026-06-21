@@ -1,0 +1,17 @@
+{
+  "data_hash": "b5ebc4954947d9305c22cb76e0581648fd739924c36dc884c6469238fee52718",
+  "end": "2026-06-19",
+  "errors": [],
+  "generated_at": "2026-06-20T16:06:32.060174+00:00",
+  "output_csv": "/home/justant/Data/Buy-Low-Sell-High/data/raw/0193t0_daily_2015_present.csv",
+  "rows": 2813,
+  "source": "naver_synthetic",
+  "start": "2015-01-02",
+  "symbol": "0193T0",
+  "warnings": [
+    "Adjusted-close basis appears unavailable: adj_close mirrors close for all rows",
+    "Synthetic pre-listing history present: 2015-01-02..2026-05-26",
+    "Rows before 2026-05-27 are synthetic and anchored to the actual 0193T0 listing-day close",
+    "Requested start date 2015-01-01 is not a trading session; first row is 2015-01-02"
+  ]
+}

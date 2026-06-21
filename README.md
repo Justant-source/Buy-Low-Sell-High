@@ -4,9 +4,11 @@ Buy-Low-Sell-High is a clean-room backtesting stack for daily-close "ddeolsao-pa
 
 ## Current Scope
 - Python engine, Docker runtime, and safety guardrails are implemented.
-- Symbol snapshots follow `data/raw/{symbol_lower}_daily_2011_present.csv`.
+- Symbol snapshots follow the symbol registry filename, including `soxl_daily_2011_present.csv`, `000660_daily_2015_present.csv`, and `0193t0_daily_2015_present.csv`.
 - SOXL remains the default workspace and reference dataset at `data/raw/soxl_daily_2011_present.csv`.
-- Network sync currently falls back in the order `Yahoo chart -> Investing historical API -> Stooq`.
+- `0193T0` uses Naver daily history plus synthetic pre-listing rows anchored to the actual `2026-05-27` listing-day close.
+- `0193T0` profiles default to `initial_capital: 10000000` because the canonical dataset is KRW-priced and the SOXL baseline `10000` capital would stop producing whole-share entries once the ETF price exceeds a single thread budget.
+- Network sync currently uses `Naver` for `000660`/`0193T0` and falls back in the order `Yahoo chart -> Investing historical API -> Stooq` for SOXL-like symbols.
 - Strategy logic, parity fixtures, and symbol-aware backtest workflows are available in the Python CLI.
 - The Express dashboard serves workspace-based backtest pages at `/backtests/:symbolSlug`.
 - The `backtests` workspace includes `Strategy Explorer`, `Sweep Explorer`, official SOXL reference views, and risk comparison.
@@ -38,12 +40,23 @@ make e2e-backtest
 make e2e-risk
 make clean-room
 make ci
-npm --prefix dashboard run build
-npm --prefix dashboard test
+./scripts/dashboard_exec.sh build
+./scripts/dashboard_exec.sh test
+PORT=3232 ./scripts/dashboard_exec.sh start
 python3 scripts/verify_no_autotrading.py
-PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli data sync --symbol SOXL --start-date 2011-01-01
+PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli data sync --symbol SOXL
+PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli data sync --symbol 0193T0
 PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile configs/strategies/soxl_default_5x30.yaml --symbol SOXL
+PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile configs/strategies/0193t0_default_5x30.yaml --symbol 0193T0
 ```
+
+## Dashboard Toolchain
+- Always use `./scripts/dashboard_exec.sh` for dashboard build, test, and start commands.
+- The script first uses system `node`/`npm` when available.
+- If the environment has no working system Node toolchain, it automatically downloads and reuses a local Node `v20.19.5` toolchain under `.tools/`.
+- The wrapper also forces `npm --script-shell /bin/bash`, which avoids the `spawn sh ENOENT` failure seen in restricted environments.
+- If neither `DATABASE_URL` nor `SQLITE_PATH` is set, the wrapper defaults the dashboard research store to `data/runtime/buy-low-sell-high.sqlite`.
+- This requirement is intentional: future agents should not call raw `npm --prefix dashboard ...` unless they have already verified the local environment.
 
 ## Docker
 ```bash
@@ -56,6 +69,7 @@ PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile co
 Docker helper containers use the `buylowsellhigh-` prefix, including `buylowsellhigh-postgres`, `buylowsellhigh-dashboard`, `buylowsellhigh-engine-sync`, and `buylowsellhigh-engine-backtest`.
 
 The dashboard container expects `DATABASE_URL` so `Strategy Explorer` and `Sweep Explorer` artifacts can be persisted in PostgreSQL.
+For local non-container runs, the dashboard can persist the same artifacts in `SQLITE_PATH` instead of falling back to in-memory storage.
 
 In the current Codex snap environment, the Docker CLI can be installed locally, but daemon access may still be blocked at `/var/run/docker.sock` by confinement rules.
 
@@ -63,6 +77,7 @@ In the current Codex snap environment, the Docker CLI can be installed locally, 
 - Default dashboard port: `3232`
 - `http://localhost:3232/backtests`
 - `http://localhost:3232/backtests/soxl`
+- `http://localhost:3232/backtests/0193T0`
 
 The default landing page redirects to `/backtests/soxl`.
 

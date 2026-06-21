@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 
 import { engineSrcRoot, repoRoot } from "./paths.js";
 
@@ -15,7 +16,7 @@ export class CliInvocationError extends Error {
   }
 }
 
-function cliEnv(): NodeJS.ProcessEnv {
+export function cliEnv(): NodeJS.ProcessEnv {
   const pythonPath = process.env.PYTHONPATH ? `${engineSrcRoot}:${process.env.PYTHONPATH}` : engineSrcRoot;
   return {
     ...process.env,
@@ -23,9 +24,32 @@ function cliEnv(): NodeJS.ProcessEnv {
   };
 }
 
+export function resolvePythonBinary(): string {
+  const candidates = [
+    process.env.PYTHON,
+    "/usr/bin/python3",
+    "/bin/python3",
+    "/usr/local/bin/python3",
+    "python3",
+    "/usr/bin/python",
+    "/bin/python",
+    "python",
+  ].filter((value): value is string => typeof value === "string" && value.trim() !== "");
+
+  for (const candidate of candidates) {
+    if (!candidate.startsWith("/")) {
+      return candidate;
+    }
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return "python3";
+}
+
 function invokeCli(args: string[]): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn("python3", ["-m", "buy_low_sell_high.cli", ...args], {
+    const child = spawn(resolvePythonBinary(), ["-m", "buy_low_sell_high.cli", ...args], {
       cwd: repoRoot,
       env: cliEnv(),
       stdio: ["ignore", "pipe", "pipe"],

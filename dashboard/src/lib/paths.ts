@@ -1,6 +1,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { defaultCsvFilenameForSymbol } from "./symbols.js";
+
 const thisFile = fileURLToPath(import.meta.url);
 const libRoot = path.dirname(thisFile);
 
@@ -16,5 +18,5 @@ export const configsRoot = path.join(repoRoot, "configs", "strategies");
 export const engineSrcRoot = path.join(repoRoot, "engine", "src");
 
 export function defaultCsvPathForSymbol(symbol: string): string {
-  return path.join(repoRoot, "data", "raw", `${symbol.toLowerCase()}_daily_2011_present.csv`);
+  return path.join(repoRoot, "data", "raw", defaultCsvFilenameForSymbol(symbol));
 }

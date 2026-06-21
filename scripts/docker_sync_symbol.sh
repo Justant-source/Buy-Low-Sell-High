@@ -4,13 +4,19 @@ set -euo pipefail
 ./scripts/check_docker_access.sh
 
 SYMBOL="${1:-SOXL}"
-OUTPUT_CSV="${2:-data/raw/${SYMBOL,,}_daily_2011_present.csv}"
+OUTPUT_CSV="${2:-}"
 
-docker compose run --rm \
+CMD=(
+  docker compose run --rm \
   --name buylowsellhigh-engine-sync \
   --no-deps \
   engine-cli \
   python -m buy_low_sell_high.cli data sync \
-  --output-csv "${OUTPUT_CSV}" \
   --symbol "${SYMBOL}" \
-  --start-date 2011-01-01
+)
+
+if [[ -n "${OUTPUT_CSV}" ]]; then
+  CMD+=(--output-csv "${OUTPUT_CSV}")
+fi
+
+"${CMD[@]}"

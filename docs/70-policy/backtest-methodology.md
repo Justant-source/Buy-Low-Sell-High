@@ -6,7 +6,7 @@
 - 기본 스냅샷 경로 규칙은 `data/raw/{symbol_lower}_daily_2011_present.csv`다.
 - 공식 제품 게이트는 `official_reference_matrix.json`과 `official_explorer_summary.json`에 대한 exact golden 비교다.
 - 공식 기준선은 `data/raw/soxl_daily_2011_present.csv` Yahoo 스냅샷, `price_basis=adjusted_close`, `execution_model=ideal_same_close`, `sizing_mode=fixed_principal`을 사용한다.
-- 공식 기본 프로필은 `soxl_official_ddeolsao_pal_v1`이며, 현재 코어 9조합 중 `5x40`을 채택한다.
+- 공식 기본 프로필은 `soxl_official_ddeolsao_pal_v1`이며, 현재 코어 6조합 중 `5x40`을 채택한다.
 - 공식 프로필 선정 기준은 `mean_segment_return desc`, `segment_stddev asc`, `full_return desc`다.
 - `official-explorer`와 `official-matrix`는 위 공식 기준선을 재현하는 canonical 리포트다.
 - 2026-06-20 기준 공식 golden은 idle-cash preservation과 `ENTRY_SKIPPED` semantics를 반영한 상태여야 한다.

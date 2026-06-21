@@ -8,18 +8,12 @@ import json
 from math import sqrt
 from typing import Any
 
-from ..domain.models import DailySnapshot
+from ..domain.enums import PriceBasis
+from ..domain.models import DailySnapshot, MarketBar
 from ..domain.money import D, ZERO, quantize_money
 
-CORE_PROFILE_CATALOG_ID = "core_profiles_v1"
+CORE_PROFILE_CATALOG_ID = "core_profiles_v2"
 CORE_PROFILE_CATALOG: tuple[dict[str, Any], ...] = (
-    {
-        "strategy_id": "5x10",
-        "label": "5T / 10S",
-        "thread_count": 5,
-        "stop_sessions": 10,
-        "mentor_profiles": [],
-    },
     {
         "strategy_id": "5x30",
         "label": "5T / 30S",
@@ -35,13 +29,6 @@ CORE_PROFILE_CATALOG: tuple[dict[str, Any], ...] = (
         "mentor_profiles": ["soxl_best_avg_5x40"],
     },
     {
-        "strategy_id": "6x10",
-        "label": "6T / 10S",
-        "thread_count": 6,
-        "stop_sessions": 10,
-        "mentor_profiles": [],
-    },
-    {
         "strategy_id": "6x30",
         "label": "6T / 30S",
         "thread_count": 6,
@@ -54,13 +41,6 @@ CORE_PROFILE_CATALOG: tuple[dict[str, Any], ...] = (
         "thread_count": 6,
         "stop_sessions": 40,
         "mentor_profiles": [],
-    },
-    {
-        "strategy_id": "7x10",
-        "label": "7T / 10S",
-        "thread_count": 7,
-        "stop_sessions": 10,
-        "mentor_profiles": ["soxl_low_vol_7x10"],
     },
     {
         "strategy_id": "7x30",
@@ -78,22 +58,22 @@ CORE_PROFILE_CATALOG: tuple[dict[str, Any], ...] = (
     },
 )
 
-PARAMETER_SWEEP_ID = "core6_v1"
+PARAMETER_SWEEP_ID = "core4_v4"
 PARAMETER_SWEEP_DEFINITION: dict[str, Any] = {
     "sweep_id": PARAMETER_SWEEP_ID,
     "parameter_values": {
         "thread_count": [5, 6, 7],
-        "stop_sessions": [10, 20, 30, 40],
-        "take_profit_pct": [0, 0.5, 1.0],
-        "entry_drop_pct": [0, 0.5, 1.0],
-        "stop_loss_pct": [0, 5, 10],
-        "max_entries_per_session": [1, 2],
+        "stop_sessions": [30, 40],
+        "buy_pct": list(range(-10, 1)),
+        "sell_pct": list(range(0, 11)),
     },
     "fixed_values": {
         "take_profit_operator": "gt",
         "thread_selector": "round_robin",
         "allow_same_session_thread_reuse": True,
         "sizing_mode": "fixed_principal",
+        "stop_loss_pct": 0,
+        "max_entries_per_session": 1,
         "price_basis": "adjusted_close",
         "execution_model": "next_open",
     },
@@ -141,6 +121,42 @@ def serialize_metric_value(value: object) -> object:
 
 def serialize_metric_dict(values: dict[str, Any]) -> dict[str, Any]:
     return {key: serialize_metric_value(value) for key, value in values.items()}
+
+
+def benchmark_daily_from_bars(
+    bars: list[MarketBar],
+    *,
+    initial_capital: Decimal,
+    price_basis: PriceBasis,
+) -> list[DailySnapshot]:
+    if not bars:
+        return []
+    start_price = bars[0].price_for_basis(price_basis)
+    if start_price == ZERO:
+        raise ValueError("Benchmark start price cannot be zero")
+    peak_equity = initial_capital
+    daily: list[DailySnapshot] = []
+    for index, bar in enumerate(bars):
+        price = bar.price_for_basis(price_basis)
+        total_equity = quantize_money((initial_capital * price) / start_price)
+        if total_equity > peak_equity:
+            peak_equity = total_equity
+        drawdown = ZERO if peak_equity == ZERO else quantize_money(((total_equity - peak_equity) / peak_equity) * D("100"))
+        daily.append(
+            DailySnapshot(
+                session_date=bar.session_date,
+                session_index=index,
+                total_equity=total_equity,
+                realized_pnl=quantize_money(total_equity - initial_capital),
+                drawdown=drawdown,
+                open_threads=0,
+                entries=0,
+                take_profits=0,
+                time_stops=0,
+                skipped_entries=0,
+            )
+        )
+    return daily
 
 
 def build_macro_segment_presets(period_start: date, period_end: date) -> list[dict[str, str]]:
@@ -295,4 +311,3 @@ def stddev_decimal(values: list[Decimal]) -> Decimal:
     mean = sum(values, start=ZERO) / D(len(values))
     variance = sum((value - mean) ** 2 for value in values) / D(len(values))
     return quantize_money(D(str(sqrt(float(variance)))))
-

@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/tokens.css?v=20260620-16">
 <link rel="stylesheet" href="/css/components.css?v=20260620-16">
-<link rel="stylesheet" href="/css/dashboard.css?v=20260620-16">
+<link rel="stylesheet" href="/css/dashboard.css?v=20260621-01">
 <script src="/js/theme.js?v=20260620-16"></script>
 </head>
 <body>
@@ -23,23 +23,22 @@
       </div>
     </div>
     <div class="strategy-card">
-      <div class="sc-label" id="sb-nav-label">백테스트 (SOXL)</div>
+      <div class="sc-label" id="sb-nav-label">백테스트</div>
       <div class="sc-tags" id="workspace-tags">
-        <span class="badge info">Yahoo Adj Close</span>
-        <span class="badge info">Read-Only</span>
+        <span class="badge info">Workspace</span>
       </div>
       <div id="sb-description" style="margin-top:10px;font:var(--t-small);color:var(--text-muted)">
-        Yahoo 조정종가 기준 SOXL 일봉 백테스트
+        워크스페이스를 불러오는 중입니다.
       </div>
       <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);display:flex;flex-direction:column;gap:4px;font:var(--t-small);color:var(--text-muted)">
-        <div style="display:flex;justify-content:space-between"><span>데이터셋</span><span class="mono" id="sb-range">2011-01-03 - 2026-06-18</span></div>
-        <div style="display:flex;justify-content:space-between"><span>실행 모델</span><span class="mono" id="sb-model">ideal_same_close</span></div>
+        <div style="display:flex;justify-content:space-between"><span>데이터셋</span><span class="mono" id="sb-range">-</span></div>
+        <div style="display:flex;justify-content:space-between"><span>실행 모델</span><span class="mono" id="sb-model">-</span></div>
       </div>
     </div>
     <nav class="nav">
       <div class="nav-section">백테스트</div>
       <div id="workspace-nav">
-        <a class="nav-item active" href="/backtests/soxl">백테스트 (SOXL)</a>
+        <a class="nav-item active" href="/backtests">백테스트</a>
       </div>
     </nav>
     <div class="sidebar-footer">
@@ -56,8 +55,8 @@
   <main class="page">
     <div class="page-head">
       <div>
-        <div class="page-title" id="page-title">백테스트 (SOXL)</div>
-        <div class="page-sub" id="page-subtitle">SOXL 일봉 떨사오팔 기준선과 파라미터 백테스트를 확인하는 기본 워크스페이스입니다.</div>
+        <div class="page-title" id="page-title">백테스트</div>
+        <div class="page-sub" id="page-subtitle">워크스페이스를 불러오는 중입니다.</div>
       </div>
     </div>
 
@@ -71,9 +70,9 @@
     <section class="tab-panel" data-tab-panel="guide">
       <div class="card guide-hero-card">
         <div class="guide-kicker">처음 보는 사람용</div>
-        <div class="card-title">SOXL 떨사오팔이란?</div>
-        <div class="guide-lead">
-          아주 단순하게 말하면, <strong>SOXL이 전일보다 떨어진 날 한 칸씩 사고</strong>, <strong>매수가보다 다시 올라오면 파는</strong> 분할 매수 전략입니다.
+        <div class="card-title" id="guide-hero-title">떨사오팔 전략이란?</div>
+        <div class="guide-lead" id="guide-lead">
+          전일보다 떨어진 날 한 칸씩 사고, 매수가보다 다시 올라오면 파는 분할 매수 전략입니다.
           한 번에 전부 사지 않고 자본을 여러 칸으로 나누기 때문에, 하락이 이어져도 다음 칸으로 대응할 수 있게 설계되어 있습니다.
         </div>
         <div class="guide-chip-row">
@@ -86,10 +85,9 @@
 
       <div class="row row-3">
         <div class="card guide-mini-card">
-          <div class="card-title">왜 SOXL인가</div>
-          <div class="guide-copy">
-            SOXL은 반도체 지수를 3배로 추종하는 레버리지 ETF라서 오를 때도 빠르고, 내릴 때도 빠릅니다.
-            그래서 짧은 반등을 노리는 분할 매수 전략과 잘 맞지만, 변동성이 매우 크기 때문에 리스크도 큽니다.
+          <div class="card-title" id="guide-why-title">왜 이 종목인가</div>
+          <div class="guide-copy" id="guide-why-copy">
+            레버리지 성격이 강한 종목일수록 하락과 반등이 모두 빠르게 나타나기 때문에, 분할 매수와 독립 Thread 관리가 어떤 결과를 만드는지 더 선명하게 관찰할 수 있습니다.
           </div>
         </div>
         <div class="card guide-mini-card">
@@ -163,8 +161,8 @@
             </div>
             <div class="meta-item">
               <span>COMBO</span>
-              <strong>Thread 수 x 손절일</strong>
-              <small>예: 5x40 = Thread 5개, 손절 40거래일</small>
+              <strong>Thread 수 x 손절일 x 매수% x 매도%</strong>
+              <small>예: T5 / 40S / BUY -2% / SELL +3%</small>
             </div>
             <div class="meta-item">
               <span>기본 익절</span>
@@ -253,7 +251,7 @@
         <div class="card-head">
           <div>
             <div class="card-title">콤보 랭킹</div>
-            <div class="card-sub">행을 눌러 최대 6개 콤보를 비교하고, Focus 버튼으로 아래 thread timeline 전략을 바꿀 수 있습니다. Combo는 Thread 수 x 손절일 파라미터 조합입니다.</div>
+            <div class="card-sub">행을 눌러 최대 6개 콤보를 비교하고, Focus 버튼으로 아래 thread timeline 전략을 바꿀 수 있습니다. Combo는 Thread 수, 손절일, 매수%, 매도%를 함께 가진 4파라미터 조합입니다.</div>
           </div>
         </div>
         <div class="tbl-wrap">
@@ -262,12 +260,35 @@
               <tr>
                 <th>Focus</th>
                 <th>선택</th>
-                <th>Rank</th>
-                <th>COMBO<br><small class="tbl-head-sub">Thread 수 x 손절일</small></th>
-                <th class="num">Full Return</th>
-                <th class="num">Mean Segment</th>
-                <th class="num">Segment Std</th>
-                <th class="num">Recent</th>
+                <th class="num" data-strategy-sort-key="rank" style="cursor:pointer">Rank</th>
+                <th>
+                  <div class="strategy-combo-head">
+                    <div>COMBO</div>
+                    <small class="tbl-head-sub">Thread 수 x 손절일 x 매수% x 매도%</small>
+                    <div class="strategy-filter-chip-row">
+                      <button class="strategy-filter-chip" type="button" data-strategy-filter-button="threadCount">
+                        <span class="strategy-filter-chip-label">Thread 수</span>
+                        <span class="strategy-filter-chip-value" id="strategy-filter-chip-thread-count">all</span>
+                      </button>
+                      <button class="strategy-filter-chip" type="button" data-strategy-filter-button="stopSessions">
+                        <span class="strategy-filter-chip-label">손절일</span>
+                        <span class="strategy-filter-chip-value" id="strategy-filter-chip-stop-sessions">all</span>
+                      </button>
+                      <button class="strategy-filter-chip" type="button" data-strategy-filter-button="buyPct">
+                        <span class="strategy-filter-chip-label">매수 %</span>
+                        <span class="strategy-filter-chip-value" id="strategy-filter-chip-buy-pct">all</span>
+                      </button>
+                      <button class="strategy-filter-chip" type="button" data-strategy-filter-button="sellPct">
+                        <span class="strategy-filter-chip-label">매도 %</span>
+                        <span class="strategy-filter-chip-value" id="strategy-filter-chip-sell-pct">all</span>
+                      </button>
+                    </div>
+                  </div>
+                </th>
+                <th class="num" data-strategy-sort-key="full_return_pct" style="cursor:pointer">Full Return</th>
+                <th class="num" data-strategy-sort-key="mean_segment_return_pct" style="cursor:pointer">Mean Segment</th>
+                <th class="num" data-strategy-sort-key="segment_stddev_pct" style="cursor:pointer">Segment Std</th>
+                <th class="num" data-strategy-sort-key="recent_segment_return_pct" style="cursor:pointer">Recent</th>
               </tr>
             </thead>
             <tbody id="strategy-ranking-body">
@@ -275,7 +296,20 @@
             </tbody>
           </table>
         </div>
-        <div class="table-note" id="strategy-selector-note">선택 0 / 6</div>
+        <div class="thread-history-footer">
+          <div class="table-note" id="strategy-selector-note">선택 0 / 6</div>
+          <div class="thread-history-pager">
+            <div class="thread-history-page-group">
+              <span class="muted" id="strategy-ranking-meta">총 0개</span>
+            </div>
+            <div class="thread-history-page-group">
+              <button class="btn ghost" type="button" id="strategy-ranking-prev">이전</button>
+              <span id="strategy-ranking-page-status" class="mono">1 / 1</span>
+              <button class="btn ghost" type="button" id="strategy-ranking-next">다음</button>
+            </div>
+          </div>
+        </div>
+        <div id="strategy-ranking-filter-dropdown" class="strategy-filter-dropdown-root" hidden></div>
       </div>
 
       <div class="row row-2">
@@ -420,7 +454,7 @@
             <div class="card-title">Parameter Sweep Explorer</div>
           </div>
           <div class="sc-tags">
-            <span class="badge info mono">core6_v1</span>
+            <span class="badge info mono">core4_v4</span>
             <span class="badge neutral mono" id="sweep-artifact-id">-</span>
           </div>
         </div>
@@ -442,7 +476,7 @@
           </div>
           <div class="field full">
             <label>스윕 정의</label>
-            <div class="notice">`thread_count[5,6,7] × stop_sessions[10,20,30,40] × take_profit_pct[0,0.5,1] × entry_drop_pct[0,0.5,1] × stop_loss_pct[0,5,10] × max_entries_per_session[1,2]`</div>
+            <div class="notice">`thread_count[5,6,7] × stop_sessions[30,40] × buy_pct[-10..0] × sell_pct[0..10] = 726 combos`</div>
           </div>
         </div>
         <div class="action-row">
@@ -452,7 +486,7 @@
       </div>
 
       <div class="row row-4">
-        <div class="kpi"><span class="kpi-label">콤보 수</span><span class="kpi-value" id="sweep-kpi-count">-</span><div class="kpi-meta">core6_v1</div></div>
+        <div class="kpi"><span class="kpi-label">콤보 수</span><span class="kpi-value" id="sweep-kpi-count">-</span><div class="kpi-meta">core4_v4</div></div>
         <div class="kpi"><span class="kpi-label">최고 전체 수익</span><span class="kpi-value mono" id="sweep-kpi-best-full">-</span><div class="kpi-meta">combo key</div></div>
         <div class="kpi"><span class="kpi-label">최고 강건 조합</span><span class="kpi-value mono" id="sweep-kpi-best-robust">-</span><div class="kpi-meta">mean segment return basis</div></div>
         <div class="kpi"><span class="kpi-label">Pareto</span><span class="kpi-value" id="sweep-kpi-pareto">-</span><div class="kpi-meta">return/MDD + return/stability</div></div>
@@ -477,10 +511,8 @@
             <select class="select" id="sweep-box-axis" style="width:180px">
               <option value="thread_count">thread_count</option>
               <option value="stop_sessions">stop_sessions</option>
-              <option value="take_profit_pct">take_profit_pct</option>
-              <option value="entry_drop_pct">entry_drop_pct</option>
-              <option value="stop_loss_pct">stop_loss_pct</option>
-              <option value="max_entries_per_session">max_entries_per_session</option>
+              <option value="buy_pct">buy_pct</option>
+              <option value="sell_pct">sell_pct</option>
             </select>
           </div>
           <div class="chart-wrap" id="sweep-box-chart"><div class="empty-state">스윕 결과가 준비되면 box plot이 표시됩니다.</div></div>
@@ -491,7 +523,7 @@
         <div class="card-head">
           <div>
             <div class="card-title">Parallel Coordinates</div>
-            <div class="card-sub">6개 파라미터와 핵심 성과 지표를 한 번에 비교합니다.</div>
+            <div class="card-sub">4개 파라미터와 핵심 성과 지표를 한 번에 비교합니다.</div>
           </div>
         </div>
         <div class="chart-wrap" id="sweep-parcoords-chart"><div class="empty-state">스윕 결과가 준비되면 parallel coordinates가 표시됩니다.</div></div>
@@ -500,7 +532,7 @@
       <div class="card wide-table">
         <div class="card-head">
           <div>
-            <div class="card-title">상위 100 콤보</div>
+            <div class="card-title">상위 10 콤보</div>
             <div class="card-sub">기본 정렬: mean segment return desc, segment stddev asc, full return desc</div>
           </div>
         </div>
@@ -577,7 +609,7 @@
   </main>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
-<script src="/js/common.js?v=20260620-16"></script>
-<script src="/js/backtests-dashboard.js?v=20260620-16"></script>
+<script src="/js/common.js?v=20260621-01"></script>
+<script src="/js/backtests-dashboard.js?v=20260621-13"></script>
 </body>
 </html>

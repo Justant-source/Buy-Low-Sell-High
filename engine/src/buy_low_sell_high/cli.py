@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import date
 import json
 from pathlib import Path
 
@@ -20,9 +21,11 @@ from .reporting.official_explorer import build_official_explorer
 from .reporting.official_matrix import build_official_matrix
 from .reporting.parameter_sweep import build_parameter_sweep
 from .reporting.risk_report import build_risk_report
-from .reporting.strategy_explorer import build_strategy_explorer
+from .reporting.strategy_ranking_daemon import run_strategy_ranking_pool_daemon
+from .reporting.strategy_explorer import build_slice_strategy_rankings, build_strategy_detail, build_strategy_explorer, filter_bars_to_slice
 from .reporting.thread_timeline import build_thread_timeline
 from .backtest.parity import ParityResult
+from .symbols import default_market_data_csv as default_market_data_csv_for_symbol, get_symbol_definition
 
 
 def _repo_root() -> Path:
@@ -30,7 +33,7 @@ def _repo_root() -> Path:
 
 
 def default_market_data_csv(symbol: str = "SOXL") -> str:
-    return str(_repo_root() / "data" / "raw" / f"{symbol.lower()}_daily_2011_present.csv")
+    return default_market_data_csv_for_symbol(symbol)
 
 
 def bootstrap_check() -> int:
@@ -203,6 +206,9 @@ def _data_status(args: argparse.Namespace) -> int:
     bars, data_hash = _load_bars(csv_path, args.symbol)
     report = summarize_import(args.symbol, "csv", bars)
     manifest_path = snapshot_manifest_path(csv_path)
+    manifest_payload = None
+    if manifest_path.exists():
+        manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     return _print_json(
         {
             "symbol": args.symbol,
@@ -210,8 +216,8 @@ def _data_status(args: argparse.Namespace) -> int:
             "start": bars[0].session_date.isoformat(),
             "end": bars[-1].session_date.isoformat(),
             "data_hash": data_hash,
-            "source": bars[-1].source,
-            "warnings": report.warnings,
+            "source": manifest_payload.get("source", bars[-1].source) if manifest_payload else bars[-1].source,
+            "warnings": manifest_payload.get("warnings", report.warnings) if manifest_payload else report.warnings,
             "snapshot_path": str(Path(csv_path).resolve()),
             "manifest_path": str(manifest_path.resolve()) if manifest_path.exists() else None,
         }
@@ -222,7 +228,7 @@ def _data_sync(args: argparse.Namespace) -> int:
     result = sync_history(
         args.output_csv or default_market_data_csv(args.symbol),
         symbol=args.symbol,
-        start_date=args.start_date,
+        start_date=args.start_date or get_symbol_definition(args.symbol).dataset_start_date,
     )
     return _print_json(result)
 
@@ -309,6 +315,42 @@ def _backtest_strategy_explorer(args: argparse.Namespace) -> int:
     )
 
 
+def _backtest_strategy_ranking(args: argparse.Namespace) -> int:
+    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
+    sliced_bars = filter_bars_to_slice(
+        bars,
+        slice_start=date.fromisoformat(args.slice_start) if args.slice_start else None,
+        slice_end=date.fromisoformat(args.slice_end) if args.slice_end else None,
+    )
+    return _print_json(
+        build_slice_strategy_rankings(
+            sliced_bars,
+            config,
+            data_hash=data_hash,
+            execution_model=args.execution_model,
+            price_basis=args.price_basis,
+            limit=args.limit,
+            max_workers=args.max_workers,
+        )
+    )
+
+
+def _backtest_strategy_detail(args: argparse.Namespace) -> int:
+    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
+    return _print_json(
+        build_strategy_detail(
+            bars,
+            config,
+            strategy_id=args.strategy_id,
+            data_hash=data_hash,
+            execution_model=args.execution_model,
+            price_basis=args.price_basis,
+        )
+    )
+
+
 def _backtest_parameter_sweep(args: argparse.Namespace) -> int:
     config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
     bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
@@ -328,6 +370,13 @@ def _backtest_official_explorer(args: argparse.Namespace) -> int:
     config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
     bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     return _print_json(build_official_explorer(bars, config, data_hash=data_hash))
+
+
+def _worker_strategy_ranking_daemon(args: argparse.Namespace) -> int:
+    return run_strategy_ranking_pool_daemon(
+        max_workers=args.max_workers,
+        idle_timeout_seconds=args.idle_timeout_seconds,
+    )
 
 
 def _backtest_official_matrix(args: argparse.Namespace) -> int:
@@ -438,7 +487,7 @@ def main() -> int:
     data_sync = data_subparsers.add_parser("sync")
     data_sync.add_argument("--output-csv")
     data_sync.add_argument("--symbol", default="SOXL")
-    data_sync.add_argument("--start-date", default="2011-01-01")
+    data_sync.add_argument("--start-date")
     data_sync.set_defaults(handler=_data_sync)
     data_status = data_subparsers.add_parser("status")
     _add_csv_argument(data_status)
@@ -482,7 +531,7 @@ def main() -> int:
     _add_csv_argument(backtest_strategy_explorer_parser)
     backtest_strategy_explorer_parser.add_argument("--symbol")
     backtest_strategy_explorer_parser.add_argument("--initial-capital", type=float, default=10000.0)
-    backtest_strategy_explorer_parser.add_argument("--catalog-id", default="core_profiles_v1")
+    backtest_strategy_explorer_parser.add_argument("--catalog-id", default="core_profiles_v2")
     backtest_strategy_explorer_parser.add_argument(
         "--execution-model",
         default="next_open",
@@ -494,12 +543,49 @@ def main() -> int:
         choices=["adjusted_close", "raw_close_with_actions"],
     )
     backtest_strategy_explorer_parser.set_defaults(handler=_backtest_strategy_explorer)
+    backtest_strategy_ranking_parser = backtest_subparsers.add_parser("strategy-ranking")
+    backtest_strategy_ranking_parser.add_argument("--profile", required=True)
+    _add_csv_argument(backtest_strategy_ranking_parser)
+    backtest_strategy_ranking_parser.add_argument("--symbol")
+    backtest_strategy_ranking_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    backtest_strategy_ranking_parser.add_argument("--slice-start")
+    backtest_strategy_ranking_parser.add_argument("--slice-end")
+    backtest_strategy_ranking_parser.add_argument("--limit", type=int, default=10)
+    backtest_strategy_ranking_parser.add_argument("--max-workers", type=int, default=1)
+    backtest_strategy_ranking_parser.add_argument(
+        "--execution-model",
+        default="ideal_same_close",
+        choices=["ideal_same_close", "next_open", "next_close"],
+    )
+    backtest_strategy_ranking_parser.add_argument(
+        "--price-basis",
+        default="adjusted_close",
+        choices=["adjusted_close", "raw_close_with_actions"],
+    )
+    backtest_strategy_ranking_parser.set_defaults(handler=_backtest_strategy_ranking)
+    backtest_strategy_detail_parser = backtest_subparsers.add_parser("strategy-detail")
+    backtest_strategy_detail_parser.add_argument("--profile", required=True)
+    _add_csv_argument(backtest_strategy_detail_parser)
+    backtest_strategy_detail_parser.add_argument("--symbol")
+    backtest_strategy_detail_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    backtest_strategy_detail_parser.add_argument("--strategy-id", required=True)
+    backtest_strategy_detail_parser.add_argument(
+        "--execution-model",
+        default="ideal_same_close",
+        choices=["ideal_same_close", "next_open", "next_close"],
+    )
+    backtest_strategy_detail_parser.add_argument(
+        "--price-basis",
+        default="adjusted_close",
+        choices=["adjusted_close", "raw_close_with_actions"],
+    )
+    backtest_strategy_detail_parser.set_defaults(handler=_backtest_strategy_detail)
     backtest_parameter_sweep_parser = backtest_subparsers.add_parser("parameter-sweep")
     backtest_parameter_sweep_parser.add_argument("--profile", required=True)
     _add_csv_argument(backtest_parameter_sweep_parser)
     backtest_parameter_sweep_parser.add_argument("--symbol")
     backtest_parameter_sweep_parser.add_argument("--initial-capital", type=float, default=10000.0)
-    backtest_parameter_sweep_parser.add_argument("--sweep-id", default="core6_v1")
+    backtest_parameter_sweep_parser.add_argument("--sweep-id", default="core4_v4")
     backtest_parameter_sweep_parser.add_argument(
         "--execution-model",
         default="next_open",
@@ -522,7 +608,7 @@ def main() -> int:
     _add_csv_argument(backtest_official_matrix_parser)
     backtest_official_matrix_parser.add_argument("--symbol")
     backtest_official_matrix_parser.add_argument("--threads", default="5,6,7")
-    backtest_official_matrix_parser.add_argument("--stops", default="10,30,40")
+    backtest_official_matrix_parser.add_argument("--stops", default="30,40")
     backtest_official_matrix_parser.add_argument("--initial-capital", type=float, default=10000.0)
     _add_strategy_override_arguments(backtest_official_matrix_parser, include_thread_count=False, include_stop_sessions=False)
     backtest_official_matrix_parser.set_defaults(handler=_backtest_official_matrix)
@@ -531,7 +617,7 @@ def main() -> int:
     _add_csv_argument(backtest_thread_timeline_parser)
     backtest_thread_timeline_parser.add_argument("--symbol")
     backtest_thread_timeline_parser.add_argument("--strategy-id", required=True)
-    backtest_thread_timeline_parser.add_argument("--catalog-id", default="core_profiles_v1")
+    backtest_thread_timeline_parser.add_argument("--catalog-id", default="core_profiles_v2")
     backtest_thread_timeline_parser.add_argument("--initial-capital", type=float, default=10000.0)
     backtest_thread_timeline_parser.add_argument(
         "--execution-model",
@@ -549,7 +635,7 @@ def main() -> int:
     _add_csv_argument(backtest_mentor_matrix_parser)
     backtest_mentor_matrix_parser.add_argument("--symbol")
     backtest_mentor_matrix_parser.add_argument("--threads", default="5,6,7")
-    backtest_mentor_matrix_parser.add_argument("--stops", default="10,30,40")
+    backtest_mentor_matrix_parser.add_argument("--stops", default="30,40")
     backtest_mentor_matrix_parser.add_argument("--windows")
     backtest_mentor_matrix_parser.add_argument("--reference")
     backtest_mentor_matrix_parser.add_argument("--initial-capital", type=float, default=10000.0)
@@ -579,6 +665,10 @@ def main() -> int:
     worker_subparsers = worker_parser.add_subparsers(dest="worker_command", required=True)
     worker_smoke_parser = worker_subparsers.add_parser("smoke")
     worker_smoke_parser.set_defaults(handler=_worker_smoke)
+    worker_strategy_ranking_daemon_parser = worker_subparsers.add_parser("strategy-ranking-daemon")
+    worker_strategy_ranking_daemon_parser.add_argument("--max-workers", type=int, default=8)
+    worker_strategy_ranking_daemon_parser.add_argument("--idle-timeout-seconds", type=int, default=3600)
+    worker_strategy_ranking_daemon_parser.set_defaults(handler=_worker_strategy_ranking_daemon)
 
     args = parser.parse_args()
     return args.handler(args)

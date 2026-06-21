@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import path from "node:path";
 
 import { Pool } from "pg";
+import initSqlJs from "sql.js";
 
 import type {
   ParameterSweepPayload,
@@ -10,6 +14,7 @@ import type {
 } from "./types.js";
 
 type AnyArtifactPayload = ParameterSweepPayload | Record<string, unknown>;
+type SqliteBindValue = string | number | Uint8Array | null;
 
 interface LatestSweepFilter {
   sweepId: string;
@@ -27,6 +32,16 @@ export interface ResearchStore {
     artifact: ResearchArtifactRecord<TPayload>,
     sweepRows?: ParameterSweepRowPayload[],
   ): Promise<ResearchArtifactRecord<TPayload>>;
+}
+
+const require = createRequire(import.meta.url);
+const SQLITE_WASM_PATH = require.resolve("sql.js/dist/sql-wasm.wasm");
+
+function parseArtifactPayload(payload: unknown): AnyArtifactPayload {
+  if (typeof payload === "string") {
+    return JSON.parse(payload) as AnyArtifactPayload;
+  }
+  return payload as AnyArtifactPayload;
 }
 
 function parseArtifactRow<TPayload>(row: Record<string, unknown>): ResearchArtifactRecord<TPayload> {
@@ -48,8 +63,22 @@ function parseArtifactRow<TPayload>(row: Record<string, unknown>): ResearchArtif
     catalogHash: row.catalog_hash == null ? null : String(row.catalog_hash),
     sweepHash: row.sweep_hash == null ? null : String(row.sweep_hash),
     payloadHash: row.payload_hash == null ? null : String(row.payload_hash),
-    payload: row.payload as TPayload,
+    payload: parseArtifactPayload(row.payload) as TPayload,
   };
+}
+
+function maskDatabaseUrl(databaseUrl: string): string {
+  return databaseUrl.replace(/:\/\/([^:/]+):([^@]+)@/, "://$1:***@");
+}
+
+export function describeResearchStoreTarget(): string {
+  if (process.env.DATABASE_URL) {
+    return `postgres (${maskDatabaseUrl(process.env.DATABASE_URL)})`;
+  }
+  if (process.env.SQLITE_PATH) {
+    return `sqlite (${path.resolve(process.env.SQLITE_PATH)})`;
+  }
+  return "memory";
 }
 
 class MemoryResearchStore implements ResearchStore {
@@ -306,10 +335,10 @@ class PostgresResearchStore implements ResearchStore {
               row.combo_key,
               row.params.thread_count,
               row.params.stop_sessions,
-              row.params.take_profit_pct,
-              row.params.entry_drop_pct,
-              row.params.stop_loss_pct,
-              row.params.max_entries_per_session,
+              row.params.sell_pct,
+              row.params.buy_pct,
+              0,
+              1,
               row.config_hash,
               row.metrics.full_return_pct,
               row.metrics.max_drawdown_pct,
@@ -338,6 +367,285 @@ class PostgresResearchStore implements ResearchStore {
   }
 }
 
+class SqliteResearchStore implements ResearchStore {
+  private readonly readyPromise: Promise<void>;
+
+  private constructor(
+    private readonly databasePath: string,
+    private readonly database: import("sql.js").Database,
+  ) {
+    this.readyPromise = this.initialize();
+  }
+
+  static async create(databasePath: string): Promise<SqliteResearchStore> {
+    const sqlitePath = path.resolve(databasePath);
+    await mkdir(path.dirname(sqlitePath), { recursive: true });
+    const SQL = await initSqlJs({
+      locateFile: () => SQLITE_WASM_PATH,
+    });
+    let bytes: Uint8Array | undefined;
+    try {
+      bytes = new Uint8Array(await readFile(sqlitePath));
+    } catch (error) {
+      if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") {
+        throw error;
+      }
+    }
+    const database = bytes ? new SQL.Database(bytes) : new SQL.Database();
+    return new SqliteResearchStore(sqlitePath, database);
+  }
+
+  private async ensureReady(): Promise<void> {
+    await this.readyPromise;
+  }
+
+  private async initialize(): Promise<void> {
+    this.database.run(`
+      CREATE TABLE IF NOT EXISTS backtest_research_artifacts (
+        artifact_id TEXT PRIMARY KEY,
+        artifact_key TEXT NOT NULL UNIQUE,
+        artifact_kind TEXT NOT NULL,
+        profile_id TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        csv_path TEXT NOT NULL,
+        execution_model TEXT NOT NULL,
+        price_basis TEXT NOT NULL,
+        data_hash TEXT NOT NULL,
+        code_commit TEXT NOT NULL,
+        catalog_id TEXT,
+        sweep_id TEXT,
+        catalog_hash TEXT,
+        sweep_hash TEXT,
+        payload_hash TEXT,
+        payload TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `);
+    this.database.run(`
+      CREATE TABLE IF NOT EXISTS backtest_research_sweep_rows (
+        artifact_id TEXT NOT NULL,
+        row_index INTEGER NOT NULL,
+        combo_key TEXT NOT NULL,
+        thread_count INTEGER NOT NULL,
+        stop_sessions INTEGER NOT NULL,
+        take_profit_pct REAL NOT NULL,
+        entry_drop_pct REAL NOT NULL,
+        stop_loss_pct REAL NOT NULL,
+        max_entries_per_session INTEGER NOT NULL,
+        config_hash TEXT NOT NULL,
+        total_return_pct REAL NOT NULL,
+        max_drawdown_pct REAL NOT NULL,
+        volatility_pct REAL NOT NULL,
+        trade_count INTEGER NOT NULL,
+        mean_segment_return_pct REAL NOT NULL,
+        segment_stddev_pct REAL NOT NULL,
+        worst_segment_return_pct REAL NOT NULL,
+        positive_segment_ratio_pct REAL NOT NULL,
+        recent_segment_return_pct REAL NOT NULL,
+        pareto_return_mdd INTEGER NOT NULL,
+        pareto_return_stability INTEGER NOT NULL,
+        payload TEXT NOT NULL,
+        PRIMARY KEY (artifact_id, row_index)
+      )
+    `);
+    this.database.run(`
+      CREATE INDEX IF NOT EXISTS backtest_research_artifacts_kind_created_idx
+      ON backtest_research_artifacts (artifact_kind, created_at DESC)
+    `);
+    await this.persist();
+  }
+
+  private selectOne(sql: string, params: SqliteBindValue[] = []): Record<string, unknown> | null {
+    const statement = this.database.prepare(sql);
+    try {
+      statement.bind(params);
+      if (!statement.step()) {
+        return null;
+      }
+      return statement.getAsObject() as Record<string, unknown>;
+    } finally {
+      statement.free();
+    }
+  }
+
+  private async persist(): Promise<void> {
+    const bytes = Buffer.from(this.database.export());
+    const tempPath = `${this.databasePath}.tmp`;
+    await writeFile(tempPath, bytes);
+    await rename(tempPath, this.databasePath);
+  }
+
+  async findByKey<TPayload>(artifactKey: string): Promise<ResearchArtifactRecord<TPayload> | null> {
+    await this.ensureReady();
+    const row = this.selectOne("SELECT * FROM backtest_research_artifacts WHERE artifact_key = ?", [artifactKey]);
+    return row ? parseArtifactRow<TPayload>(row) : null;
+  }
+
+  async loadArtifact<TPayload>(artifactId: string): Promise<ResearchArtifactRecord<TPayload> | null> {
+    await this.ensureReady();
+    const row = this.selectOne("SELECT * FROM backtest_research_artifacts WHERE artifact_id = ?", [artifactId]);
+    return row ? parseArtifactRow<TPayload>(row) : null;
+  }
+
+  async loadLatestSweep<TPayload>(filter: LatestSweepFilter): Promise<ResearchArtifactRecord<TPayload> | null> {
+    await this.ensureReady();
+    const row = this.selectOne(
+      `
+        SELECT *
+        FROM backtest_research_artifacts
+        WHERE artifact_kind = 'PARAMETER_SWEEP'
+          AND sweep_id = ?
+          AND csv_path = ?
+          AND execution_model = ?
+          AND price_basis = ?
+          AND data_hash = ?
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,
+      [filter.sweepId, filter.csvPath, filter.executionModel, filter.priceBasis, filter.dataHash],
+    );
+    return row ? parseArtifactRow<TPayload>(row) : null;
+  }
+
+  async saveArtifact<TPayload>(
+    artifact: ResearchArtifactRecord<TPayload>,
+    sweepRows: ParameterSweepRowPayload[] = [],
+  ): Promise<ResearchArtifactRecord<TPayload>> {
+    await this.ensureReady();
+    this.database.run("BEGIN");
+    try {
+      this.database.run(
+        `
+          INSERT INTO backtest_research_artifacts (
+            artifact_id,
+            artifact_key,
+            artifact_kind,
+            profile_id,
+            symbol,
+            csv_path,
+            execution_model,
+            price_basis,
+            data_hash,
+            code_commit,
+            catalog_id,
+            sweep_id,
+            catalog_hash,
+            sweep_hash,
+            payload_hash,
+            payload,
+            created_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(artifact_key) DO UPDATE SET
+            artifact_kind = excluded.artifact_kind,
+            profile_id = excluded.profile_id,
+            symbol = excluded.symbol,
+            csv_path = excluded.csv_path,
+            execution_model = excluded.execution_model,
+            price_basis = excluded.price_basis,
+            data_hash = excluded.data_hash,
+            code_commit = excluded.code_commit,
+            catalog_id = excluded.catalog_id,
+            sweep_id = excluded.sweep_id,
+            catalog_hash = excluded.catalog_hash,
+            sweep_hash = excluded.sweep_hash,
+            payload_hash = excluded.payload_hash,
+            payload = excluded.payload,
+            created_at = excluded.created_at
+        `,
+        [
+          artifact.artifactId,
+          artifact.artifactKey,
+          artifact.kind,
+          artifact.profileId,
+          artifact.symbol,
+          artifact.csvPath,
+          artifact.executionModel,
+          artifact.priceBasis,
+          artifact.dataHash,
+          artifact.codeCommit,
+          artifact.catalogId ?? null,
+          artifact.sweepId ?? null,
+          artifact.catalogHash ?? null,
+          artifact.sweepHash ?? null,
+          artifact.payloadHash ?? null,
+          JSON.stringify(artifact.payload),
+          artifact.createdAt,
+        ],
+      );
+      const storedRow = this.selectOne("SELECT * FROM backtest_research_artifacts WHERE artifact_key = ?", [artifact.artifactKey]);
+      if (!storedRow) {
+        throw new Error(`Failed to reload persisted artifact ${artifact.artifactKey}`);
+      }
+      const stored = parseArtifactRow<TPayload>(storedRow);
+      this.database.run("DELETE FROM backtest_research_sweep_rows WHERE artifact_id = ?", [stored.artifactId]);
+      if (artifact.kind === "PARAMETER_SWEEP" && sweepRows.length > 0) {
+        for (const [index, row] of sweepRows.entries()) {
+          this.database.run(
+            `
+              INSERT INTO backtest_research_sweep_rows (
+                artifact_id,
+                row_index,
+                combo_key,
+                thread_count,
+                stop_sessions,
+                take_profit_pct,
+                entry_drop_pct,
+                stop_loss_pct,
+                max_entries_per_session,
+                config_hash,
+                total_return_pct,
+                max_drawdown_pct,
+                volatility_pct,
+                trade_count,
+                mean_segment_return_pct,
+                segment_stddev_pct,
+                worst_segment_return_pct,
+                positive_segment_ratio_pct,
+                recent_segment_return_pct,
+                pareto_return_mdd,
+                pareto_return_stability,
+                payload
+              )
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+            [
+              stored.artifactId,
+              index,
+              row.combo_key,
+              row.params.thread_count,
+              row.params.stop_sessions,
+              row.params.sell_pct,
+              row.params.buy_pct,
+              0,
+              1,
+              row.config_hash,
+              row.metrics.full_return_pct,
+              row.metrics.max_drawdown_pct,
+              row.metrics.volatility_pct,
+              row.metrics.trade_count,
+              row.metrics.mean_segment_return_pct,
+              row.metrics.segment_stddev_pct,
+              row.metrics.worst_segment_return_pct,
+              row.metrics.positive_segment_ratio_pct,
+              row.metrics.recent_segment_return_pct,
+              row.flags.pareto_return_mdd ? 1 : 0,
+              row.flags.pareto_return_stability ? 1 : 0,
+              JSON.stringify(row),
+            ],
+          );
+        }
+      }
+      this.database.run("COMMIT");
+      await this.persist();
+      return stored;
+    } catch (error) {
+      this.database.run("ROLLBACK");
+      throw error;
+    }
+  }
+}
+
 let singletonPromise: Promise<ResearchStore> | null = null;
 
 export function newResearchArtifactId(): string {
@@ -346,9 +654,13 @@ export function newResearchArtifactId(): string {
 
 export async function getResearchStore(): Promise<ResearchStore> {
   if (!singletonPromise) {
-    singletonPromise = Promise.resolve(
-      process.env.DATABASE_URL ? new PostgresResearchStore(process.env.DATABASE_URL) : new MemoryResearchStore(),
-    );
+    if (process.env.DATABASE_URL) {
+      singletonPromise = Promise.resolve(new PostgresResearchStore(process.env.DATABASE_URL));
+    } else if (process.env.SQLITE_PATH) {
+      singletonPromise = SqliteResearchStore.create(process.env.SQLITE_PATH);
+    } else {
+      singletonPromise = Promise.resolve(new MemoryResearchStore());
+    }
   }
   return singletonPromise;
 }

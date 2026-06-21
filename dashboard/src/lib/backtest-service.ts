@@ -6,6 +6,8 @@ import { defaultCsvPathForSymbol } from "./paths.js";
 import { getProfileDefinition } from "./profiles.js";
 import { runCliJson } from "./python.js";
 import { getResearchStore, newResearchArtifactId } from "./research-store.js";
+import { requestStrategyRankingFromDaemon } from "./strategy-ranking-daemon-client.js";
+import { listWorkspaceDefinitions } from "./workspaces.js";
 import {
   listJobs,
   listRunArtifacts,
@@ -34,15 +36,19 @@ import type {
   ProfileShowPayload,
   ResearchArtifactRecord,
   StrategyExplorerPayload,
+  StrategyExplorerStrategyPayload,
+  StrategyRankingPayload,
   ThreadTimelinePayload,
 } from "./types.js";
 
-const STRATEGY_EXPLORER_VERSION = "strategy-explorer-v1";
-const PARAMETER_SWEEP_VERSION = "parameter-sweep-v1";
+const STRATEGY_EXPLORER_VERSION = "strategy-explorer-v4";
+const STRATEGY_RANKING_VERSION = "strategy-ranking-v6";
+const STRATEGY_DETAIL_VERSION = "strategy-detail-v1";
+const THREAD_TIMELINE_VERSION = "thread-timeline-v1";
+const PARAMETER_SWEEP_VERSION = "parameter-sweep-v4";
 const DEFAULT_RESEARCH_EXECUTION_MODEL = "next_open";
-const DEFAULT_RESEARCH_PRICE_BASIS = "adjusted_close";
-const DEFAULT_STRATEGY_CATALOG_ID = "core_profiles_v1";
-const DEFAULT_SWEEP_ID = "core6_v1";
+const DEFAULT_STRATEGY_CATALOG_ID = "core_profiles_v2";
+const DEFAULT_SWEEP_ID = "core4_v4";
 
 function resolveCsvPath(csvPath: string | undefined, symbol: string): string {
   return csvPath ?? defaultCsvPathForSymbol(symbol);
@@ -78,6 +84,26 @@ export interface StrategyExplorerInput {
   csvPath?: string;
   initialCapital?: number;
   catalogId?: string;
+  executionModel?: string;
+  priceBasis?: string;
+}
+
+export interface StrategyRankingInput {
+  profileId: string;
+  csvPath?: string;
+  initialCapital?: number;
+  executionModel?: string;
+  priceBasis?: string;
+  sliceStart?: string;
+  sliceEnd?: string;
+  limit?: number;
+}
+
+export interface StrategyDetailInput {
+  profileId: string;
+  csvPath?: string;
+  initialCapital?: number;
+  strategyId: string;
   executionModel?: string;
   priceBasis?: string;
 }
@@ -169,8 +195,49 @@ function buildResearchArgs(input: {
     args.push("--sweep-id", input.sweepId);
   }
   args.push("--execution-model", input.executionModel ?? DEFAULT_RESEARCH_EXECUTION_MODEL);
-  args.push("--price-basis", input.priceBasis ?? DEFAULT_RESEARCH_PRICE_BASIS);
+  args.push("--price-basis", input.priceBasis ?? "adjusted_close");
   return args;
+}
+
+function defaultStrategyExecutionModel(profile: ProfilePayload | ReturnType<typeof getProfileDefinition>): string {
+  return profile?.executionModel ?? "ideal_same_close";
+}
+
+function defaultStrategyPriceBasis(profile: ProfilePayload | ReturnType<typeof getProfileDefinition>): string {
+  return profile?.priceBasis ?? "adjusted_close";
+}
+
+function defaultSweepExecutionModel(): string {
+  return DEFAULT_RESEARCH_EXECUTION_MODEL;
+}
+
+function defaultSweepPriceBasis(profile: ProfilePayload | ReturnType<typeof getProfileDefinition>): string {
+  return profile?.priceBasis ?? "adjusted_close";
+}
+
+async function resolveProfileContext(input: {
+  profileId: string;
+  csvPath?: string;
+  initialCapital?: number;
+  overrides?: BacktestOverrides;
+}): Promise<{
+  profile: NonNullable<ReturnType<typeof getProfileDefinition>>;
+  profilePayload: ProfilePayload;
+  csvPath: string;
+  initialCapital: number;
+}> {
+  const requestedInitialCapital = input.initialCapital ?? 10000;
+  const profile = getProfileDefinition(input.profileId);
+  if (!profile) {
+    throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
+  }
+  const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
+  const profilePayload = await resolveProfilePayload(input.profileId, requestedInitialCapital, input.overrides);
+  const initialCapital = Number(profilePayload.initialCapital);
+  if (!Number.isFinite(initialCapital)) {
+    throw new HttpError(500, `Invalid initial capital for profileId: ${input.profileId}`);
+  }
+  return { profile, profilePayload, csvPath, initialCapital };
 }
 
 function resolveProfilePayload(staticProfileId: string, initialCapital: number, overrides?: BacktestOverrides): Promise<ProfilePayload> {
@@ -253,6 +320,45 @@ function shortDigest(parts: Array<string | number | undefined | null>): string {
   return createHash("sha256").update(raw).digest("hex");
 }
 
+function makeStrategyPresetWarmupKey(input: {
+  profileId: string;
+  csvPath: string;
+  dataHash: string;
+  initialCapital: number;
+  executionModel: string;
+  priceBasis: string;
+}): string {
+  return shortDigest([
+    "strategy-preset-warmup-v1",
+    input.profileId,
+    input.csvPath,
+    input.dataHash,
+    input.initialCapital,
+    input.executionModel,
+    input.priceBasis,
+  ]);
+}
+
+async function runWithConcurrency<T>(tasks: Array<() => Promise<T>>, concurrency: number): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      if (currentIndex >= tasks.length) {
+        return;
+      }
+      results[currentIndex] = await tasks[currentIndex]();
+    }
+  }
+
+  const workerCount = Math.max(1, Math.min(concurrency, tasks.length));
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
 function makeStrategyArtifactKey(input: {
   profileId: string;
   csvPath: string;
@@ -295,6 +401,86 @@ function makeSweepArtifactKey(input: {
   ]);
 }
 
+function makeStrategyRankingCacheKey(input: {
+  profileId: string;
+  csvPath: string;
+  dataHash: string;
+  initialCapital: number;
+  executionModel: string;
+  priceBasis: string;
+  sliceStart?: string;
+  sliceEnd?: string;
+}): string {
+  return shortDigest([
+    STRATEGY_RANKING_VERSION,
+    input.profileId,
+    input.csvPath,
+    input.dataHash,
+    input.initialCapital,
+    input.executionModel,
+    input.priceBasis,
+    input.sliceStart,
+    input.sliceEnd,
+  ]);
+}
+
+function applyStrategyRankingLimit(payload: StrategyRankingPayload, limit: number): StrategyRankingPayload {
+  if (limit <= 0 || payload.rows.length <= limit) {
+    return payload;
+  }
+  return {
+    ...payload,
+    rows: payload.rows.slice(0, limit),
+  };
+}
+
+function isCompleteStrategyRankingPayload(payload: StrategyRankingPayload): boolean {
+  const comboCount = Number(payload.meta.combo_count || 0);
+  return comboCount <= 0 || payload.rows.length >= comboCount;
+}
+
+function makeStrategyDetailCacheKey(input: {
+  profileId: string;
+  csvPath: string;
+  dataHash: string;
+  initialCapital: number;
+  executionModel: string;
+  priceBasis: string;
+  strategyId: string;
+}): string {
+  return shortDigest([
+    STRATEGY_DETAIL_VERSION,
+    input.profileId,
+    input.csvPath,
+    input.dataHash,
+    input.initialCapital,
+    input.executionModel,
+    input.priceBasis,
+    input.strategyId,
+  ]);
+}
+
+function makeThreadTimelineCacheKey(input: {
+  profileId: string;
+  csvPath: string;
+  dataHash: string;
+  initialCapital: number;
+  executionModel: string;
+  priceBasis: string;
+  strategyId: string;
+}): string {
+  return shortDigest([
+    THREAD_TIMELINE_VERSION,
+    input.profileId,
+    input.csvPath,
+    input.dataHash,
+    input.initialCapital,
+    input.executionModel,
+    input.priceBasis,
+    input.strategyId,
+  ]);
+}
+
 async function saveStrategyArtifact(
   payload: StrategyExplorerPayload,
   input: {
@@ -320,6 +506,43 @@ async function saveStrategyArtifact(
     catalogId: payload.meta.catalog_id,
     catalogHash: payload.meta.catalog_hash,
     payloadHash: payload.meta.catalog_hash,
+    payload,
+  });
+}
+
+async function saveStrategyRankingArtifact(
+  payload: StrategyRankingPayload,
+  input: {
+    artifactKey: string;
+    profileId: string;
+    symbol: string;
+    csvPath: string;
+    sliceStart?: string;
+    sliceEnd?: string;
+  },
+): Promise<ResearchArtifactRecord<StrategyRankingPayload>> {
+  const store = await getResearchStore();
+  return store.saveArtifact<StrategyRankingPayload>({
+    artifactId: newResearchArtifactId(),
+    artifactKey: input.artifactKey,
+    kind: "STRATEGY_RANKING",
+    profileId: input.profileId,
+    symbol: input.symbol,
+    csvPath: input.csvPath,
+    executionModel: payload.meta.execution_model,
+    priceBasis: payload.meta.price_basis,
+    dataHash: payload.meta.data_hash,
+    codeCommit: payload.meta.code_commit,
+    createdAt: new Date().toISOString(),
+    catalogId: input.sliceStart && input.sliceEnd ? `${input.sliceStart}:${input.sliceEnd}` : "all",
+    payloadHash: shortDigest([
+      payload.meta.symbol,
+      payload.meta.period_start,
+      payload.meta.period_end,
+      payload.meta.data_hash,
+      payload.rows[0]?.strategy_id,
+      payload.rows.length,
+    ]),
     payload,
   });
 }
@@ -358,19 +581,18 @@ async function saveSweepArtifact(
 
 export class BacktestService {
   private readonly queuedJobIds = new Set<string>();
+  private readonly strategyRankingCache = new Map<string, StrategyRankingPayload>();
+  private readonly strategyRankingPending = new Map<string, Promise<StrategyRankingPayload>>();
+  private readonly strategyPresetWarmupPending = new Map<string, Promise<void>>();
+  private readonly strategyDetailCache = new Map<string, StrategyExplorerStrategyPayload>();
+  private readonly strategyDetailPending = new Map<string, Promise<StrategyExplorerStrategyPayload>>();
+  private readonly threadTimelineCache = new Map<string, ThreadTimelinePayload>();
+  private readonly threadTimelinePending = new Map<string, Promise<ThreadTimelinePayload>>();
   private running = false;
 
   async createJob(input: BacktestJobInput): Promise<DashboardJobRecord> {
-    const initialCapital = input.initialCapital ?? 10000;
-    const profile = getProfileDefinition(input.profileId);
-    if (!profile) {
-      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
-    }
-    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
-    const [profilePayload, dataStatus] = await Promise.all([
-      resolveProfilePayload(input.profileId, initialCapital, input.overrides),
-      getDataStatus(csvPath, profile.symbol),
-    ]);
+    const { profile, profilePayload, csvPath, initialCapital } = await resolveProfileContext(input);
+    const dataStatus = await getDataStatus(csvPath, profile.symbol);
     const job: DashboardJobRecord = {
       jobId: newJobId(),
       kind: "BACKTEST",
@@ -397,20 +619,11 @@ export class BacktestService {
   }
 
   async createSweepJob(input: SweepJobInput): Promise<DashboardJobRecord> {
-    const initialCapital = input.initialCapital ?? 10000;
-    const profile = getProfileDefinition(input.profileId);
-    if (!profile) {
-      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
-    }
-    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
-    const executionModel = input.executionModel ?? DEFAULT_RESEARCH_EXECUTION_MODEL;
-    const priceBasis = input.priceBasis ?? DEFAULT_RESEARCH_PRICE_BASIS;
+    const { profile, profilePayload, csvPath, initialCapital } = await resolveProfileContext(input);
+    const executionModel = input.executionModel ?? defaultSweepExecutionModel();
+    const priceBasis = input.priceBasis ?? defaultSweepPriceBasis(profile);
     const sweepId = input.sweepId ?? DEFAULT_SWEEP_ID;
-    const [profilePayload, dataStatus, store] = await Promise.all([
-      resolveProfilePayload(input.profileId, initialCapital),
-      getDataStatus(csvPath, profile.symbol),
-      getResearchStore(),
-    ]);
+    const [dataStatus, store] = await Promise.all([getDataStatus(csvPath, profile.symbol), getResearchStore()]);
     const artifactKey = makeSweepArtifactKey({
       profileId: input.profileId,
       csvPath,
@@ -452,15 +665,10 @@ export class BacktestService {
   }
 
   async strategyExplorer(input: StrategyExplorerInput): Promise<StrategyExplorerPayload> {
-    const initialCapital = input.initialCapital ?? 10000;
-    const profile = getProfileDefinition(input.profileId);
-    if (!profile) {
-      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
-    }
-    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
+    const { profile, csvPath, initialCapital } = await resolveProfileContext(input);
     const catalogId = input.catalogId ?? DEFAULT_STRATEGY_CATALOG_ID;
-    const executionModel = input.executionModel ?? DEFAULT_RESEARCH_EXECUTION_MODEL;
-    const priceBasis = input.priceBasis ?? DEFAULT_RESEARCH_PRICE_BASIS;
+    const executionModel = input.executionModel ?? defaultStrategyExecutionModel(profile);
+    const priceBasis = input.priceBasis ?? defaultStrategyPriceBasis(profile);
     const [dataStatus, store] = await Promise.all([getDataStatus(csvPath, profile.symbol), getResearchStore()]);
     const artifactKey = makeStrategyArtifactKey({
       profileId: input.profileId,
@@ -473,6 +681,17 @@ export class BacktestService {
     });
     const cached = await store.findByKey<StrategyExplorerPayload>(artifactKey);
     if (cached) {
+      void this.ensureStrategyRankingPresets(
+        {
+          profileId: input.profileId,
+          csvPath,
+          initialCapital,
+          executionModel,
+          priceBasis,
+        },
+        cached.payload.meta.slice_presets,
+        dataStatus.data_hash,
+      );
       return cached.payload;
     }
     const payload = await runCliJson<StrategyExplorerPayload>([
@@ -494,16 +713,196 @@ export class BacktestService {
       symbol: profile.symbol,
       csvPath,
     });
+    void this.ensureStrategyRankingPresets(
+      {
+        profileId: input.profileId,
+        csvPath,
+        initialCapital,
+        executionModel,
+        priceBasis,
+      },
+      payload.meta.slice_presets,
+      dataStatus.data_hash,
+    );
     return payload;
   }
 
-  async officialExplorer(input: OfficialExplorerInput): Promise<OfficialExplorerPayload> {
-    const initialCapital = input.initialCapital ?? 10000;
-    const profile = getProfileDefinition(input.profileId);
-    if (!profile) {
-      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
+  async strategyRanking(input: StrategyRankingInput): Promise<StrategyRankingPayload> {
+    const { profile, csvPath, initialCapital } = await resolveProfileContext(input);
+    const executionModel = input.executionModel ?? defaultStrategyExecutionModel(profile);
+    const priceBasis = input.priceBasis ?? defaultStrategyPriceBasis(profile);
+    const limit = input.limit ?? 0;
+    const dataStatus = await getDataStatus(csvPath, profile.symbol);
+    const cacheKey = makeStrategyRankingCacheKey({
+      profileId: input.profileId,
+      csvPath,
+      dataHash: dataStatus.data_hash,
+      initialCapital,
+      executionModel,
+      priceBasis,
+      sliceStart: input.sliceStart,
+      sliceEnd: input.sliceEnd,
+    });
+    const cached = this.strategyRankingCache.get(cacheKey);
+    if (cached && isCompleteStrategyRankingPayload(cached)) {
+      return applyStrategyRankingLimit(cached, limit);
     }
-    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
+    const [store, pending] = await Promise.all([getResearchStore(), Promise.resolve(this.strategyRankingPending.get(cacheKey))]);
+    if (pending) {
+      return applyStrategyRankingLimit(await pending, limit);
+    }
+    const stored = await store.findByKey<StrategyRankingPayload>(cacheKey);
+    if (stored?.payload && isCompleteStrategyRankingPayload(stored.payload)) {
+      this.strategyRankingCache.set(cacheKey, stored.payload);
+      return applyStrategyRankingLimit(stored.payload, limit);
+    }
+    const loader = (async () => {
+    const fullPeriod =
+      (!input.sliceStart || input.sliceStart === dataStatus.start) &&
+      (!input.sliceEnd || input.sliceEnd === dataStatus.end);
+    if (fullPeriod) {
+      const latestSweep = await this.getLatestSweep({
+        profileId: input.profileId,
+        csvPath,
+        initialCapital,
+        executionModel,
+        priceBasis,
+        sweepId: DEFAULT_SWEEP_ID,
+      });
+      if (latestSweep?.payload) {
+          return {
+          meta: {
+            symbol: latestSweep.payload.meta.symbol,
+            initial_capital: latestSweep.payload.meta.initial_capital,
+            price_basis: latestSweep.payload.meta.price_basis,
+            execution_model: latestSweep.payload.meta.execution_model,
+            period_start: latestSweep.payload.meta.period_start,
+            period_end: latestSweep.payload.meta.period_end,
+            data_hash: latestSweep.payload.meta.data_hash,
+            code_commit: latestSweep.payload.meta.code_commit,
+            ranking_basis: "full_return desc, mean_segment_return desc, segment_stddev asc, combo_key asc",
+            segment_presets: latestSweep.payload.meta.segment_presets,
+            combo_count: latestSweep.payload.meta.combo_count,
+          },
+          rows: latestSweep.payload.rows
+            .map((row) => ({
+              combo_key: row.combo_key,
+              strategy_id: row.combo_key,
+              label: row.combo_key,
+              display_params:
+                `T${row.params.thread_count} / ${row.params.stop_sessions}S / `
+                + `BUY ${row.params.buy_pct >= 0 ? "+" : ""}${row.params.buy_pct}% / `
+                + `SELL ${row.params.sell_pct >= 0 ? "+" : ""}${row.params.sell_pct}%`,
+              thread_count: row.params.thread_count,
+              stop_sessions: row.params.stop_sessions,
+              buy_pct: row.params.buy_pct,
+              sell_pct: row.params.sell_pct,
+              full_return_pct: row.metrics.full_return_pct,
+              mean_segment_return_pct: row.metrics.mean_segment_return_pct,
+              segment_stddev_pct: row.metrics.segment_stddev_pct,
+              worst_segment_return_pct: row.metrics.worst_segment_return_pct,
+              positive_segment_ratio_pct: row.metrics.positive_segment_ratio_pct,
+              recent_segment_return_pct: row.metrics.recent_segment_return_pct,
+              rank: 0,
+            }))
+            .sort((left, right) => {
+              if (right.full_return_pct !== left.full_return_pct) {
+                return right.full_return_pct - left.full_return_pct;
+              }
+              if (right.mean_segment_return_pct !== left.mean_segment_return_pct) {
+                return right.mean_segment_return_pct - left.mean_segment_return_pct;
+              }
+              if (left.segment_stddev_pct !== right.segment_stddev_pct) {
+                return left.segment_stddev_pct - right.segment_stddev_pct;
+              }
+              return left.combo_key.localeCompare(right.combo_key);
+            })
+            .map((row, index) => ({ ...row, rank: index + 1 })),
+        };
+      }
+    }
+      return requestStrategyRankingFromDaemon({
+        profilePath: profile.profilePath,
+        csvPath,
+        symbol: profile.symbol,
+        initialCapital,
+        executionModel,
+        priceBasis,
+        sliceStart: input.sliceStart,
+        sliceEnd: input.sliceEnd,
+        limit: 0,
+      });
+    })();
+    this.strategyRankingPending.set(cacheKey, loader);
+    try {
+      const payload = await loader;
+      this.strategyRankingCache.set(cacheKey, payload);
+      await saveStrategyRankingArtifact(payload, {
+        artifactKey: cacheKey,
+        profileId: input.profileId,
+        symbol: profile.symbol,
+        csvPath,
+        sliceStart: input.sliceStart,
+        sliceEnd: input.sliceEnd,
+      });
+      return applyStrategyRankingLimit(payload, limit);
+    } finally {
+      this.strategyRankingPending.delete(cacheKey);
+    }
+  }
+
+  async strategyDetail(input: StrategyDetailInput): Promise<StrategyExplorerStrategyPayload> {
+    const { profile, csvPath, initialCapital } = await resolveProfileContext(input);
+    const executionModel = input.executionModel ?? defaultStrategyExecutionModel(profile);
+    const priceBasis = input.priceBasis ?? defaultStrategyPriceBasis(profile);
+    const dataStatus = await getDataStatus(csvPath, profile.symbol);
+    const cacheKey = makeStrategyDetailCacheKey({
+      profileId: input.profileId,
+      csvPath,
+      dataHash: dataStatus.data_hash,
+      initialCapital,
+      executionModel,
+      priceBasis,
+      strategyId: input.strategyId,
+    });
+    const cached = this.strategyDetailCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+    const pending = this.strategyDetailPending.get(cacheKey);
+    if (pending) {
+      return pending;
+    }
+    const loader = runCliJson<StrategyExplorerStrategyPayload>([
+      "backtest",
+      "strategy-detail",
+      "--profile",
+      profile.profilePath,
+      "--csv",
+      csvPath,
+      "--symbol",
+      profile.symbol,
+      "--initial-capital",
+      String(initialCapital),
+      "--strategy-id",
+      input.strategyId,
+      "--execution-model",
+      executionModel,
+      "--price-basis",
+      priceBasis,
+    ]);
+    this.strategyDetailPending.set(cacheKey, loader);
+    try {
+      const payload = await loader;
+      this.strategyDetailCache.set(cacheKey, payload);
+      return payload;
+    } finally {
+      this.strategyDetailPending.delete(cacheKey);
+    }
+  }
+
+  async officialExplorer(input: OfficialExplorerInput): Promise<OfficialExplorerPayload> {
+    const { profile, csvPath, initialCapital } = await resolveProfileContext(input);
     return runCliJson<OfficialExplorerPayload>([
       "backtest",
       "official-explorer",
@@ -519,15 +918,28 @@ export class BacktestService {
   }
 
   async threadTimeline(input: ThreadTimelineInput): Promise<ThreadTimelinePayload> {
-    const initialCapital = input.initialCapital ?? 10000;
-    const profile = getProfileDefinition(input.profileId);
-    if (!profile) {
-      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
+    const { profile, csvPath, initialCapital } = await resolveProfileContext(input);
+    const executionModel = input.executionModel ?? defaultStrategyExecutionModel(profile);
+    const priceBasis = input.priceBasis ?? defaultStrategyPriceBasis(profile);
+    const dataStatus = await getDataStatus(csvPath, profile.symbol);
+    const cacheKey = makeThreadTimelineCacheKey({
+      profileId: input.profileId,
+      csvPath,
+      dataHash: dataStatus.data_hash,
+      initialCapital,
+      executionModel,
+      priceBasis,
+      strategyId: input.strategyId,
+    });
+    const cached = this.threadTimelineCache.get(cacheKey);
+    if (cached) {
+      return cached;
     }
-    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
-    const executionModel = input.executionModel ?? "ideal_same_close";
-    const priceBasis = input.priceBasis ?? "adjusted_close";
-    return runCliJson<ThreadTimelinePayload>([
+    const pending = this.threadTimelinePending.get(cacheKey);
+    if (pending) {
+      return pending;
+    }
+    const loader = runCliJson<ThreadTimelinePayload>([
       "backtest",
       "thread-timeline",
       "--profile",
@@ -545,6 +957,14 @@ export class BacktestService {
       "--price-basis",
       priceBasis,
     ]);
+    this.threadTimelinePending.set(cacheKey, loader);
+    try {
+      const payload = await loader;
+      this.threadTimelineCache.set(cacheKey, payload);
+      return payload;
+    } finally {
+      this.threadTimelinePending.delete(cacheKey);
+    }
   }
 
   async getLatestSweep(input: SweepJobInput): Promise<ResearchArtifactRecord<ParameterSweepPayload> | null> {
@@ -553,8 +973,8 @@ export class BacktestService {
       throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
     }
     const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
-    const executionModel = input.executionModel ?? DEFAULT_RESEARCH_EXECUTION_MODEL;
-    const priceBasis = input.priceBasis ?? DEFAULT_RESEARCH_PRICE_BASIS;
+    const executionModel = input.executionModel ?? defaultSweepExecutionModel();
+    const priceBasis = input.priceBasis ?? defaultSweepPriceBasis(profile);
     const sweepId = input.sweepId ?? DEFAULT_SWEEP_ID;
     const [dataStatus, store] = await Promise.all([getDataStatus(csvPath, profile.symbol), getResearchStore()]);
     return store.loadLatestSweep<ParameterSweepPayload>({
@@ -564,6 +984,89 @@ export class BacktestService {
       priceBasis,
       dataHash: dataStatus.data_hash,
     });
+  }
+
+  async warmStrategyPresetRankings(input: StrategyExplorerInput): Promise<void> {
+    const { profile, csvPath, initialCapital } = await resolveProfileContext(input);
+    const executionModel = input.executionModel ?? defaultStrategyExecutionModel(profile);
+    const priceBasis = input.priceBasis ?? defaultStrategyPriceBasis(profile);
+    const payload = await this.strategyExplorer({
+      profileId: input.profileId,
+      csvPath,
+      initialCapital,
+      catalogId: input.catalogId,
+      executionModel,
+      priceBasis,
+    });
+    const dataStatus = await getDataStatus(csvPath, profile.symbol);
+    await this.ensureStrategyRankingPresets(
+      {
+        profileId: input.profileId,
+        csvPath,
+        initialCapital,
+        executionModel,
+        priceBasis,
+      },
+      payload.meta.slice_presets,
+      dataStatus.data_hash,
+    );
+  }
+
+  async warmDefaultStrategyPresetRankings(): Promise<void> {
+    const workspaces = listWorkspaceDefinitions();
+    await runWithConcurrency(
+      workspaces.map((workspace) => async () => {
+        await this.warmStrategyPresetRankings({
+          profileId: workspace.defaultProfileId,
+          csvPath: workspace.csvPath,
+          executionModel: workspace.defaultStrategyExecutionModel,
+          priceBasis: workspace.defaultStrategyPriceBasis,
+        });
+      }),
+      1,
+    );
+  }
+
+  private ensureStrategyRankingPresets(
+    input: {
+      profileId: string;
+      csvPath: string;
+      initialCapital: number;
+      executionModel: string;
+      priceBasis: string;
+    },
+    slicePresets: Array<{ preset_id: string; start: string; end: string }>,
+    dataHash: string,
+  ): Promise<void> {
+    const warmupKey = makeStrategyPresetWarmupKey({
+      profileId: input.profileId,
+      csvPath: input.csvPath,
+      dataHash,
+      initialCapital: input.initialCapital,
+      executionModel: input.executionModel,
+      priceBasis: input.priceBasis,
+    });
+    const pending = this.strategyPresetWarmupPending.get(warmupKey);
+    if (pending) {
+      return pending;
+    }
+    const tasks = slicePresets.map((preset) => async () => {
+      await this.strategyRanking({
+        profileId: input.profileId,
+        csvPath: input.csvPath,
+        initialCapital: input.initialCapital,
+        executionModel: input.executionModel,
+        priceBasis: input.priceBasis,
+        sliceStart: preset.start,
+        sliceEnd: preset.end,
+        limit: 0,
+      });
+    });
+    const runner = runWithConcurrency(tasks, 1).then(() => undefined).finally(() => {
+      this.strategyPresetWarmupPending.delete(warmupKey);
+    });
+    this.strategyPresetWarmupPending.set(warmupKey, runner);
+    return runner;
   }
 
   async getSweepArtifact(artifactId: string): Promise<ResearchArtifactRecord<ParameterSweepPayload>> {
@@ -619,14 +1122,8 @@ export class BacktestService {
     stopSessions: number[];
     cells: GridCellPayload[];
   }> {
-    const initialCapital = input.initialCapital ?? 10000;
-    const profile = getProfileDefinition(input.profileId);
-    if (!profile) {
-      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
-    }
-    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
-    const [profilePayload, dataStatus, cells] = await Promise.all([
-      resolveProfilePayload(input.profileId, initialCapital, input.overrides),
+    const { profile, profilePayload, csvPath, initialCapital } = await resolveProfileContext(input);
+    const [dataStatus, cells] = await Promise.all([
       getDataStatus(csvPath, profile.symbol),
       runCliJson<GridCellPayload[]>([
         "backtest",
@@ -659,16 +1156,8 @@ export class BacktestService {
   }
 
   async mentorMatrix(input: MentorMatrixInput): Promise<MentorMatrixPayload> {
-    const initialCapital = input.initialCapital ?? 10000;
-    const profile = getProfileDefinition(input.profileId);
-    if (!profile) {
-      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
-    }
-    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
-    const [profilePayload, dataStatus] = await Promise.all([
-      resolveProfilePayload(input.profileId, initialCapital, input.overrides),
-      getDataStatus(csvPath, profile.symbol),
-    ]);
+    const { profile, profilePayload, csvPath, initialCapital } = await resolveProfileContext(input);
+    const dataStatus = await getDataStatus(csvPath, profile.symbol);
     const cacheKey = [
       "mentor-matrix",
       input.profileId,
@@ -703,16 +1192,8 @@ export class BacktestService {
   }
 
   async officialMatrix(input: OfficialMatrixInput): Promise<OfficialMatrixPayload> {
-    const initialCapital = input.initialCapital ?? 10000;
-    const profile = getProfileDefinition(input.profileId);
-    if (!profile) {
-      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
-    }
-    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
-    const [profilePayload, dataStatus] = await Promise.all([
-      resolveProfilePayload(input.profileId, initialCapital, input.overrides),
-      getDataStatus(csvPath, profile.symbol),
-    ]);
+    const { profile, profilePayload, csvPath, initialCapital } = await resolveProfileContext(input);
+    const dataStatus = await getDataStatus(csvPath, profile.symbol);
     const cacheKey = [
       "official-matrix",
       input.profileId,
@@ -752,12 +1233,7 @@ export class BacktestService {
     initialCapital?: number;
     overrides?: BacktestOverrides;
   }): Promise<BacktestRiskPayload> {
-    const initialCapital = input.initialCapital ?? 10000;
-    const profile = getProfileDefinition(input.profileId);
-    if (!profile) {
-      throw new HttpError(404, `Unknown profileId: ${input.profileId}`);
-    }
-    const csvPath = resolveCsvPath(input.csvPath, profile.symbol);
+    const { profile, csvPath, initialCapital } = await resolveProfileContext(input);
     return runCliJson<BacktestRiskPayload>([
       "backtest",
       "risk-report",
@@ -870,8 +1346,8 @@ export class BacktestService {
       return;
     }
     const sweepId = job.sweepId ?? DEFAULT_SWEEP_ID;
-    const executionModel = job.executionModel ?? DEFAULT_RESEARCH_EXECUTION_MODEL;
-    const priceBasis = job.priceBasis ?? DEFAULT_RESEARCH_PRICE_BASIS;
+    const executionModel = job.executionModel ?? defaultSweepExecutionModel();
+    const priceBasis = job.priceBasis ?? defaultSweepPriceBasis(profile);
     job.status = "RUNNING";
     job.startedAt = new Date().toISOString();
     job.progress = 10;

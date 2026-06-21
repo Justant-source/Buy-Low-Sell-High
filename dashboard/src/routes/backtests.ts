@@ -100,6 +100,68 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
   );
 
   router.get(
+    "/strategy-ranking",
+    asyncHandler(async (req, res) => {
+      const profileId = typeof req.query.profileId === "string" ? req.query.profileId : defaultProfileId;
+      const csvPath = typeof req.query.csvPath === "string" && req.query.csvPath.trim() !== "" ? req.query.csvPath : undefined;
+      const initialCapital = parseNumber(req.query.initialCapital, 10000);
+      const executionModel = parseOptionalEnumField(req.query.executionModel, "executionModel", [
+        "ideal_same_close",
+        "next_open",
+        "next_close",
+      ]);
+      const priceBasis = parseOptionalEnumField(req.query.priceBasis, "priceBasis", [
+        "adjusted_close",
+        "raw_close_with_actions",
+      ]);
+      const limit = parseOptionalNumberField(req.query.limit, "limit", { integer: true, min: 0 }) ?? 0;
+      const sliceStart = typeof req.query.sliceStart === "string" && req.query.sliceStart.trim() !== "" ? req.query.sliceStart : undefined;
+      const sliceEnd = typeof req.query.sliceEnd === "string" && req.query.sliceEnd.trim() !== "" ? req.query.sliceEnd : undefined;
+      res.json(
+        await backtestService.strategyRanking({
+          profileId,
+          csvPath,
+          initialCapital,
+          executionModel,
+          priceBasis,
+          sliceStart,
+          sliceEnd,
+          limit,
+        }),
+      );
+    }),
+  );
+
+  router.get(
+    "/strategy-detail",
+    asyncHandler(async (req, res) => {
+      const profileId = typeof req.query.profileId === "string" ? req.query.profileId : defaultProfileId;
+      const csvPath = typeof req.query.csvPath === "string" && req.query.csvPath.trim() !== "" ? req.query.csvPath : undefined;
+      const initialCapital = parseNumber(req.query.initialCapital, 10000);
+      const strategyId = requireString(req.query.strategyId, "strategyId");
+      const executionModel = parseOptionalEnumField(req.query.executionModel, "executionModel", [
+        "ideal_same_close",
+        "next_open",
+        "next_close",
+      ]);
+      const priceBasis = parseOptionalEnumField(req.query.priceBasis, "priceBasis", [
+        "adjusted_close",
+        "raw_close_with_actions",
+      ]);
+      res.json(
+        await backtestService.strategyDetail({
+          profileId,
+          csvPath,
+          initialCapital,
+          strategyId,
+          executionModel,
+          priceBasis,
+        }),
+      );
+    }),
+  );
+
+  router.get(
     "/official-explorer",
     asyncHandler(async (req, res) => {
       const profileId = typeof req.query.profileId === "string" ? req.query.profileId : defaultProfileId;

@@ -23,7 +23,7 @@
 - 공식 제품 baseline은 `data/raw/soxl_daily_2011_present.csv` Yahoo 스냅샷을 사용한다.
 - 공식 프로필은 `configs/strategies/soxl_official_ddeolsao_pal_v1.yaml`이다.
 - 공식 프로필 파라미터는 `thread_count=5`, `stop_sessions=40`, `price_basis=adjusted_close`, `execution_model=ideal_same_close`, `sizing_mode=fixed_principal`이다.
-- 공식 프로필은 코어 9조합을 `mean_segment_return desc`, `segment_stddev asc`, `full_return desc` 기준으로 정렬해 현재 1위를 고정한 결과다.
+- 공식 프로필은 현재 코어 6조합을 `mean_segment_return desc`, `segment_stddev asc`, `full_return desc` 기준으로 정렬해 현재 1위를 고정한 결과다.
 - 공식 CI 게이트는 `official-explorer`와 `official-matrix` golden fixture다.
 - 멘토 매트릭스와 parity는 `legacy comparison` 진단으로만 유지한다.
 
@@ -47,18 +47,24 @@ thread_principal = initial_capital / thread_count
 
 | 프로파일 | 스레드 수 | 손절 세션 |
 |---|---|---|
-| 5x10 | 5 | 10 |
 | 5x30 | 5 | 30 |
 | 5x40 | 5 | 40 |
-| 6x10 | 6 | 10 |
 | 6x30 | 6 | 30 |
 | 6x40 | 6 | 40 |
-| 7x10 | 7 | 10 |
 | 7x30 | 7 | 30 |
 | 7x40 | 7 | 40 |
 
-멘토 매트릭스는 위 9개 조합을 모두 검증한다.
-공식 baseline은 위 9개 중 `5x40`을 채택한다.
+현재 전략 탐색기와 멘토 매트릭스 런타임 기본 조합은 위 6개다.
+공식 baseline은 위 6개 중 `5x40`을 채택한다.
+
+### 현재 파라미터 스윕 정의
+
+- `thread_count`: `5`, `6`, `7`
+- `stop_sessions`: `30`, `40`
+- `buy_pct`: `-10`부터 `0`까지 1단위
+- `sell_pct`: `0`부터 `+10`까지 1단위
+- 고정값: `stop_loss_pct = 0`, `max_entries_per_session = 1`
+- 총 조합 수: `3 × 2 × 11 × 11 = 726`
 
 ---
 
@@ -195,7 +201,7 @@ session_price <= entry_price × (1 - stop_loss_pct / 100)
 
 - 각 연도를 **독립 실행**으로 처리 (`year_boundary = reset`)
 - 초기 자본 **$10,000** 연도마다 리셋
-- 9개 조합 × 14년(2011–2024)의 연간 수익률, 표준편차, 평균
+- 현재 런타임 멘토 매트릭스는 6개 조합 × 14년(2011–2024)의 연간 수익률, 표준편차, 평균을 계산한다.
 
 ### 8-2. 연속 carry 계열 (Block C — 집계 행)
 

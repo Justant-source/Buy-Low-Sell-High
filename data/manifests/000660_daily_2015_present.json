@@ -1,0 +1,15 @@
+{
+  "data_hash": "ec7ea58df35a59875f0b7021b19d491870fb313232848fc768c9993d58d3d39d",
+  "end": "2026-06-19",
+  "errors": [],
+  "generated_at": "2026-06-20T16:05:55.173146+00:00",
+  "output_csv": "/home/justant/Data/Buy-Low-Sell-High/data/raw/000660_daily_2015_present.csv",
+  "rows": 2813,
+  "source": "naver",
+  "start": "2015-01-02",
+  "symbol": "000660",
+  "warnings": [
+    "Adjusted-close basis appears unavailable: adj_close mirrors close for all rows",
+    "Requested start date 2015-01-01 is not a trading session; first row is 2015-01-02"
+  ]
+}

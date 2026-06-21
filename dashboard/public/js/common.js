@@ -30,6 +30,10 @@
     });
   }
 
+  function isAbortError(error) {
+    return Boolean(error && typeof error === "object" && error.name === "AbortError");
+  }
+
   function formatNumber(value) {
     const number = Number(value);
     if (!Number.isFinite(number)) {
@@ -116,6 +120,7 @@
   window.SOXLDashboard = {
     fetchJson,
     postJson,
+    isAbortError,
     formatNumber,
     formatMoney,
     formatPercent,

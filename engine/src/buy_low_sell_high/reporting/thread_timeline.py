@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
-from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -9,35 +8,11 @@ from typing import Any
 from ..backtest.engine import run_backtest
 from ..backtest.execution import signal_price
 from ..backtest.sizing import entry_budget
-from ..domain.enums import CloseReason, ExecutionModel, PriceBasis, SizingMode, ThreadState
+from ..domain.enums import CloseReason, ThreadState
 from ..domain.models import CapitalThread, MarketBar, StrategyConfig, Trade, compute_trade_pnl
 from ..domain.money import D, ZERO, quantize_entry_shares, quantize_money, quantize_shares
 from .research_common import CORE_PROFILE_CATALOG, CORE_PROFILE_CATALOG_ID, catalog_hash
-
-
-def _catalog_strategy_config(
-    base_config: StrategyConfig,
-    strategy_row: dict[str, Any],
-    *,
-    execution_model: str,
-    price_basis: str,
-) -> StrategyConfig:
-    return replace(
-        base_config,
-        thread_count=int(strategy_row["thread_count"]),
-        stop_sessions=int(strategy_row["stop_sessions"]),
-        execution_model=ExecutionModel(execution_model),
-        price_basis=PriceBasis(price_basis),
-        sizing_mode=SizingMode.FIXED_PRINCIPAL if base_config.sizing_mode == SizingMode.FIXED_PRINCIPAL else base_config.sizing_mode,
-        profile_id=str(strategy_row["strategy_id"]),
-    )
-
-
-def _find_strategy_row(catalog: tuple[dict[str, Any], ...], strategy_id: str) -> dict[str, Any]:
-    for row in catalog:
-        if str(row["strategy_id"]) == strategy_id:
-            return row
-    raise ValueError(f"Unknown strategy_id: {strategy_id}")
+from .strategy_specs import build_strategy_config, resolve_strategy_spec
 
 
 def _portfolio_equity(thread_states: dict[int, dict[str, Any]], mark_price: Decimal) -> Decimal:
@@ -97,10 +72,10 @@ def build_thread_timeline(
     if not bars:
         raise ValueError("No bars provided")
 
-    strategy_row = _find_strategy_row(catalog, strategy_id)
-    config = _catalog_strategy_config(
+    strategy_spec = resolve_strategy_spec(strategy_id, catalog=catalog)
+    config = build_strategy_config(
         base_config,
-        strategy_row,
+        strategy_spec,
         execution_model=execution_model,
         price_basis=price_basis,
     )
@@ -314,7 +289,7 @@ def build_thread_timeline(
             "catalog_id": catalog_id,
             "catalog_hash": catalog_hash(catalog),
             "strategy_id": strategy_id,
-            "label": str(strategy_row["label"]),
+            "label": str(strategy_spec["label"]),
             "symbol": config.symbol,
             "thread_count": config.thread_count,
             "stop_sessions": config.stop_sessions,

@@ -5,6 +5,7 @@
 - `engine-cli`: 종목 데이터 동기화와 백테스트에 사용하는 온디맨드 Python CLI 컨테이너
 - `dashboard`: `/backtests/:symbolSlug`를 제공하는 TypeScript Express API 및 정적 UI 호스트
   - `DATABASE_URL`을 사용해 `backtest_research_artifacts`, `backtest_research_sweep_rows`를 PostgreSQL에 저장한다.
+  - 컨테이너 밖에서 로컬 스크립트로 실행할 때는 `SQLITE_PATH`를 사용해 같은 연구 산출물을 단일 파일 SQLite DB에 저장할 수 있다.
   - `Strategy Explorer`와 `Sweep Explorer`는 이 저장소를 사용해 재현성 메타데이터가 포함된 연구 산출물을 재사용한다.
 
 Redis는 의도적으로 제외한다.

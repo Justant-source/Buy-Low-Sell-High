@@ -31,6 +31,7 @@ export interface ProfilePayload extends ProfileDefinition {
 export interface WorkspaceDefinition {
   workspaceId: string;
   symbol: string;
+  displayName: string;
   routeSlug: string;
   navLabel: string;
   description: string;
@@ -39,6 +40,14 @@ export interface WorkspaceDefinition {
   csvPath: string;
   referenceMode: "soxl_reference" | "backtest_only";
   warningTags: string[];
+  defaultStrategyExecutionModel: string;
+  defaultStrategyPriceBasis: string;
+  defaultSweepExecutionModel: string;
+  defaultSweepPriceBasis: string;
+  guideTitle: string;
+  guideLead: string;
+  guideWhyTitle: string;
+  guideWhyCopy: string;
 }
 
 export interface BacktestOverrides {
@@ -353,10 +362,23 @@ export interface StrategyExplorerStrategyPayload {
   label: string;
   thread_count: number;
   stop_sessions: number;
+  buy_pct?: number;
+  sell_pct?: number;
+  display_params?: string;
   mentor_profiles: string[];
   config_hash: string;
   metrics: Record<string, string | number>;
   yearly: Record<string, Record<string, string | number>>;
+  monthly: StrategyMonthlyRowPayload[];
+  segments: StrategySegmentRowPayload[];
+  daily: DailyPointPayload[];
+}
+
+export interface StrategyExplorerBenchmarkPayload {
+  strategy_id: string;
+  label: string;
+  combo_key: string;
+  metrics: Record<string, string | number>;
   monthly: StrategyMonthlyRowPayload[];
   segments: StrategySegmentRowPayload[];
   daily: DailyPointPayload[];
@@ -374,10 +396,48 @@ export interface StrategyExplorerPayload {
     period_end: string;
     data_hash: string;
     code_commit: string;
+    ranking_basis: string;
     slice_presets: StrategySlicePresetPayload[];
     segment_presets: StrategySlicePresetPayload[];
   };
+  benchmark: StrategyExplorerBenchmarkPayload | null;
   strategies: StrategyExplorerStrategyPayload[];
+  rankings: OfficialExplorerRankingPayload[];
+}
+
+export interface StrategyRankingRowPayload {
+  combo_key: string;
+  strategy_id: string;
+  label: string;
+  display_params: string;
+  thread_count: number;
+  stop_sessions: number;
+  buy_pct: number;
+  sell_pct: number;
+  full_return_pct: number;
+  mean_segment_return_pct: number;
+  segment_stddev_pct: number;
+  worst_segment_return_pct: number;
+  positive_segment_ratio_pct: number;
+  recent_segment_return_pct: number;
+  rank: number;
+}
+
+export interface StrategyRankingPayload {
+  meta: {
+    symbol: string;
+    initial_capital: string;
+    price_basis: string;
+    execution_model: string;
+    period_start: string;
+    period_end: string;
+    data_hash: string;
+    code_commit: string;
+    ranking_basis: string;
+    segment_presets: StrategySlicePresetPayload[];
+    combo_count: number;
+  };
+  rows: StrategyRankingRowPayload[];
 }
 
 export interface ThreadTimelineLaneIntervalPayload {
@@ -482,10 +542,8 @@ export interface ParameterSweepRowPayload {
   params: {
     thread_count: number;
     stop_sessions: number;
-    take_profit_pct: number;
-    entry_drop_pct: number;
-    stop_loss_pct: number;
-    max_entries_per_session: number;
+    buy_pct: number;
+    sell_pct: number;
   };
   metrics: {
     full_return_pct: number;
@@ -572,7 +630,7 @@ export interface PersistedRunArtifact {
   payload: BacktestDetailPayload;
 }
 
-export type ResearchArtifactKind = "STRATEGY_EXPLORER" | "PARAMETER_SWEEP";
+export type ResearchArtifactKind = "STRATEGY_EXPLORER" | "STRATEGY_RANKING" | "PARAMETER_SWEEP";
 
 export interface ResearchArtifactRecord<TPayload> {
   artifactId: string;

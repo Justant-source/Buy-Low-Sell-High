@@ -29,3 +29,4 @@
 - Default to parallel execution for independent work. Use up to 8 parallel sub-agents/tool tasks when the work can be safely split.
 - Run the Phase Gate commands and report the results.
 - Never skip or weaken failing tests.
+- For dashboard build/test/start, use `./scripts/dashboard_exec.sh` instead of raw `npm` or `node`. This repo must tolerate environments without a working system Node toolchain.

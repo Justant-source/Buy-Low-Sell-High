@@ -1,4 +1,5 @@
 .venv/
+.tools/
 __pycache__/
 .pytest_cache/
 .mypy_cache/
@@ -8,7 +9,10 @@ __pycache__/
 env/
 node_modules/
 dashboard/node_modules/
-data/raw/
+data/raw/*
+!data/raw/
+!data/raw/000660_daily_2015_present.csv
+!data/raw/0193t0_daily_2015_present.csv
 data/runtime/
 data/normalized/
 results/

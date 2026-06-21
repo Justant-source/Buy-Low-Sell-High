@@ -15,8 +15,8 @@ trap cleanup EXIT
 
 cd "${ROOT_DIR}"
 
-npm --prefix dashboard run build >/dev/null
-PORT="${PORT}" node dashboard/dist/server.js >/tmp/buy-low-sell-high-backtest-e2e.log 2>&1 &
+./scripts/dashboard_exec.sh build >/dev/null
+PORT="${PORT}" ./scripts/dashboard_exec.sh start >/tmp/buy-low-sell-high-backtest-e2e.log 2>&1 &
 SERVER_PID="$!"
 
 python3 - <<'PY'
@@ -56,7 +56,7 @@ else:
 
 html = get(f"http://127.0.0.1:{port}/backtests/soxl")
 required_markers = [
-    "백테스트 (SOXL)",
+    "Buy-Low-Sell-High",
     "전략",
     "파라미터 테스트",
     "멘토 래퍼런스",
@@ -69,6 +69,29 @@ required_markers = [
 for marker in required_markers:
     if marker not in html:
         raise SystemExit(f"missing backtest UI marker: {marker}")
+
+workspaces = json.loads(get(f"http://127.0.0.1:{port}/api/workspaces"))
+workspace_ids = {row["workspaceId"] for row in workspaces.get("workspaces", [])}
+if "0193t0" not in workspace_ids:
+    raise SystemExit("workspace list missing 0193t0")
+
+workspace_0193t0 = next(row for row in workspaces["workspaces"] if row["workspaceId"] == "0193t0")
+if workspace_0193t0.get("referenceMode") != "backtest_only":
+    raise SystemExit("0193t0 workspace referenceMode mismatch")
+
+profiles_0193t0 = json.loads(
+    get(f"http://127.0.0.1:{port}/api/profiles?workspaceId=0193t0")
+)
+if profiles_0193t0.get("defaultProfileId") != "0193t0_default_5x30":
+    raise SystemExit("0193t0 default profile mismatch")
+if len(profiles_0193t0.get("profiles", [])) != 4:
+    raise SystemExit("0193t0 profile count mismatch")
+
+data_0193t0 = json.loads(get(f"http://127.0.0.1:{port}/api/data/status?workspaceId=0193t0"))
+if data_0193t0.get("symbol") != "0193T0":
+    raise SystemExit("0193t0 data status symbol mismatch")
+if not any("Synthetic pre-listing history present" in warning for warning in data_0193t0.get("warnings", [])):
+    raise SystemExit("0193t0 data status missing synthetic warning")
 
 strategy_explorer = json.loads(
     get(

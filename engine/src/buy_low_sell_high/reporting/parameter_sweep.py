@@ -20,6 +20,7 @@ from .research_common import (
     stddev_decimal,
     sweep_hash,
 )
+from .strategy_specs import dynamic_strategy_id
 
 
 def _format_param(value: int | float | Decimal) -> str:
@@ -31,13 +32,11 @@ def _format_param(value: int | float | Decimal) -> str:
 
 
 def _combo_key(params: dict[str, int | float | Decimal]) -> str:
-    return (
-        f"t{_format_param(params['thread_count'])}"
-        f"-s{_format_param(params['stop_sessions'])}"
-        f"-tp{_format_param(params['take_profit_pct'])}"
-        f"-ed{_format_param(params['entry_drop_pct'])}"
-        f"-sl{_format_param(params['stop_loss_pct'])}"
-        f"-me{_format_param(params['max_entries_per_session'])}"
+    return dynamic_strategy_id(
+        int(params["thread_count"]),
+        int(params["stop_sessions"]),
+        Decimal(str(params["buy_pct"])),
+        Decimal(str(params["sell_pct"])),
     )
 
 
@@ -53,10 +52,10 @@ def _build_sweep_config(
         base_config,
         thread_count=int(params["thread_count"]),
         stop_sessions=int(params["stop_sessions"]),
-        take_profit_pct=D(params["take_profit_pct"]),
-        entry_drop_pct=D(params["entry_drop_pct"]),
-        stop_loss_pct=D(params["stop_loss_pct"]),
-        max_entries_per_session=int(params["max_entries_per_session"]),
+        take_profit_pct=D(params["sell_pct"]),
+        entry_drop_pct=D(params["buy_pct"]),
+        stop_loss_pct=D(str(fixed_values.get("stop_loss_pct", 0))),
+        max_entries_per_session=int(fixed_values.get("max_entries_per_session", 1)),
         take_profit_operator=str(fixed_values.get("take_profit_operator", "gt")),
         thread_selector=ThreadSelector(str(fixed_values.get("thread_selector", "round_robin"))),
         allow_same_session_thread_reuse=bool(fixed_values.get("allow_same_session_thread_reuse", True)),
@@ -72,10 +71,8 @@ def _iter_parameter_rows(definition: dict[str, Any]) -> list[dict[str, int | flo
     keys = [
         "thread_count",
         "stop_sessions",
-        "take_profit_pct",
-        "entry_drop_pct",
-        "stop_loss_pct",
-        "max_entries_per_session",
+        "buy_pct",
+        "sell_pct",
     ]
     rows: list[dict[str, int | float]] = []
     for combo in product(*(values[key] for key in keys)):
@@ -150,10 +147,8 @@ def build_parameter_sweep(
             "params": {
                 "thread_count": int(params["thread_count"]),
                 "stop_sessions": int(params["stop_sessions"]),
-                "take_profit_pct": as_number(D(params["take_profit_pct"])),
-                "entry_drop_pct": as_number(D(params["entry_drop_pct"])),
-                "stop_loss_pct": as_number(D(params["stop_loss_pct"])),
-                "max_entries_per_session": int(params["max_entries_per_session"]),
+                "buy_pct": as_number(D(params["buy_pct"])),
+                "sell_pct": as_number(D(params["sell_pct"])),
             },
             "metrics": {
                 "full_return_pct": as_number(run.metrics["total_return_pct"]),

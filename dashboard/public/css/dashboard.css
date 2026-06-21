@@ -588,6 +588,104 @@
   white-space: nowrap;
 }
 
+.strategy-combo-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.strategy-filter-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.strategy-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-muted);
+  padding: 5px 10px;
+  font: 600 11px/1 var(--font-sans);
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.strategy-filter-chip:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.strategy-filter-chip.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  color: var(--primary-text);
+}
+
+.strategy-filter-chip-label {
+  color: inherit;
+}
+
+.strategy-filter-chip-value {
+  color: inherit;
+  font: 600 10px/1 var(--font-sans);
+  opacity: 0.9;
+}
+
+.strategy-filter-dropdown-root {
+  position: fixed;
+  z-index: 60;
+  min-width: 220px;
+  max-width: 260px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+
+.strategy-filter-dropdown-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.strategy-filter-dropdown-title {
+  color: var(--text);
+  font: 600 12px/1.2 var(--font-sans);
+}
+
+.strategy-filter-dropdown-all {
+  color: var(--text-muted);
+  font: 500 11px/1.2 var(--font-sans);
+}
+
+.strategy-filter-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.strategy-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font: 500 12px/1.2 var(--font-sans);
+}
+
+.strategy-filter-option input {
+  margin: 0;
+}
+
 .reference-frame {
   border: 1px solid var(--border);
   border-radius: var(--r-lg);

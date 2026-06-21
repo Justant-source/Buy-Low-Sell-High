@@ -1,0 +1,8 @@
+profile_id: 0193t0_default_7x30
+symbol: 0193T0
+initial_capital: 10000000
+thread_count: 7
+stop_sessions: 30
+price_basis: raw_close_with_actions
+execution_model: ideal_same_close
+sizing_mode: fixed_principal

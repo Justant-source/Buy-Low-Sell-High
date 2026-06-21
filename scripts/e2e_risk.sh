@@ -15,8 +15,8 @@ trap cleanup EXIT
 
 cd "${ROOT_DIR}"
 
-npm --prefix dashboard run build >/dev/null
-PORT="${PORT}" node dashboard/dist/server.js >/tmp/buy-low-sell-high-risk-e2e.log 2>&1 &
+./scripts/dashboard_exec.sh build >/dev/null
+PORT="${PORT}" ./scripts/dashboard_exec.sh start >/tmp/buy-low-sell-high-risk-e2e.log 2>&1 &
 SERVER_PID="$!"
 
 python3 - <<'PY'

@@ -10,10 +10,12 @@ from urllib.error import HTTPError
 from buy_low_sell_high.data.normalize import normalize_bars
 from buy_low_sell_high.data.providers.csv_provider import CsvMarketDataProvider
 from buy_low_sell_high.data.providers.investing_provider import InvestingMarketDataProvider
+from buy_low_sell_high.data.providers.naver_provider import NaverMarketDataProvider
 from buy_low_sell_high.data.providers.stooq_provider import StooqMarketDataProvider
 from buy_low_sell_high.data.providers.yahoo_provider import YahooMarketDataProvider
 from buy_low_sell_high.data.quality import apply_split_to_position, compute_data_hash, summarize_import, validate_bars
-from buy_low_sell_high.data.sync import snapshot_manifest_path, write_snapshot_manifest
+from buy_low_sell_high.data.sync import snapshot_manifest_path, sync_history, write_snapshot_manifest
+from buy_low_sell_high.data.synthetic import build_single_stock_leveraged_history
 from buy_low_sell_high.domain.models import MarketBar
 from buy_low_sell_high.domain.money import D
 
@@ -162,6 +164,235 @@ class DataPipelineTest(unittest.TestCase):
             self.assertEqual(payload["warnings"], ["cached"])
             self.assertEqual(payload["errors"], ["query1: 429"])
             self.assertEqual(payload["output_csv"], str(output_csv.resolve()))
+
+    def test_import_summary_warns_when_synthetic_rows_are_present(self) -> None:
+        bars = [
+            MarketBar(
+                symbol="0193T0",
+                session_date=date(2026, 5, 26),
+                open=D("10"),
+                high=D("11"),
+                low=D("9"),
+                close=D("10"),
+                adj_close=D("10"),
+                volume=0,
+                source="synthetic_naver",
+            ),
+            MarketBar(
+                symbol="0193T0",
+                session_date=date(2026, 5, 27),
+                open=D("12"),
+                high=D("13"),
+                low=D("11"),
+                close=D("12"),
+                adj_close=D("12"),
+                volume=100,
+                source="naver",
+            ),
+        ]
+        report = summarize_import("0193T0", "naver_synthetic", bars)
+        self.assertTrue(any("Synthetic pre-listing history present" in warning for warning in report.warnings))
+
+    def test_naver_provider_loads_multi_page_history_in_ascending_order(self) -> None:
+        page1 = """
+        <html><body>
+        <table class="type2">
+        <tr onMouseOver="mouseOver(this)">
+          <td align="center"><span class="tah p10 gray03">2026.06.19</span></td>
+          <td class="num"><span class="tah p11">39,200</span></td>
+          <td class="num"><span class="tah p11 red02">2,300</span></td>
+          <td class="num"><span class="tah p11">41,000</span></td>
+          <td class="num"><span class="tah p11">42,675</span></td>
+          <td class="num"><span class="tah p11">36,905</span></td>
+          <td class="num"><span class="tah p11">173,489,198</span></td>
+        </tr>
+        <tr onMouseOver="mouseOver(this)">
+          <td align="center"><span class="tah p10 gray03">2026.06.18</span></td>
+          <td class="num"><span class="tah p11">36,900</span></td>
+          <td class="num"><span class="tah p11 red02">4,240</span></td>
+          <td class="num"><span class="tah p11">33,475</span></td>
+          <td class="num"><span class="tah p11">38,425</span></td>
+          <td class="num"><span class="tah p11">33,465</span></td>
+          <td class="num"><span class="tah p11">142,814,867</span></td>
+        </tr>
+        </table>
+        <td class="pgRR"><a href="/item/sise_day.naver?code=0193T0&amp;page=2">맨뒤</a></td>
+        </body></html>
+        """
+        page2 = """
+        <html><body>
+        <table class="type2">
+        <tr onMouseOver="mouseOver(this)">
+          <td align="center"><span class="tah p10 gray03">2026.05.28</span></td>
+          <td class="num"><span class="tah p11">24,000</span></td>
+          <td class="num"><span class="tah p11 red02">500</span></td>
+          <td class="num"><span class="tah p11">24,500</span></td>
+          <td class="num"><span class="tah p11">25,000</span></td>
+          <td class="num"><span class="tah p11">23,500</span></td>
+          <td class="num"><span class="tah p11">11,000,000</span></td>
+        </tr>
+        <tr onMouseOver="mouseOver(this)">
+          <td align="center"><span class="tah p10 gray03">2026.05.27</span></td>
+          <td class="num"><span class="tah p11">23,500</span></td>
+          <td class="num"><span class="tah p11 red02">100</span></td>
+          <td class="num"><span class="tah p11">23,000</span></td>
+          <td class="num"><span class="tah p11">24,000</span></td>
+          <td class="num"><span class="tah p11">22,800</span></td>
+          <td class="num"><span class="tah p11">10,500,000</span></td>
+        </tr>
+        </table>
+        </body></html>
+        """
+
+        class Response:
+            def __init__(self, html: str) -> None:
+                self.html = html
+
+            def __enter__(self) -> "Response":
+                return self
+
+            def __exit__(self, exc_type, exc, tb) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return self.html.encode("euc-kr")
+
+        with patch("urllib.request.urlopen", side_effect=[Response(page1), Response(page2)]):
+            bars = NaverMarketDataProvider().load_bars("0193T0", start_date="2026-05-27")
+        self.assertEqual([bar.session_date.isoformat() for bar in bars], ["2026-05-27", "2026-05-28", "2026-06-18", "2026-06-19"])
+        self.assertEqual(str(bars[0].close), "23500")
+        self.assertEqual(bars[-1].volume, 173489198)
+
+    def test_synthetic_history_is_scaled_to_listing_day_close(self) -> None:
+        underlying_bars = [
+            MarketBar(
+                symbol="000660",
+                session_date=date(2026, 5, 26),
+                open=D("100"),
+                high=D("105"),
+                low=D("95"),
+                close=D("100"),
+                adj_close=D("100"),
+                volume=1000,
+                source="naver",
+            ),
+            MarketBar(
+                symbol="000660",
+                session_date=date(2026, 5, 27),
+                open=D("108"),
+                high=D("112"),
+                low=D("107"),
+                close=D("110"),
+                adj_close=D("110"),
+                volume=1000,
+                source="naver",
+            ),
+        ]
+        actual_bars = [
+            MarketBar(
+                symbol="0193T0",
+                session_date=date(2026, 5, 27),
+                open=D("210"),
+                high=D("225"),
+                low=D("205"),
+                close=D("220"),
+                adj_close=D("220"),
+                volume=5000,
+                source="naver",
+            ),
+            MarketBar(
+                symbol="0193T0",
+                session_date=date(2026, 5, 28),
+                open=D("221"),
+                high=D("230"),
+                low=D("215"),
+                close=D("218"),
+                adj_close=D("218"),
+                volume=6000,
+                source="naver",
+            ),
+        ]
+        bars = build_single_stock_leveraged_history(
+            symbol="0193T0",
+            underlying_bars=underlying_bars,
+            actual_bars=actual_bars,
+            dataset_start_date="2026-05-26",
+            actual_start_date="2026-05-27",
+            leverage_factor=D("2"),
+        )
+        self.assertEqual([bar.session_date.isoformat() for bar in bars], ["2026-05-26", "2026-05-27", "2026-05-28"])
+        self.assertEqual(bars[0].source, "synthetic_naver")
+        self.assertEqual(str(bars[1].close), "220")
+        self.assertEqual(str(bars[2].close), "218")
+        self.assertEqual(str((bars[0].close * D("1.2")).quantize(D("0.0001"))), "220.0000")
+
+    def test_sync_history_builds_synthetic_0193t0_snapshot(self) -> None:
+        underlying_bars = [
+            MarketBar(
+                symbol="000660",
+                session_date=date(2026, 5, 26),
+                open=D("100"),
+                high=D("105"),
+                low=D("95"),
+                close=D("100"),
+                adj_close=D("100"),
+                volume=1000,
+                source="naver",
+            ),
+            MarketBar(
+                symbol="000660",
+                session_date=date(2026, 5, 27),
+                open=D("108"),
+                high=D("112"),
+                low=D("107"),
+                close=D("110"),
+                adj_close=D("110"),
+                volume=1000,
+                source="naver",
+            ),
+        ]
+        actual_bars = [
+            MarketBar(
+                symbol="0193T0",
+                session_date=date(2026, 5, 27),
+                open=D("210"),
+                high=D("225"),
+                low=D("205"),
+                close=D("220"),
+                adj_close=D("220"),
+                volume=5000,
+                source="naver",
+            ),
+            MarketBar(
+                symbol="0193T0",
+                session_date=date(2026, 5, 28),
+                open=D("221"),
+                high=D("230"),
+                low=D("215"),
+                close=D("218"),
+                adj_close=D("218"),
+                volume=6000,
+                source="naver",
+            ),
+        ]
+
+        def fake_load_bars(symbol: str, *, start_date: str = "2011-01-01", end_date: str | None = None) -> list[MarketBar]:
+            if symbol == "000660":
+                return underlying_bars
+            if symbol == "0193T0":
+                return actual_bars
+            raise AssertionError(symbol)
+
+        with TemporaryDirectory() as temp_dir:
+            output_csv = Path(temp_dir) / "0193t0.csv"
+            with patch("buy_low_sell_high.data.sync.NaverMarketDataProvider.load_bars", side_effect=fake_load_bars):
+                result = sync_history(output_csv, symbol="0193T0", start_date="2026-05-26")
+            self.assertEqual(result["source"], "naver_synthetic")
+            self.assertEqual(result["rows"], 3)
+            self.assertTrue(any("synthetic" in warning.lower() for warning in result["warnings"]))
+            written = output_csv.read_text(encoding="utf-8")
+            self.assertIn("synthetic_naver", written)
+            self.assertIn("2026-05-28", written)
 
     def test_yahoo_provider_falls_back_to_query2(self) -> None:
         payload = yahoo_payload(date(2024, 1, 1), "10")

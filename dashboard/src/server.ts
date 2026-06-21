@@ -5,6 +5,7 @@ import path from "node:path";
 import { BacktestService } from "./lib/backtest-service.js";
 import { HttpError } from "./lib/http.js";
 import { publicRoot, repoRoot } from "./lib/paths.js";
+import { describeResearchStoreTarget } from "./lib/research-store.js";
 import { createBacktestsRouter } from "./routes/backtests.js";
 import { createDataRouter } from "./routes/data.js";
 import { createProfilesRouter } from "./routes/profiles.js";
@@ -65,4 +66,11 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(port, () => {
   console.log(`Buy-Low-Sell-High dashboard listening on ${port}`);
+  console.log(`Research store: ${describeResearchStoreTarget()}`);
+  void backtestService.warmDefaultStrategyPresetRankings().then(() => {
+    console.log("Preset ranking warmup completed for default workspaces");
+  }).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Preset ranking warmup failed: ${message}`);
+  });
 });

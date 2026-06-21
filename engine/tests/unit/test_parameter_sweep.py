@@ -6,6 +6,7 @@ import unittest
 from buy_low_sell_high.domain.models import MarketBar, StrategyConfig
 from buy_low_sell_high.domain.money import D
 from buy_low_sell_high.reporting.parameter_sweep import build_parameter_sweep
+from buy_low_sell_high.reporting.research_common import PARAMETER_SWEEP_DEFINITION
 
 
 def bar(day: int, close: str) -> MarketBar:
@@ -39,17 +40,17 @@ class ParameterSweepTest(unittest.TestCase):
                 "sweep_id": "mini",
                 "parameter_values": {
                     "thread_count": [5],
-                    "stop_sessions": [10, 30],
-                    "take_profit_pct": [0],
-                    "entry_drop_pct": [0],
-                    "stop_loss_pct": [0, 5],
-                    "max_entries_per_session": [1],
+                    "stop_sessions": [30, 40],
+                    "buy_pct": [0, 1],
+                    "sell_pct": [0],
                 },
                 "fixed_values": {
                     "take_profit_operator": "gt",
                     "thread_selector": "round_robin",
                     "allow_same_session_thread_reuse": True,
                     "sizing_mode": "fixed_principal",
+                    "stop_loss_pct": 0,
+                    "max_entries_per_session": 1,
                     "price_basis": "adjusted_close",
                     "execution_model": "next_open",
                 },
@@ -64,7 +65,14 @@ class ParameterSweepTest(unittest.TestCase):
         self.assertIn("flags", payload["rows"][0])
         self.assertIn("pareto_return_mdd", payload["rows"][0]["flags"])
         self.assertIn("mean_segment_return_pct", payload["rows"][0]["metrics"])
+        self.assertEqual(set(payload["rows"][0]["params"].keys()), {"thread_count", "stop_sessions", "buy_pct", "sell_pct"})
         self.assertEqual(payload["meta"]["segment_presets"][0]["preset_id"], "2025-latest")
+
+    def test_default_sweep_definition_expands_to_726_combos(self) -> None:
+        combo_count = 1
+        for values in PARAMETER_SWEEP_DEFINITION["parameter_values"].values():
+            combo_count *= len(values)
+        self.assertEqual(combo_count, 726)
 
 
 if __name__ == "__main__":

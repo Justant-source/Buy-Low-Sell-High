@@ -20,6 +20,16 @@ def _adjusted_close_warnings(bars: list[MarketBar]) -> list[str]:
     return ["Adjusted-close basis appears unavailable: adj_close mirrors close for all rows"]
 
 
+def _synthetic_history_warnings(bars: list[MarketBar]) -> list[str]:
+    synthetic_rows = [bar for bar in bars if bar.source.startswith("synthetic")]
+    if not synthetic_rows:
+        return []
+    return [
+        "Synthetic pre-listing history present: "
+        f"{synthetic_rows[0].session_date.isoformat()}..{synthetic_rows[-1].session_date.isoformat()}"
+    ]
+
+
 def validate_bars(bars: list[MarketBar]) -> list[str]:
     warnings: list[str] = []
     seen_dates: set[object] = set()
@@ -60,7 +70,7 @@ def compute_data_hash(bars: list[MarketBar]) -> str:
 
 
 def summarize_import(symbol: str, source: str, bars: list[MarketBar]) -> DataImportReport:
-    warnings = validate_bars(bars) + _adjusted_close_warnings(bars)
+    warnings = validate_bars(bars) + _adjusted_close_warnings(bars) + _synthetic_history_warnings(bars)
     return DataImportReport(
         symbol=symbol,
         source=source,
