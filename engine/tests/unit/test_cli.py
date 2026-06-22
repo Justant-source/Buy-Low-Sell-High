@@ -25,6 +25,13 @@ from buy_low_sell_high.domain.money import D
 from buy_low_sell_high.domain.models import StrategyConfig
 
 
+def _daily_return_pct(payload: dict[str, object]) -> float:
+    daily = payload["daily"]
+    start = float(daily[0]["total_equity"])
+    end = float(daily[-1]["total_equity"])
+    return 0.0 if start == 0 else round(((end - start) / start) * 100, 2)
+
+
 class CliDefaultsTest(unittest.TestCase):
     def test_strategy_detail_cli_respects_slice_boundaries(self) -> None:
         profile = Path(__file__).resolve().parents[3] / "configs" / "strategies" / "soxl_official_ddeolsao_pal_v1.yaml"
@@ -46,8 +53,12 @@ class CliDefaultsTest(unittest.TestCase):
             )
         payload = json.loads(stdout.getvalue())
         self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["meta"]["strategy_id"], "t5-s40-buy-2-sell+0")
+        self.assertEqual(payload["meta"]["period_start"], "2024-01-03")
+        self.assertEqual(payload["meta"]["period_end"], "2024-01-04")
         self.assertEqual(payload["daily"][0]["session_date"], "2024-01-03")
         self.assertEqual(payload["daily"][-1]["session_date"], "2024-01-04")
+        self.assertEqual(float(payload["metrics"]["total_return_pct"]), _daily_return_pct(payload))
 
     def test_thread_timeline_cli_respects_slice_boundaries(self) -> None:
         profile = Path(__file__).resolve().parents[3] / "configs" / "strategies" / "soxl_official_ddeolsao_pal_v1.yaml"
@@ -72,6 +83,8 @@ class CliDefaultsTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(payload["meta"]["period_start"], "2024-01-03")
         self.assertEqual(payload["meta"]["period_end"], "2024-01-04")
+        self.assertEqual(payload["meta"]["commission_bps"], "25")
+        self.assertEqual(payload["meta"]["transaction_tax_bps"], "0")
         self.assertTrue(all("2024-01-03" <= row["session_date"] <= "2024-01-04" for row in payload["sessions"]))
 
     def test_default_market_data_csv_points_to_repo_snapshot(self) -> None:
@@ -85,6 +98,7 @@ class CliDefaultsTest(unittest.TestCase):
         self.assertEqual(path.name, "tqqq_daily_2011_present.csv")
 
     def test_default_market_data_csv_uses_symbol_registry_filename(self) -> None:
+        self.assertEqual(Path(default_market_data_csv("QQQ")).name, "qqq_daily_2011_present.csv")
         self.assertEqual(Path(default_market_data_csv("0193T0")).name, "0193t0_daily_2015_present.csv")
         self.assertEqual(Path(default_market_data_csv("000660")).name, "000660_daily_2015_present.csv")
         self.assertEqual(Path(default_market_data_csv("233740")).name, "233740_daily_2015_present.csv")
@@ -167,6 +181,32 @@ class CliDefaultsTest(unittest.TestCase):
         self.assertEqual(payload["entry_drop_pct"], "2")
         self.assertEqual(payload["stop_loss_pct"], "10")
         self.assertEqual(payload["max_entries_per_session"], 2)
+        self.assertEqual(payload["commission_bps"], "25")
+        self.assertEqual(payload["transaction_tax_bps"], "0")
+
+    def test_serialize_config_includes_regime_fields(self) -> None:
+        config = StrategyConfig.from_mapping(
+            {
+                "symbol": "SOXL",
+                "thread_count": 5,
+                "stop_sessions": 30,
+                "regime_enabled": True,
+                "regime_symbol": "QQQ",
+                "regime_base_stop_sessions": 30,
+                "regime_bull_stop_sessions": 40,
+                "regime_bull_buy_pct": "-2",
+                "regime_bull_sell_pct": "3",
+                "regime_bear_stop_sessions": 10,
+                "regime_bear_buy_pct": "-5",
+                "regime_bear_sell_pct": "1",
+            }
+        )
+        payload = _serialize_config(config)
+        self.assertEqual(payload["regime_enabled"], True)
+        self.assertEqual(payload["regime_symbol"], "QQQ")
+        self.assertEqual(payload["regime_bull_stop_sessions"], 40)
+        self.assertEqual(payload["regime_bear_buy_pct"], "-5")
+        self.assertTrue(payload["regime_config_hash"])
 
     def test_parity_exit_code_fails_when_any_result_is_not_pass(self) -> None:
         self.assertEqual(

@@ -65,12 +65,20 @@ def _recovery_metrics(run: BacktestRun) -> dict[str, int | bool | None]:
     }
 
 
-def _scenario_row(run: BacktestRun, label: str, *, commission_bps: Decimal = ZERO, slippage_bps: Decimal = ZERO) -> dict[str, object]:
+def _scenario_row(
+    run: BacktestRun,
+    label: str,
+    *,
+    commission_bps: Decimal = ZERO,
+    transaction_tax_bps: Decimal = ZERO,
+    slippage_bps: Decimal = ZERO,
+) -> dict[str, object]:
     recovery = _recovery_metrics(run)
     return {
       "label": label,
       "execution_model": run.config.execution_model.value,
       "commission_bps": str(commission_bps),
+      "transaction_tax_bps": str(transaction_tax_bps),
       "slippage_bps": str(slippage_bps),
       "total_return_pct": str(run.metrics["total_return_pct"]),
       "max_drawdown_pct": str(run.metrics["max_drawdown_pct"]),
@@ -92,7 +100,7 @@ def _metric_delta(left: str, right: str) -> str:
 
 
 def build_risk_report(bars: list[MarketBar], config: StrategyConfig, *, data_hash: str = "adhoc") -> dict[str, object]:
-    base = _clone_config(config, commission_bps=ZERO, slippage_bps=ZERO)
+    base = _clone_config(config, commission_bps=ZERO, transaction_tax_bps=ZERO, slippage_bps=ZERO)
     ideal_run = run_backtest(bars, _clone_config(base, execution_model=ExecutionModel.IDEAL_SAME_CLOSE), data_hash=data_hash)
     next_open_run = run_backtest(bars, _clone_config(base, execution_model=ExecutionModel.NEXT_OPEN), data_hash=data_hash)
     next_close_run = run_backtest(bars, _clone_config(base, execution_model=ExecutionModel.NEXT_CLOSE), data_hash=data_hash)
@@ -110,11 +118,20 @@ def build_risk_report(bars: list[MarketBar], config: StrategyConfig, *, data_has
                 base,
                 execution_model=ExecutionModel.NEXT_OPEN,
                 commission_bps=commission_bps,
+                transaction_tax_bps=ZERO,
                 slippage_bps=slippage_bps,
             ),
             data_hash=data_hash,
         )
-        cost_rows.append(_scenario_row(run, label, commission_bps=commission_bps, slippage_bps=slippage_bps))
+        cost_rows.append(
+            _scenario_row(
+                run,
+                label,
+                commission_bps=commission_bps,
+                transaction_tax_bps=ZERO,
+                slippage_bps=slippage_bps,
+            )
+        )
 
     sensitivity_runs = run_grid(
         bars,

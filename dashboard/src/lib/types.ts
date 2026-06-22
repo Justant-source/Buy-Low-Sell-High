@@ -60,6 +60,24 @@ export interface BacktestOverrides {
   maxEntriesPerSession?: number;
   sizingMode?: string;
   priceBasis?: string;
+  regimeEnabled?: boolean;
+  regimeSymbol?: string;
+  regimeRsiPeriodWeeks?: number;
+  regimeBearHighThreshold?: number;
+  regimeBearMidLowThreshold?: number;
+  regimeBearMidHighThreshold?: number;
+  regimeBullLowThreshold?: number;
+  regimeBullMidLowThreshold?: number;
+  regimeBullMidHighThreshold?: number;
+  regimeBaseStopSessions?: number;
+  regimeBaseBuyPct?: number;
+  regimeBaseSellPct?: number;
+  regimeBullStopSessions?: number;
+  regimeBullBuyPct?: number;
+  regimeBullSellPct?: number;
+  regimeBearStopSessions?: number;
+  regimeBearBuyPct?: number;
+  regimeBearSellPct?: number;
 }
 
 export interface ProfileShowPayload {
@@ -77,6 +95,25 @@ export interface ProfileShowPayload {
   sizing_mode: string;
   year_boundary: string;
   end_of_test: string;
+  regime_enabled?: boolean;
+  regime_symbol?: string;
+  regime_rsi_period_weeks?: number;
+  regime_bear_high_threshold?: string;
+  regime_bear_mid_low_threshold?: string;
+  regime_bear_mid_high_threshold?: string;
+  regime_bull_low_threshold?: string;
+  regime_bull_mid_low_threshold?: string;
+  regime_bull_mid_high_threshold?: string;
+  regime_base_stop_sessions?: number;
+  regime_base_buy_pct?: string;
+  regime_base_sell_pct?: string;
+  regime_bull_stop_sessions?: number;
+  regime_bull_buy_pct?: string;
+  regime_bull_sell_pct?: string;
+  regime_bear_stop_sessions?: number;
+  regime_bear_buy_pct?: string;
+  regime_bear_sell_pct?: string;
+  regime_config_hash?: string;
   config_hash: string;
   initial_capital: string;
 }
@@ -92,6 +129,7 @@ export interface DailyPointPayload {
   take_profits: number;
   time_stops: number;
   skipped_entries: number;
+  applied_regime?: string;
 }
 
 export interface TradePayload {
@@ -101,13 +139,20 @@ export interface TradePayload {
   entry_price: string;
   shares: string;
   invested_amount: string;
+  entry_fee: string;
   exit_signal_date: string | null;
   fill_exit_date: string | null;
   exit_price: string | null;
+  exit_fee: string;
+  total_fees: string;
   holding_sessions: number | null;
   pnl: string;
   return_pct: string;
   close_reason: string | null;
+  entry_regime?: string;
+  entry_stop_sessions?: number;
+  entry_buy_pct?: string;
+  entry_sell_pct?: string;
 }
 
 export interface BacktestDetailPayload {
@@ -115,6 +160,8 @@ export interface BacktestDetailPayload {
   profile_id: string;
   code_commit: string;
   data_hash: string;
+  regime_data_hash?: string | null;
+  regime_config_hash?: string | null;
   config_hash: string;
   config: Record<string, unknown>;
   metrics: Record<string, string | number>;
@@ -286,6 +333,7 @@ export interface RiskScenarioRowPayload {
   label: string;
   execution_model: string;
   commission_bps: string;
+  transaction_tax_bps: string;
   slippage_bps: string;
   total_return_pct: string;
   max_drawdown_pct: string;
@@ -365,8 +413,31 @@ export interface StrategyExplorerStrategyPayload {
   buy_pct?: number;
   sell_pct?: number;
   display_params?: string;
+  regime_enabled?: boolean;
+  bull_stop_sessions?: number;
+  bull_buy_pct?: number;
+  bull_sell_pct?: number;
+  bear_stop_sessions?: number;
+  bear_buy_pct?: number;
+  bear_sell_pct?: number;
   mentor_profiles: string[];
   config_hash: string;
+  meta: {
+    strategy_id: string;
+    symbol: string;
+    initial_capital: string;
+    price_basis: string;
+    execution_model: string;
+    period_start: string;
+    period_end: string;
+    data_hash: string;
+    config_hash: string;
+    code_commit: string;
+    regime_enabled?: boolean;
+    regime_symbol?: string;
+    regime_data_hash?: string | null;
+    regime_config_hash?: string | null;
+  };
   metrics: Record<string, string | number>;
   yearly: Record<string, Record<string, string | number>>;
   monthly: StrategyMonthlyRowPayload[];
@@ -399,6 +470,10 @@ export interface StrategyExplorerPayload {
     ranking_basis: string;
     slice_presets: StrategySlicePresetPayload[];
     segment_presets: StrategySlicePresetPayload[];
+    regime_enabled?: boolean;
+    regime_symbol?: string | null;
+    regime_data_hash?: string | null;
+    regime_config_hash?: string | null;
   };
   benchmark: StrategyExplorerBenchmarkPayload | null;
   strategies: StrategyExplorerStrategyPayload[];
@@ -414,9 +489,17 @@ export interface StrategyRankingRowPayload {
   stop_sessions: number;
   buy_pct: number;
   sell_pct: number;
+  regime_enabled?: boolean;
+  bull_stop_sessions?: number;
+  bull_buy_pct?: number;
+  bull_sell_pct?: number;
+  bear_stop_sessions?: number;
+  bear_buy_pct?: number;
+  bear_sell_pct?: number;
   full_return_pct: number;
   cagr_pct: number;
   max_drawdown_pct: number;
+  trade_count: number;
   rank: number;
 }
 
@@ -433,6 +516,10 @@ export interface StrategyRankingPayload {
     ranking_basis: string;
     segment_presets: StrategySlicePresetPayload[];
     combo_count: number;
+    regime_enabled?: boolean;
+    regime_symbol?: string | null;
+    regime_data_hash?: string | null;
+    regime_config_hash?: string | null;
   };
   rows: StrategyRankingRowPayload[];
 }
@@ -447,6 +534,9 @@ export interface ThreadTimelineLaneIntervalPayload {
   exit_price: string | null;
   shares: string;
   invested_amount: string;
+  entry_fee: string;
+  exit_fee: string;
+  total_fees: string;
   close_reason: string | null;
   pnl: string | null;
   return_pct: string | null;
@@ -466,14 +556,20 @@ export interface ThreadTimelineEntryPayload {
   entry_price: string;
   shares: string;
   invested_amount: string;
+  entry_fee: string;
+  entry_regime?: string;
 }
 
 export interface ThreadTimelineExitPayload {
   trade_id: string;
   thread_id: number;
+  entry_regime?: string;
   close_reason: string;
   entry_price: string;
   exit_price: string;
+  entry_fee: string;
+  exit_fee: string;
+  total_fees: string;
   pnl: string;
   return_pct: string;
   holding_sessions: number | null;
@@ -485,6 +581,7 @@ export interface ThreadTimelineOpenPositionPayload {
   entry_price: string;
   shares: string;
   invested_amount: string;
+  entry_fee: string;
   mark_price: string;
   marked_value: string;
   unrealized_pnl: string;
@@ -499,6 +596,7 @@ export interface ThreadTimelineSessionPayload {
   entries: number;
   exit_count: number;
   skipped_entries: number;
+  applied_regime?: string;
   entry_batch: ThreadTimelineEntryPayload[];
   exit_batch: ThreadTimelineExitPayload[];
   open_positions: ThreadTimelineOpenPositionPayload[];
@@ -520,6 +618,13 @@ export interface ThreadTimelinePayload {
     code_commit: string;
     execution_model: string;
     price_basis: string;
+    commission_bps: string;
+    transaction_tax_bps: string;
+    slippage_bps: string;
+    regime_enabled?: boolean;
+    regime_symbol?: string;
+    regime_data_hash?: string | null;
+    regime_config_hash?: string | null;
   };
   lanes: ThreadTimelineLanePayload[];
   sessions: ThreadTimelineSessionPayload[];

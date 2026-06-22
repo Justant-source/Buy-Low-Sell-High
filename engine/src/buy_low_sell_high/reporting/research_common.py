@@ -294,6 +294,7 @@ def serialize_daily(daily: list[DailySnapshot]) -> list[dict[str, Any]]:
             "take_profits": snapshot.take_profits,
             "time_stops": snapshot.time_stops,
             "skipped_entries": snapshot.skipped_entries,
+            "applied_regime": snapshot.applied_regime,
         }
         for snapshot in daily
     ]

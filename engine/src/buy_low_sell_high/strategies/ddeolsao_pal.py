@@ -4,7 +4,8 @@ from collections import deque
 from dataclasses import dataclass
 from decimal import Decimal
 
-from ..backtest.execution import ScheduledAction, apply_costs, fill_price, signal_price
+from ..backtest.execution import ScheduledAction, apply_costs, fill_fee_amount, fill_price, signal_price
+from ..backtest.regime import ResolvedRegimeContext, disabled_regime_parameters, load_regime_context
 from ..backtest.sizing import entry_budget
 from ..domain.enums import CloseReason, EventOrder, ExecutionModel, ThreadSelector, ThreadState
 from ..domain.models import (
@@ -28,14 +29,14 @@ class StrategyResult:
     daily: list[DailySnapshot]
 
 
-def _entry_signal(session_price: Decimal, previous_price: Decimal, config: StrategyConfig) -> bool:
-    threshold = previous_price * (D("1") - config.entry_drop_pct / D("100"))
+def _entry_signal(session_price: Decimal, previous_price: Decimal, entry_drop_pct: Decimal) -> bool:
+    threshold = previous_price * (D("1") - entry_drop_pct / D("100"))
     return session_price < threshold
 
 
-def _take_profit_signal(session_price: Decimal, entry_price: Decimal, config: StrategyConfig) -> bool:
-    threshold = entry_price * (D("1") + config.take_profit_pct / D("100"))
-    if config.take_profit_operator == "gte":
+def _take_profit_signal(session_price: Decimal, entry_price: Decimal, take_profit_pct: Decimal, take_profit_operator: str) -> bool:
+    threshold = entry_price * (D("1") + take_profit_pct / D("100"))
+    if take_profit_operator == "gte":
         return session_price >= threshold
     return session_price > threshold
 
@@ -84,9 +85,17 @@ def _entry_shares(budget: Decimal, executed_price: Decimal) -> Decimal:
     return shares
 
 
-def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: str = "adhoc") -> BacktestRun:
+def run_strategy(
+    bars: list[MarketBar],
+    config: StrategyConfig,
+    *,
+    data_hash: str = "adhoc",
+    regime_context: ResolvedRegimeContext | None = None,
+) -> BacktestRun:
     if not bars:
         raise ValueError("No bars provided")
+    resolved_regime_context = regime_context or load_regime_context(bars, config)
+    default_session_regime = disabled_regime_parameters(config)
     run_id = new_run_id()
     initial_thread_principal = config.initial_capital / D(config.thread_count)
     threads = [
@@ -103,6 +112,11 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
 
     for index, bar in enumerate(bars):
         session_price = signal_price(bar, config.price_basis)
+        session_regime = (
+            resolved_regime_context.parameters_for_session(bar.session_date)
+            if resolved_regime_context.enabled
+            else default_session_regime
+        )
         entries = 0
         take_profits = 0
         time_stops = 0
@@ -117,10 +131,12 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                 action = pending_for_next.popleft()
                 if action.kind == "ENTRY":
                     thread = next(item for item in threads if item.thread_id == action.thread_id)
-                    executed_price = fill_price(bar, config.execution_model, config.price_basis)
+                    raw_fill_price = fill_price(bar, config.execution_model, config.price_basis)
+                    executed_price = raw_fill_price
                     executed_price = apply_costs(
                         executed_price,
                         config.commission_bps,
+                        config.transaction_tax_bps,
                         config.slippage_bps,
                         is_buy=True,
                     )
@@ -146,6 +162,17 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                     thread.entry_date = bar.session_date
                     thread.invested_amount = quantize_money(shares * D(executed_price))
                     thread.reserve_pnl = quantize_money(thread.free_equity - thread.invested_amount)
+                    thread.active_regime = action.regime
+                    thread.active_stop_sessions = int(action.stop_sessions)
+                    thread.active_take_profit_pct = D(action.take_profit_pct)
+                    thread.active_buy_pct = D(action.buy_pct)
+                    entry_fee = fill_fee_amount(
+                        raw_fill_price,
+                        shares,
+                        config.commission_bps,
+                        config.transaction_tax_bps,
+                        config.slippage_bps,
+                    )
                     open_trades[thread.thread_id] = Trade(
                         run_id=run_id,
                         thread_id=thread.thread_id,
@@ -154,6 +181,11 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                         entry_price=D(executed_price),
                         shares=shares,
                         invested_amount=thread.invested_amount,
+                        entry_fee=D(entry_fee),
+                        entry_regime=action.regime,
+                        entry_stop_sessions=int(action.stop_sessions),
+                        entry_buy_pct=D(action.buy_pct),
+                        entry_sell_pct=D(action.take_profit_pct),
                     )
                     events.append(
                         StrategyEvent(
@@ -169,10 +201,12 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                     thread = next(item for item in threads if item.thread_id == action.thread_id)
                     if thread.state != ThreadState.OPEN:
                         continue
-                    executed_price = fill_price(bar, config.execution_model, config.price_basis)
+                    raw_fill_price = fill_price(bar, config.execution_model, config.price_basis)
+                    executed_price = raw_fill_price
                     executed_price = apply_costs(
                         executed_price,
                         config.commission_bps,
+                        config.transaction_tax_bps,
                         config.slippage_bps,
                         is_buy=False,
                     )
@@ -180,6 +214,15 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                     trade.exit_signal_date = action.signal_date
                     trade.fill_exit_date = bar.session_date
                     trade.exit_price = D(executed_price)
+                    trade.exit_fee = D(
+                        fill_fee_amount(
+                            raw_fill_price,
+                            trade.shares,
+                            config.commission_bps,
+                            config.transaction_tax_bps,
+                            config.slippage_bps,
+                        )
+                    )
                     trade.holding_sessions = index - (thread.entry_session_index or index)
                     trade.close_reason = CloseReason(action.reason or CloseReason.END_OF_TEST.value)
                     compute_trade_pnl(trade)
@@ -195,6 +238,10 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                     thread.entry_session_index = None
                     thread.entry_date = None
                     thread.invested_amount = ZERO
+                    thread.active_regime = "base"
+                    thread.active_stop_sessions = 0
+                    thread.active_take_profit_pct = ZERO
+                    thread.active_buy_pct = ZERO
                     events.append(
                         StrategyEvent(
                             session_date=bar.session_date,
@@ -229,6 +276,7 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                     take_profits=take_profits,
                     time_stops=time_stops,
                     skipped_entries=skipped_entries,
+                    applied_regime=session_regime.regime,
                 )
             )
             continue
@@ -239,9 +287,11 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
         def close_thread(thread: CapitalThread, reason: CloseReason) -> None:
             nonlocal realized_pnl, take_profits, time_stops
             if config.execution_model == ExecutionModel.IDEAL_SAME_CLOSE:
+                raw_fill_price = session_price
                 executed_price = apply_costs(
-                    session_price,
+                    raw_fill_price,
                     config.commission_bps,
+                    config.transaction_tax_bps,
                     config.slippage_bps,
                     is_buy=False,
                 )
@@ -249,6 +299,15 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                 trade.exit_signal_date = bar.session_date
                 trade.fill_exit_date = bar.session_date
                 trade.exit_price = D(executed_price)
+                trade.exit_fee = D(
+                    fill_fee_amount(
+                        raw_fill_price,
+                        trade.shares,
+                        config.commission_bps,
+                        config.transaction_tax_bps,
+                        config.slippage_bps,
+                    )
+                )
                 trade.holding_sessions = index - (thread.entry_session_index or index)
                 trade.close_reason = reason
                 compute_trade_pnl(trade)
@@ -264,6 +323,10 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                 thread.entry_session_index = None
                 thread.entry_date = None
                 thread.invested_amount = ZERO
+                thread.active_regime = "base"
+                thread.active_stop_sessions = 0
+                thread.active_take_profit_pct = ZERO
+                thread.active_buy_pct = ZERO
                 events.append(
                     StrategyEvent(
                         session_date=bar.session_date,
@@ -293,9 +356,11 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
         def open_thread(thread: CapitalThread) -> None:
             nonlocal entries, skipped_entries
             if config.execution_model == ExecutionModel.IDEAL_SAME_CLOSE:
+                raw_fill_price = session_price
                 executed_price = apply_costs(
-                    session_price,
+                    raw_fill_price,
                     config.commission_bps,
+                    config.transaction_tax_bps,
                     config.slippage_bps,
                     is_buy=True,
                 )
@@ -321,6 +386,17 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                 thread.entry_date = bar.session_date
                 thread.invested_amount = quantize_money(shares * D(executed_price))
                 thread.reserve_pnl = quantize_money(thread.free_equity - thread.invested_amount)
+                thread.active_regime = session_regime.regime
+                thread.active_stop_sessions = session_regime.stop_sessions
+                thread.active_take_profit_pct = session_regime.sell_pct
+                thread.active_buy_pct = session_regime.buy_pct
+                entry_fee = fill_fee_amount(
+                    raw_fill_price,
+                    shares,
+                    config.commission_bps,
+                    config.transaction_tax_bps,
+                    config.slippage_bps,
+                )
                 open_trades[thread.thread_id] = Trade(
                     run_id=run_id,
                     thread_id=thread.thread_id,
@@ -329,6 +405,11 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                     entry_price=D(executed_price),
                     shares=shares,
                     invested_amount=thread.invested_amount,
+                    entry_fee=D(entry_fee),
+                    entry_regime=session_regime.regime,
+                    entry_stop_sessions=session_regime.stop_sessions,
+                    entry_buy_pct=session_regime.buy_pct,
+                    entry_sell_pct=session_regime.sell_pct,
                 )
                 entries += 1
                 events.append(
@@ -348,6 +429,10 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                         signal_session_index=index,
                         signal_date=bar.session_date,
                         price_hint=session_price,
+                        regime=session_regime.regime,
+                        stop_sessions=session_regime.stop_sessions,
+                        take_profit_pct=session_regime.sell_pct,
+                        buy_pct=session_regime.buy_pct,
                     )
                 )
 
@@ -356,9 +441,14 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                 if thread.state != ThreadState.OPEN or thread.entry_session_index is None:
                     continue
                 age = index - thread.entry_session_index
-                profitable = _take_profit_signal(session_price, thread.entry_price, config)
+                profitable = _take_profit_signal(
+                    session_price,
+                    thread.entry_price,
+                    thread.active_take_profit_pct,
+                    config.take_profit_operator,
+                )
                 price_stop_due = _price_stop_signal(session_price, thread.entry_price, config)
-                time_stop_due = age >= config.stop_sessions and session_price <= thread.entry_price
+                time_stop_due = age >= thread.active_stop_sessions and session_price <= thread.entry_price
                 if config.profit_precedes_stop:
                     if profitable:
                         close_thread(thread, CloseReason.TAKE_PROFIT)
@@ -376,7 +466,7 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
 
         def process_entry() -> None:
             nonlocal skipped_entries
-            if not _entry_signal(session_price, previous_price, config):
+            if not _entry_signal(session_price, previous_price, session_regime.buy_pct):
                 return
             opened = 0
             for _ in range(config.max_entries_per_session):
@@ -418,6 +508,7 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
                 take_profits=take_profits,
                 time_stops=time_stops,
                 skipped_entries=skipped_entries,
+                applied_regime=session_regime.regime,
             )
         )
 
@@ -445,4 +536,6 @@ def run_strategy(bars: list[MarketBar], config: StrategyConfig, *, data_hash: st
         daily=daily,
         yearly={},
         metrics={},
+        regime_data_hash=resolved_regime_context.data_hash,
+        regime_config_hash=resolved_regime_context.config_hash,
     )

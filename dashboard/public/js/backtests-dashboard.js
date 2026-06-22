@@ -3,12 +3,22 @@
   const MAX_STRATEGY_SELECTION = 6;
   const BUY_HOLD_STRATEGY_ID = "buy_hold";
   const SWEEP_DEFINITION_ID = "core4_v4";
+  const STRATEGY_DETAIL_RETURN_TOLERANCE_PCT = 0.5;
   const STRATEGY_COLORS = ["#d78a4b", "#2f7ed8", "#2fb344", "#d63939", "#7b5cff", "#1f9d8b"];
-  const STRATEGY_FILTER_CONFIG = {
+  const DEFAULT_STRATEGY_FILTER_CONFIG = {
     threadCount: { rowKey: "thread_count", label: "Thread 수" },
     stopSessions: { rowKey: "stop_sessions", label: "손절일" },
     buyPct: { rowKey: "buy_pct", label: "매수 %" },
     sellPct: { rowKey: "sell_pct", label: "매도 %" },
+  };
+  const REGIME_STRATEGY_FILTER_CONFIG = {
+    threadCount: { rowKey: "thread_count", label: "Thread 수" },
+    bullStopSessions: { rowKey: "bull_stop_sessions", label: "Bull 손절일" },
+    bullBuyPct: { rowKey: "bull_buy_pct", label: "Bull 매수 %" },
+    bullSellPct: { rowKey: "bull_sell_pct", label: "Bull 매도 %" },
+    bearStopSessions: { rowKey: "bear_stop_sessions", label: "Bear 손절일" },
+    bearBuyPct: { rowKey: "bear_buy_pct", label: "Bear 매수 %" },
+    bearSellPct: { rowKey: "bear_sell_pct", label: "Bear 매도 %" },
   };
   const THREAD_SESSION_PX_BASE = 14;
   const THREAD_TRACK_MIN_WIDTH = 0;
@@ -34,9 +44,14 @@
     strategyRankingError: "",
     strategySliceRequestId: 0,
     strategyDetails: {},
+    strategyDetailPending: {},
+    strategyDetailControllers: {},
+    strategyDetailError: "",
+    strategyDetailMismatchNotice: "",
     strategyRankingController: null,
     focusedStrategyId: null,
     threadTimeline: null,
+    threadTimelineController: null,
     threadTimelineCache: {},
     threadDrawer: { sessionDate: null, tradeId: null, kind: null },
     threadTimelineScrollLeft: 0,
@@ -58,7 +73,14 @@
       stopSessions: [],
       buyPct: [],
       sellPct: [],
+      bullStopSessions: [],
+      bullBuyPct: [],
+      bullSellPct: [],
+      bearStopSessions: [],
+      bearBuyPct: [],
+      bearSellPct: [],
     },
+    strategyRegime: null,
   };
 
   function resetThreadHistoryPage() {
@@ -101,6 +123,20 @@
     return Number.isFinite(number) ? number : 0;
   }
 
+  function bpsToPercent(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? (number / 100) : 0;
+  }
+
+  function formatFeeNote(meta) {
+    if (!meta) {
+      return "수수료 기준: 0.25% + 기타거래세";
+    }
+    const commissionPct = bpsToPercent(meta.commission_bps);
+    const transactionTaxPct = bpsToPercent(meta.transaction_tax_bps);
+    return `수수료 기준: ${ui.formatPercent(commissionPct)} + 기타거래세 ${ui.formatPercent(transactionTaxPct)}`;
+  }
+
   function formatSessionPeriod(start, end) {
     if (!start || !end) {
       return "-";
@@ -119,6 +155,26 @@
     }
     element.textContent = message || "";
     element.style.display = message ? "" : "none";
+  }
+
+  function renderStrategyMetaNotice() {
+    setNotice("strategy-meta-note", state.strategyDetailError || state.strategyDetailMismatchNotice);
+  }
+
+  function resetStrategyMetaNotice() {
+    state.strategyDetailError = "";
+    state.strategyDetailMismatchNotice = "";
+    renderStrategyMetaNotice();
+  }
+
+  function setStrategyDetailError(message) {
+    state.strategyDetailError = message || "";
+    renderStrategyMetaNotice();
+  }
+
+  function setStrategyDetailMismatchNotice(message) {
+    state.strategyDetailMismatchNotice = message || "";
+    renderStrategyMetaNotice();
   }
 
   function threadReasonClass(interval) {
@@ -184,7 +240,7 @@
     if (kind === "threadCount") {
       return `T${number}`;
     }
-    if (kind === "stopSessions") {
+    if (kind === "stopSessions" || kind === "bullStopSessions" || kind === "bearStopSessions") {
       return `${number}S`;
     }
     return `${number >= 0 ? "+" : ""}${number}%`;
@@ -199,7 +255,7 @@
   }
 
   function availableStrategyFilterValues(key) {
-    const config = STRATEGY_FILTER_CONFIG[key];
+    const config = activeStrategyFilterConfig()[key];
     if (!config) {
       return [];
     }
@@ -207,7 +263,12 @@
   }
 
   function normalizeStrategyRankingFilters() {
-    Object.keys(STRATEGY_FILTER_CONFIG).forEach((key) => {
+    const activeConfig = activeStrategyFilterConfig();
+    Object.keys(state.strategyRankingFilters).forEach((key) => {
+      if (!activeConfig[key]) {
+        state.strategyRankingFilters[key] = [];
+        return;
+      }
       const available = availableStrategyFilterValues(key);
       const normalized = strategyFilterValues(key)
         .filter((value) => available.includes(value))
@@ -313,6 +374,139 @@
 
   function workspaceSupportsMentorReference(workspace) {
     return !!workspace && workspace.referenceMode === "mentor_reference";
+  }
+
+  function workspaceSupportsStrategyRegime(workspace) {
+    return !!workspace && workspace.workspaceId === "soxl";
+  }
+
+  function makeDefaultStrategyRegime(profile) {
+    const defaultStop = Number(profile?.stopSessions || 40) || 40;
+    return {
+      enabled: false,
+      symbol: "QQQ",
+      rsiPeriodWeeks: 14,
+      bearHighThreshold: 65,
+      bearMidLowThreshold: 40,
+      bearMidHighThreshold: 50,
+      bullLowThreshold: 35,
+      bullMidLowThreshold: 50,
+      bullMidHighThreshold: 60,
+      baseStopSessions: defaultStop,
+      baseBuyPct: 0,
+      baseSellPct: 0,
+      bullStopSessions: defaultStop,
+      bullBuyPct: 0,
+      bullSellPct: 0,
+      bearStopSessions: defaultStop,
+      bearBuyPct: 0,
+      bearSellPct: 0,
+    };
+  }
+
+  function currentStrategyRegimeState() {
+    if (!state.strategyRegime) {
+      state.strategyRegime = makeDefaultStrategyRegime(currentProfile());
+    }
+    return state.strategyRegime;
+  }
+
+  function currentStrategyRegimeOverrides() {
+    const workspace = currentWorkspace();
+    const regime = currentStrategyRegimeState();
+    if (!workspaceSupportsStrategyRegime(workspace) || !regime?.enabled) {
+      return undefined;
+    }
+    return {
+      regimeEnabled: true,
+      regimeSymbol: regime.symbol || "QQQ",
+      regimeRsiPeriodWeeks: Number(regime.rsiPeriodWeeks || 14),
+      regimeBearHighThreshold: Number(regime.bearHighThreshold || 65),
+      regimeBearMidLowThreshold: Number(regime.bearMidLowThreshold || 40),
+      regimeBearMidHighThreshold: Number(regime.bearMidHighThreshold || 50),
+      regimeBullLowThreshold: Number(regime.bullLowThreshold || 35),
+      regimeBullMidLowThreshold: Number(regime.bullMidLowThreshold || 50),
+      regimeBullMidHighThreshold: Number(regime.bullMidHighThreshold || 60),
+      regimeBaseStopSessions: Number(regime.baseStopSessions || 40),
+      regimeBaseBuyPct: Number(regime.baseBuyPct || 0),
+      regimeBaseSellPct: Number(regime.baseSellPct || 0),
+      regimeBullStopSessions: Number(regime.bullStopSessions || 40),
+      regimeBullBuyPct: Number(regime.bullBuyPct || 0),
+      regimeBullSellPct: Number(regime.bullSellPct || 0),
+      regimeBearStopSessions: Number(regime.bearStopSessions || 40),
+      regimeBearBuyPct: Number(regime.bearBuyPct || 0),
+      regimeBearSellPct: Number(regime.bearSellPct || 0),
+    };
+  }
+
+  function currentStrategyRegimeKey() {
+    const overrides = currentStrategyRegimeOverrides();
+    if (!overrides) {
+      return "";
+    }
+    return JSON.stringify(overrides);
+  }
+
+  function appendStrategyRegimeParams(params) {
+    const overrides = currentStrategyRegimeOverrides();
+    if (!overrides) {
+      return params;
+    }
+    Object.entries(overrides).forEach(([key, value]) => {
+      params.set(key, String(value));
+    });
+    return params;
+  }
+
+  function strategyRankingUsesRegimeFilters() {
+    if (state.strategyRanking?.meta?.regime_enabled) {
+      return true;
+    }
+    if (state.strategyRanking) {
+      return false;
+    }
+    return workspaceSupportsStrategyRegime(currentWorkspace()) && Boolean(currentStrategyRegimeOverrides());
+  }
+
+  function activeStrategyFilterConfig() {
+    return strategyRankingUsesRegimeFilters() ? REGIME_STRATEGY_FILTER_CONFIG : DEFAULT_STRATEGY_FILTER_CONFIG;
+  }
+
+  function renderStrategyComboSubtitle() {
+    const target = document.getElementById("strategy-combo-head-subtitle");
+    if (!target) {
+      return;
+    }
+    if (strategyRankingUsesRegimeFilters()) {
+      target.textContent = "SOXL regime 모드: Thread 수 x Bull 손절/매수/매도 x Bear 손절/매수/매도";
+      return;
+    }
+    target.textContent = "Thread 수 x 손절일 x 매수% x 매도%";
+  }
+
+  function openStrategyRegimeHelp() {
+    if (!workspaceSupportsStrategyRegime(currentWorkspace())) {
+      return;
+    }
+    const dialog = document.getElementById("strategy-regime-help-dialog");
+    if (!(dialog instanceof HTMLElement)) {
+      return;
+    }
+    dialog.classList.add("visible");
+    dialog.setAttribute("aria-hidden", "false");
+    const closeButton = document.getElementById("strategy-regime-help-close");
+    if (closeButton instanceof HTMLButtonElement) {
+      closeButton.focus();
+    }
+  }
+
+  function closeStrategyRegimeHelp() {
+    const dialog = document.getElementById("strategy-regime-help-dialog");
+    if (!(dialog instanceof HTMLElement)) {
+      return;
+    }
+    dialog.classList.remove("visible");
+    dialog.setAttribute("aria-hidden", "true");
   }
 
   function currentWorkspaceSlug() {
@@ -424,7 +618,88 @@
       return;
     }
     state.profileId = profile.profileId;
+    if (!state.strategyRegime || !workspaceSupportsStrategyRegime(currentWorkspace())) {
+      state.strategyRegime = makeDefaultStrategyRegime(profile);
+    }
     ui.setText("sb-model", profile.executionModel || "ideal_same_close");
+  }
+
+  function renderStrategyRegimeCard() {
+    const card = document.getElementById("strategy-regime-card");
+    const fieldset = document.getElementById("strategy-regime-fieldset");
+    if (!(card instanceof HTMLElement) || !(fieldset instanceof HTMLFieldSetElement)) {
+      return;
+    }
+    const workspace = currentWorkspace();
+    if (!workspaceSupportsStrategyRegime(workspace)) {
+      card.style.display = "none";
+      closeStrategyRegimeHelp();
+      return;
+    }
+    card.style.display = "";
+    const regime = currentStrategyRegimeState();
+    const profile = currentProfile();
+    if (!state.strategyRegime) {
+      state.strategyRegime = makeDefaultStrategyRegime(profile);
+    }
+    const setValue = (id, value) => {
+      const input = document.getElementById(id);
+      if (input) {
+        input.value = String(value);
+      }
+    };
+    const enabledInput = document.getElementById("strategy-regime-enabled");
+    if (enabledInput instanceof HTMLInputElement) {
+      enabledInput.checked = Boolean(regime.enabled);
+    }
+    setValue("strategy-regime-symbol", regime.symbol || "QQQ");
+    setValue("strategy-regime-rsi-period", regime.rsiPeriodWeeks);
+    setValue("strategy-regime-bear-high-threshold", regime.bearHighThreshold);
+    setValue("strategy-regime-bear-mid-low-threshold", regime.bearMidLowThreshold);
+    setValue("strategy-regime-bear-mid-high-threshold", regime.bearMidHighThreshold);
+    setValue("strategy-regime-bull-low-threshold", regime.bullLowThreshold);
+    setValue("strategy-regime-bull-mid-low-threshold", regime.bullMidLowThreshold);
+    setValue("strategy-regime-bull-mid-high-threshold", regime.bullMidHighThreshold);
+    setValue("strategy-regime-base-stop", regime.baseStopSessions);
+    setValue("strategy-regime-base-buy", regime.baseBuyPct);
+    setValue("strategy-regime-base-sell", regime.baseSellPct);
+    setValue("strategy-regime-bull-stop", regime.bullStopSessions);
+    setValue("strategy-regime-bull-buy", regime.bullBuyPct);
+    setValue("strategy-regime-bull-sell", regime.bullSellPct);
+    setValue("strategy-regime-bear-stop", regime.bearStopSessions);
+    setValue("strategy-regime-bear-buy", regime.bearBuyPct);
+    setValue("strategy-regime-bear-sell", regime.bearSellPct);
+    fieldset.disabled = false;
+    renderStrategyComboSubtitle();
+  }
+
+  function syncStrategyRegimeStateFromInputs() {
+    const regime = currentStrategyRegimeState();
+    const getNumber = (id, fallback) => {
+      const input = document.getElementById(id);
+      const value = Number(input?.value ?? fallback);
+      return Number.isFinite(value) ? value : fallback;
+    };
+    const enabledInput = document.getElementById("strategy-regime-enabled");
+    regime.enabled = enabledInput instanceof HTMLInputElement ? enabledInput.checked : Boolean(regime.enabled);
+    regime.symbol = document.getElementById("strategy-regime-symbol")?.value || "QQQ";
+    regime.rsiPeriodWeeks = getNumber("strategy-regime-rsi-period", 14);
+    regime.bearHighThreshold = getNumber("strategy-regime-bear-high-threshold", 65);
+    regime.bearMidLowThreshold = getNumber("strategy-regime-bear-mid-low-threshold", 40);
+    regime.bearMidHighThreshold = getNumber("strategy-regime-bear-mid-high-threshold", 50);
+    regime.bullLowThreshold = getNumber("strategy-regime-bull-low-threshold", 35);
+    regime.bullMidLowThreshold = getNumber("strategy-regime-bull-mid-low-threshold", 50);
+    regime.bullMidHighThreshold = getNumber("strategy-regime-bull-mid-high-threshold", 60);
+    regime.baseStopSessions = getNumber("strategy-regime-base-stop", regime.baseStopSessions || 40);
+    regime.baseBuyPct = getNumber("strategy-regime-base-buy", 0);
+    regime.baseSellPct = getNumber("strategy-regime-base-sell", 0);
+    regime.bullStopSessions = getNumber("strategy-regime-bull-stop", regime.baseStopSessions || 40);
+    regime.bullBuyPct = getNumber("strategy-regime-bull-buy", 0);
+    regime.bullSellPct = getNumber("strategy-regime-bull-sell", 0);
+    regime.bearStopSessions = getNumber("strategy-regime-bear-stop", regime.baseStopSessions || 40);
+    regime.bearBuyPct = getNumber("strategy-regime-bear-buy", 0);
+    regime.bearSellPct = getNumber("strategy-regime-bear-sell", 0);
+    state.strategyRegime = regime;
   }
 
   function activateTab(tabId) {
@@ -458,7 +733,19 @@
         isBenchmark: true,
       };
     }
-    return state.strategyDetails[strategyId] || null;
+    const context = buildStrategyDetailContext(strategyId);
+    if (!context) {
+      return null;
+    }
+    const payload = state.strategyDetails[makeStrategyDetailStateKey(context)] || null;
+    if (!payload || !strategyDetailMatchesContext(payload, context)) {
+      return null;
+    }
+    const rankingRow = findStrategyRankingRow(strategyId);
+    if (rankingRow && !strategyDetailMatchesRanking(payload, rankingRow)) {
+      return null;
+    }
+    return payload;
   }
 
   function isBuyHoldStrategyId(strategyId) {
@@ -495,6 +782,7 @@
       full_return_pct: summary.returnPct,
       cagr_pct: summary.cagrPct,
       max_drawdown_pct: drawdownSummary?.maxDrawdownPct ?? 0,
+      trade_count: 0,
       rank: null,
       rank_display: "-",
       is_benchmark: true,
@@ -514,21 +802,11 @@
 
   function filteredStrategyRankingRows() {
     const rows = baseStrategyRankingRows().filter((row) => {
-      const threadCountFilter = strategyFilterValues("threadCount");
-      const stopSessionsFilter = strategyFilterValues("stopSessions");
-      const buyPctFilter = strategyFilterValues("buyPct");
-      const sellPctFilter = strategyFilterValues("sellPct");
-      if (threadCountFilter.length && !threadCountFilter.includes(row.thread_count)) {
-        return false;
-      }
-      if (stopSessionsFilter.length && !stopSessionsFilter.includes(row.stop_sessions)) {
-        return false;
-      }
-      if (buyPctFilter.length && !buyPctFilter.includes(row.buy_pct)) {
-        return false;
-      }
-      if (sellPctFilter.length && !sellPctFilter.includes(row.sell_pct)) {
-        return false;
+      for (const [filterKey, config] of Object.entries(activeStrategyFilterConfig())) {
+        const selectedValues = strategyFilterValues(filterKey);
+        if (selectedValues.length && !selectedValues.includes(row[config.rowKey])) {
+          return false;
+        }
       }
       return true;
     });
@@ -622,6 +900,24 @@
     button.textContent = isPending ? "적용 중..." : "구간 적용";
   }
 
+  function abortStrategyDetailRequests() {
+    Object.values(state.strategyDetailControllers).forEach((controller) => {
+      if (controller) {
+        controller.abort();
+      }
+    });
+    state.strategyDetailControllers = {};
+    state.strategyDetailPending = {};
+  }
+
+  function abortThreadTimelineRequest() {
+    if (!state.threadTimelineController) {
+      return;
+    }
+    state.threadTimelineController.abort();
+    state.threadTimelineController = null;
+  }
+
   function beginStrategySliceReload(message) {
     state.strategySliceRequestId += 1;
     state.strategyRanking = null;
@@ -629,12 +925,15 @@
     state.strategyRankingError = "";
     state.selectedStrategyIds = [];
     state.focusedStrategyId = null;
+    abortStrategyDetailRequests();
+    abortThreadTimelineRequest();
     state.strategyDetails = {};
     state.threadTimeline = null;
     state.threadTimelineCache = {};
     state.strategyRankingOpenFilterKey = null;
     resetStrategyRankingPage();
     abortStrategyRankingRequest();
+    resetStrategyMetaNotice();
     renderStrategyRankingMessage(message);
     renderStrategyViews();
     return state.strategySliceRequestId;
@@ -657,6 +956,208 @@
       start = end;
     }
     return { start, end };
+  }
+
+  function currentStrategyContextBase() {
+    if (!state.dataStatus) {
+      return null;
+    }
+    const slice = currentStrategySlice();
+    if (!slice) {
+      return null;
+    }
+    const actualSliceStart = state.strategyRanking?.meta?.period_start || slice.start;
+    const actualSliceEnd = state.strategyRanking?.meta?.period_end || slice.end;
+    const regimeOverrides = currentStrategyRegimeOverrides();
+    return {
+      profileId: state.profileId,
+      csvPath: state.dataStatus.snapshot_path || "",
+      executionModel: currentStrategyExecutionModel(),
+      priceBasis: currentStrategyPriceBasis(),
+      sliceStart: actualSliceStart,
+      sliceEnd: actualSliceEnd,
+      requestedSliceStart: slice.start,
+      requestedSliceEnd: slice.end,
+      regimeEnabled: Boolean(state.strategyRanking?.meta?.regime_enabled || regimeOverrides),
+      regimeConfigHash: String(state.strategyRanking?.meta?.regime_config_hash || currentStrategyRegimeKey() || ""),
+    };
+  }
+
+  function buildStrategyDetailContext(strategyId) {
+    const base = currentStrategyContextBase();
+    if (!base) {
+      return null;
+    }
+    return {
+      ...base,
+      strategyId,
+    };
+  }
+
+  function buildThreadTimelineContext(strategyId) {
+    const base = currentStrategyContextBase();
+    if (!base) {
+      return null;
+    }
+    return {
+      ...base,
+      strategyId,
+    };
+  }
+
+  function makeStrategyDetailStateKey(context) {
+    return [
+      context.profileId,
+      context.strategyId,
+      context.csvPath,
+      context.executionModel,
+      context.priceBasis,
+      context.sliceStart,
+      context.sliceEnd,
+      context.regimeConfigHash,
+    ].join(":");
+  }
+
+  function makeThreadTimelineStateKey(context) {
+    return [
+      context.profileId,
+      context.strategyId,
+      context.csvPath,
+      context.executionModel,
+      context.priceBasis,
+      context.sliceStart,
+      context.sliceEnd,
+      context.regimeConfigHash,
+    ].join(":");
+  }
+
+  function strategyDetailMatchesContext(payload, context) {
+    if (!payload || !context || !payload.meta) {
+      return false;
+    }
+    return payload.strategy_id === context.strategyId
+      && payload.meta.strategy_id === context.strategyId
+      && payload.meta.period_start === context.sliceStart
+      && payload.meta.period_end === context.sliceEnd
+      && payload.meta.execution_model === context.executionModel
+      && payload.meta.price_basis === context.priceBasis
+      && String(payload.meta.regime_config_hash || "") === String(context.regimeConfigHash || "")
+      && Boolean(payload.meta.regime_enabled) === Boolean(context.regimeEnabled);
+  }
+
+  function threadTimelineMatchesContext(payload, context) {
+    if (!payload || !context || !payload.meta) {
+      return false;
+    }
+    return payload.meta.strategy_id === context.strategyId
+      && payload.meta.period_start === context.sliceStart
+      && payload.meta.period_end === context.sliceEnd
+      && payload.meta.execution_model === context.executionModel
+      && payload.meta.price_basis === context.priceBasis
+      && String(payload.meta.regime_config_hash || "") === String(context.regimeConfigHash || "")
+      && Boolean(payload.meta.regime_enabled) === Boolean(context.regimeEnabled);
+  }
+
+  function strategyDetailReturnPct(payload) {
+    const daily = payload?.daily || [];
+    if (!daily.length) {
+      return null;
+    }
+    const start = parseMoney(daily[0].total_equity);
+    const end = parseMoney(daily[daily.length - 1].total_equity);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start === 0) {
+      return null;
+    }
+    return ((end - start) / start) * 100;
+  }
+
+  function normalizeStrategyDetailPayload(payload, context) {
+    if (!payload || !context) {
+      return payload;
+    }
+    if (payload.meta) {
+      return payload;
+    }
+    const daily = payload.daily || [];
+    const actualStart = daily[0]?.session_date || context.sliceStart;
+    const actualEnd = daily[daily.length - 1]?.session_date || context.sliceEnd;
+    return {
+      ...payload,
+      meta: {
+        strategy_id: payload.strategy_id || context.strategyId,
+        symbol: payload.symbol || state.dataStatus?.symbol || "",
+        initial_capital: String(state.strategyExplorer?.meta?.initial_capital || "10000"),
+        price_basis: context.priceBasis,
+        execution_model: context.executionModel,
+        period_start: actualStart,
+        period_end: actualEnd,
+        data_hash: String(state.strategyRanking?.meta?.data_hash || state.strategyExplorer?.meta?.data_hash || ""),
+        config_hash: String(payload.config_hash || ""),
+        code_commit: String(state.strategyRanking?.meta?.code_commit || state.strategyExplorer?.meta?.code_commit || ""),
+        regime_enabled: Boolean(state.strategyRanking?.meta?.regime_enabled || context.regimeEnabled),
+        regime_symbol: String(state.strategyRanking?.meta?.regime_symbol || "QQQ"),
+        regime_data_hash: String(state.strategyRanking?.meta?.regime_data_hash || ""),
+        regime_config_hash: String(state.strategyRanking?.meta?.regime_config_hash || context.regimeConfigHash || ""),
+      },
+    };
+  }
+
+  function findStrategyRankingRow(strategyId) {
+    return (state.strategyRanking?.rows || []).find((row) => row.strategy_id === strategyId) || null;
+  }
+
+  function strategyDetailMatchesRanking(payload, rankingRow) {
+    if (!rankingRow) {
+      return true;
+    }
+    const detailReturnPct = strategyDetailReturnPct(payload);
+    if (!Number.isFinite(detailReturnPct)) {
+      return false;
+    }
+    return Math.abs(detailReturnPct - Number(rankingRow.full_return_pct || 0)) <= STRATEGY_DETAIL_RETURN_TOLERANCE_PCT;
+  }
+
+  function shouldAcceptStrategyDetailPayload({ activeRequestId, requestId, payload, context, rankingRow }) {
+    if (activeRequestId !== requestId) {
+      return false;
+    }
+    if (!strategyDetailMatchesContext(payload, context)) {
+      return false;
+    }
+    return strategyDetailMatchesRanking(payload, rankingRow);
+  }
+
+  function shouldAcceptThreadTimelinePayload({ activeRequestId, requestId, payload, context }) {
+    if (activeRequestId !== requestId) {
+      return false;
+    }
+    return threadTimelineMatchesContext(payload, context);
+  }
+
+  function updateStrategyDetailMismatchNotice() {
+    const issue = state.selectedStrategyIds
+      .filter((strategyId) => !isBuyHoldStrategyId(strategyId))
+      .map((strategyId) => {
+        const context = buildStrategyDetailContext(strategyId);
+        if (!context) {
+          return null;
+        }
+        const payload = state.strategyDetails[makeStrategyDetailStateKey(context)];
+        if (!payload) {
+          return null;
+        }
+        if (!strategyDetailMatchesContext(payload, context)) {
+          return "선택 콤보 상세가 현재 구간과 일치하지 않아 다시 불러오는 중입니다.";
+        }
+        const rankingRow = findStrategyRankingRow(strategyId);
+        if (rankingRow && !strategyDetailMatchesRanking(payload, rankingRow)) {
+          return `${rankingRow.display_params || rankingRow.label} 상세가 현재 랭킹과 일치하지 않아 차트를 보류했습니다.`;
+        }
+        return null;
+      })
+      .find(Boolean)
+      || "";
+    setStrategyDetailMismatchNotice(issue);
   }
 
   function strategyDailySlice(strategy, start, end) {
@@ -750,35 +1251,70 @@
       }));
   }
 
-  async function ensureStrategyDetails(strategyIds) {
+  async function ensureStrategyDetails(strategyIds, requestId = state.strategySliceRequestId) {
     const ids = [...new Set((strategyIds || []).filter((strategyId) => strategyId && !isBuyHoldStrategyId(strategyId)))];
     if (!ids.length || !state.dataStatus) {
       return;
     }
-    const slice = currentStrategySlice();
-    const executionModel = currentStrategyExecutionModel();
-    const priceBasis = currentStrategyPriceBasis();
-    const csvPath = state.dataStatus.snapshot_path || "";
     await Promise.all(
       ids.map(async (strategyId) => {
-        if (state.strategyDetails[strategyId]) {
+        const context = buildStrategyDetailContext(strategyId);
+        if (!context) {
+          return;
+        }
+        const cacheKey = makeStrategyDetailStateKey(context);
+        const rankingRow = findStrategyRankingRow(strategyId);
+        const cached = state.strategyDetails[cacheKey];
+        if (cached && strategyDetailMatchesContext(cached, context) && strategyDetailMatchesRanking(cached, rankingRow)) {
+          return;
+        }
+        const pending = state.strategyDetailPending[cacheKey];
+        if (pending) {
+          await pending;
           return;
         }
         const params = new URLSearchParams({
-          profileId: state.profileId,
-          csvPath,
+          profileId: context.profileId,
+          csvPath: context.csvPath,
           strategyId,
-          executionModel,
-          priceBasis,
+          executionModel: context.executionModel,
+          priceBasis: context.priceBasis,
         });
-        if (slice?.start) {
-          params.set("sliceStart", slice.start);
-        }
-        if (slice?.end) {
-          params.set("sliceEnd", slice.end);
-        }
-        const payload = await ui.fetchJson(`/api/backtests/strategy-detail?${params.toString()}`);
-        state.strategyDetails[strategyId] = payload;
+        params.set("sliceStart", context.sliceStart);
+        params.set("sliceEnd", context.sliceEnd);
+        appendStrategyRegimeParams(params);
+        const controller = new AbortController();
+        state.strategyDetailControllers[cacheKey] = controller;
+        const loader = ui.fetchJson(`/api/backtests/strategy-detail?${params.toString()}`, { signal: controller.signal })
+          .then((rawPayload) => {
+            const payload = normalizeStrategyDetailPayload(rawPayload, context);
+            if (!shouldAcceptStrategyDetailPayload({
+              activeRequestId: state.strategySliceRequestId,
+              requestId,
+              payload,
+              context,
+              rankingRow,
+            })) {
+              if (state.strategySliceRequestId === requestId && strategyDetailMatchesContext(payload, context) && !strategyDetailMatchesRanking(payload, rankingRow)) {
+                setStrategyDetailMismatchNotice(`${rankingRow?.display_params || strategyId} 상세가 현재 랭킹과 일치하지 않아 차트를 보류했습니다.`);
+              }
+              return null;
+            }
+            state.strategyDetails[cacheKey] = payload;
+            return payload;
+          })
+          .catch((error) => {
+            if (ui.isAbortError && ui.isAbortError(error)) {
+              return null;
+            }
+            throw error;
+          })
+          .finally(() => {
+            delete state.strategyDetailPending[cacheKey];
+            delete state.strategyDetailControllers[cacheKey];
+          });
+        state.strategyDetailPending[cacheKey] = loader;
+        await loader;
       }),
     );
   }
@@ -791,7 +1327,7 @@
       current.add(strategyId);
     }
     state.selectedStrategyIds = [...current];
-    await ensureStrategyDetails(state.selectedStrategyIds);
+    await ensureStrategyDetails(state.selectedStrategyIds, state.strategySliceRequestId);
     renderStrategyRanking();
     renderStrategyViews();
   }
@@ -800,11 +1336,11 @@
     if (!strategyId || strategyId === state.focusedStrategyId) {
       return;
     }
-    await ensureStrategyDetails([strategyId]);
+    await ensureStrategyDetails([strategyId], state.strategySliceRequestId);
     state.focusedStrategyId = strategyId;
     resetThreadHistoryPage();
     renderStrategyRanking();
-    await loadThreadTimeline();
+    await loadThreadTimeline(state.strategySliceRequestId);
   }
 
   function renderStrategyRankingMessage(message) {
@@ -812,7 +1348,7 @@
     if (!body) {
       return;
     }
-    body.innerHTML = `<tr><td colspan="7" class="muted" style="text-align:center">${ui.escapeHtml(message)}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="8" class="muted" style="text-align:center">${ui.escapeHtml(message)}</td></tr>`;
     document.getElementById("strategy-selector-note").textContent = `선택 ${state.selectedStrategyIds.length} / ${MAX_STRATEGY_SELECTION}`;
     ui.setText("strategy-ranking-meta", "총 0개");
     ui.setText("strategy-ranking-page-status", "1 / 1");
@@ -820,31 +1356,35 @@
 
   function renderStrategyRankingFilters() {
     normalizeStrategyRankingFilters();
-    Object.keys(STRATEGY_FILTER_CONFIG).forEach((key) => {
-      const button = document.querySelector(`[data-strategy-filter-button="${key}"]`);
-      if (!(button instanceof HTMLButtonElement)) {
-        return;
-      }
-      const summary = strategyFilterButtonSummary(key);
-      const valueTarget = button.querySelector(".strategy-filter-chip-value");
-      if (valueTarget) {
-        valueTarget.textContent = summary;
-      }
-      button.classList.toggle("active", !strategyFilterAllSelected(key) || state.strategyRankingOpenFilterKey === key);
-      button.onclick = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        state.strategyRankingOpenFilterKey = state.strategyRankingOpenFilterKey === key ? null : key;
-        renderStrategyRankingFilters();
-      };
-    });
+    const chipRow = document.getElementById("strategy-filter-chip-row");
+    const activeConfig = activeStrategyFilterConfig();
+    if (chipRow) {
+      chipRow.innerHTML = Object.entries(activeConfig)
+        .map(([key, config]) => `<button class="strategy-filter-chip${(!strategyFilterAllSelected(key) || state.strategyRankingOpenFilterKey === key) ? " active" : ""}" type="button" data-strategy-filter-button="${ui.escapeHtml(key)}">
+            <span class="strategy-filter-chip-label">${ui.escapeHtml(config.label)}</span>
+            <span class="strategy-filter-chip-value">${ui.escapeHtml(strategyFilterButtonSummary(key))}</span>
+          </button>`)
+        .join("");
+      chipRow.querySelectorAll("[data-strategy-filter-button]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const key = button.getAttribute("data-strategy-filter-button");
+          if (!key) {
+            return;
+          }
+          state.strategyRankingOpenFilterKey = state.strategyRankingOpenFilterKey === key ? null : key;
+          renderStrategyRankingFilters();
+        });
+      });
+    }
 
     const dropdown = document.getElementById("strategy-ranking-filter-dropdown");
     if (!(dropdown instanceof HTMLElement)) {
       return;
     }
     const openKey = state.strategyRankingOpenFilterKey;
-    if (!openKey || !STRATEGY_FILTER_CONFIG[openKey]) {
+    if (!openKey || !activeConfig[openKey]) {
       dropdown.hidden = true;
       dropdown.innerHTML = "";
       return;
@@ -860,7 +1400,7 @@
     const selectedValues = strategyFilterValues(openKey);
     dropdown.innerHTML = `
       <div class="strategy-filter-dropdown-head">
-        <div class="strategy-filter-dropdown-title">${ui.escapeHtml(STRATEGY_FILTER_CONFIG[openKey].label)}</div>
+        <div class="strategy-filter-dropdown-title">${ui.escapeHtml(activeConfig[openKey].label)}</div>
         <div class="strategy-filter-dropdown-all">복수 선택</div>
       </div>
       <div class="strategy-filter-option-list">
@@ -891,7 +1431,7 @@
         }
         const filterKey = target.getAttribute("data-strategy-filter-option-key");
         const optionValue = target.getAttribute("data-strategy-filter-option-value");
-        if (!filterKey || !STRATEGY_FILTER_CONFIG[filterKey]) {
+        if (!filterKey || !activeConfig[filterKey]) {
           return;
         }
         if (optionValue === "__all__") {
@@ -936,6 +1476,7 @@
       return;
     }
     renderStrategySortHeaders();
+    renderStrategyComboSubtitle();
     renderStrategyRankingFilters();
     if (state.strategyRankingLoading) {
       renderStrategyRankingMessage("콤보 랭킹을 계산하는 중입니다.");
@@ -977,6 +1518,7 @@
           <td class="num">${ui.escapeHtml(ui.formatPercent(row.full_return_pct))}</td>
           <td class="num">${ui.escapeHtml(ui.formatPercent(row.cagr_pct))}</td>
           <td class="num">${ui.escapeHtml(ui.formatPercent(row.max_drawdown_pct))}</td>
+          <td class="num">${ui.escapeHtml(row.is_benchmark ? "-" : ui.formatNumber(row.trade_count))}</td>
         </tr>`;
       })
       .join("");
@@ -1699,7 +2241,7 @@
 
     if (!rows.length) {
       meta.textContent = "총 0건";
-      body.innerHTML = '<tr><td colspan="12" class="muted" style="text-align:center">선택 구간에 표시할 거래 이력이 없습니다.</td></tr>';
+      body.innerHTML = '<tr><td colspan="13" class="muted" style="text-align:center">선택 구간에 표시할 거래 이력이 없습니다.</td></tr>';
     } else {
       meta.textContent = `총 ${ui.formatNumber(rows.length)}건`;
       body.innerHTML = pageRows
@@ -1715,6 +2257,7 @@
             <td class="num">${ui.escapeHtml(formatPriceValue(interval.entry_price))}</td>
             <td class="num">${ui.escapeHtml(interval.exit_price ? formatPriceValue(interval.exit_price) : "-")}</td>
             <td class="num mono">${ui.escapeHtml(interval.shares || "-")}</td>
+            <td class="num">${ui.escapeHtml(ui.formatMoney(interval.total_fees || 0))}</td>
             <td class="num">${ui.escapeHtml(interval.pnl ? ui.formatMoney(interval.pnl) : "-")}</td>
             <td class="num">${ui.escapeHtml(interval.return_pct ? ui.formatPercent(interval.return_pct) : "-")}</td>
             <td class="num">${ui.escapeHtml(formatHoldingSessions(interval.holding_sessions))}</td>
@@ -1781,6 +2324,7 @@
   }
 
   function renderThreadTradeDetail(lane, interval) {
+    const feeNote = state.threadTimeline ? formatFeeNote(state.threadTimeline.meta) : "수수료 기준: 0.25% + 기타거래세";
     return `<section class="thread-detail-card">
       <h4>${ui.escapeHtml(threadReasonLabel(interval.close_reason))} 상세</h4>
       <div class="thread-detail-grid">
@@ -1791,14 +2335,19 @@
         <div class="meta-item"><span>진입 수량</span><strong class="mono">${ui.escapeHtml(interval.shares)}</strong></div>
         <div class="meta-item"><span>종료 날짜</span><strong class="mono">${ui.escapeHtml(interval.end_date || "-")}</strong></div>
         <div class="meta-item"><span>종료 가격</span><strong>${ui.escapeHtml(interval.exit_price ? formatPriceValue(interval.exit_price) : "-")}</strong></div>
+        <div class="meta-item"><span>진입 수수료</span><strong>${ui.escapeHtml(ui.formatMoney(interval.entry_fee || 0))}</strong></div>
+        <div class="meta-item"><span>종료 수수료</span><strong>${ui.escapeHtml(ui.formatMoney(interval.exit_fee || 0))}</strong></div>
+        <div class="meta-item"><span>총 수수료</span><strong>${ui.escapeHtml(ui.formatMoney(interval.total_fees || 0))}</strong></div>
         <div class="meta-item"><span>PNL</span><strong>${ui.escapeHtml(interval.pnl ? ui.formatMoney(interval.pnl) : "-")}</strong></div>
         <div class="meta-item"><span>Return</span><strong>${ui.escapeHtml(interval.return_pct ? ui.formatPercent(interval.return_pct) : "-")}</strong></div>
         <div class="meta-item"><span>보유 기간</span><strong>${ui.escapeHtml(formatHoldingSessions(interval.holding_sessions))}</strong></div>
       </div>
+      <div class="muted" style="font-size:12px;margin-top:10px">${ui.escapeHtml(feeNote)}</div>
     </section>`;
   }
 
   function renderThreadEntrySessionDetail(session) {
+    const feeNote = state.threadTimeline ? formatFeeNote(state.threadTimeline.meta) : "수수료 기준: 0.25% + 기타거래세";
     const cards = (session.entry_batch || [])
       .map(
         (row) => `<section class="thread-detail-card thread-batch-card">
@@ -1809,7 +2358,9 @@
             <div class="meta-item"><span>진입 날짜</span><strong class="mono">${ui.escapeHtml(session.session_date)}</strong></div>
             <div class="meta-item"><span>진입 가격</span><strong>${ui.escapeHtml(formatPriceValue(row.entry_price))}</strong></div>
             <div class="meta-item"><span>진입 수량</span><strong class="mono">${ui.escapeHtml(row.shares)}</strong></div>
+            <div class="meta-item"><span>진입 수수료</span><strong>${ui.escapeHtml(ui.formatMoney(row.entry_fee || 0))}</strong></div>
           </div>
+          <div class="muted" style="font-size:12px;margin-top:10px">${ui.escapeHtml(feeNote)}</div>
         </section>`,
       )
       .join("");
@@ -1820,6 +2371,7 @@
 
   function renderThreadExitSessionDetail(session) {
     const totalPnl = (session.exit_batch || []).reduce((sum, row) => sum + parseMoney(row.pnl), 0);
+    const feeNote = state.threadTimeline ? formatFeeNote(state.threadTimeline.meta) : "수수료 기준: 0.25% + 기타거래세";
     const cards = (session.exit_batch || [])
       .map((row) => {
         const interval = findThreadIntervalSummary(row.trade_id);
@@ -1832,10 +2384,14 @@
             <div class="meta-item"><span>진입 가격</span><strong>${ui.escapeHtml(formatPriceValue(row.entry_price))}</strong></div>
             <div class="meta-item"><span>진입 수량</span><strong class="mono">${ui.escapeHtml(interval?.shares || "-")}</strong></div>
             <div class="meta-item"><span>종료 가격</span><strong>${ui.escapeHtml(formatPriceValue(row.exit_price))}</strong></div>
+            <div class="meta-item"><span>진입 수수료</span><strong>${ui.escapeHtml(ui.formatMoney(row.entry_fee || 0))}</strong></div>
+            <div class="meta-item"><span>종료 수수료</span><strong>${ui.escapeHtml(ui.formatMoney(row.exit_fee || 0))}</strong></div>
+            <div class="meta-item"><span>총 수수료</span><strong>${ui.escapeHtml(ui.formatMoney(row.total_fees || 0))}</strong></div>
             <div class="meta-item"><span>PNL</span><strong>${ui.escapeHtml(ui.formatMoney(row.pnl))}</strong></div>
             <div class="meta-item"><span>Return</span><strong>${ui.escapeHtml(ui.formatPercent(row.return_pct))}</strong></div>
             <div class="meta-item"><span>보유 기간</span><strong>${ui.escapeHtml(formatHoldingSessions(row.holding_sessions))}</strong></div>
           </div>
+          <div class="muted" style="font-size:12px;margin-top:10px">${ui.escapeHtml(feeNote)}</div>
         </section>`;
       })
       .join("");
@@ -2092,6 +2648,7 @@
   }
 
   function renderStrategyViews() {
+    updateStrategyDetailMismatchNotice();
     renderStrategyKpis();
     renderStrategyEquityChart();
     renderStrategyDrawdownChart();
@@ -2211,7 +2768,7 @@
       setStrategyDateInputs(activePreset.start, activePreset.end);
     }
     renderStrategySlicePresets();
-    setNotice("strategy-meta-note", "");
+    resetStrategyMetaNotice();
   }
 
   function currentSweepRows() {
@@ -2418,47 +2975,73 @@
     renderSweepTable(filteredRows);
   }
 
-  async function loadThreadTimeline() {
+  async function loadThreadTimeline(requestId = state.strategySliceRequestId) {
     if (!state.focusedStrategyId || !state.dataStatus) {
+      abortThreadTimelineRequest();
       state.threadTimeline = null;
       resetThreadHistoryPage();
       renderThreadViews();
       return;
     }
-    const csvPath = state.dataStatus.snapshot_path || "";
-    const slice = currentStrategySlice();
-    const executionModel = currentStrategyExecutionModel();
-    const priceBasis = currentStrategyPriceBasis();
-    const cacheKey = [state.focusedStrategyId, csvPath, executionModel, priceBasis, slice?.start || "", slice?.end || ""].join(":");
-    if (state.threadTimelineCache[cacheKey]) {
+    const context = buildThreadTimelineContext(state.focusedStrategyId);
+    if (!context) {
+      abortThreadTimelineRequest();
+      state.threadTimeline = null;
+      resetThreadHistoryPage();
+      renderThreadViews();
+      return;
+    }
+    const cacheKey = makeThreadTimelineStateKey(context);
+    if (state.threadTimelineCache[cacheKey] && threadTimelineMatchesContext(state.threadTimelineCache[cacheKey], context)) {
       state.threadTimeline = state.threadTimelineCache[cacheKey];
       resetThreadHistoryPage();
       renderThreadViews();
       return;
     }
+    abortThreadTimelineRequest();
+    const controller = new AbortController();
+    state.threadTimelineController = controller;
+    state.threadTimeline = null;
+    resetThreadHistoryPage();
+    renderThreadViews();
     const params = new URLSearchParams({
-      profileId: state.profileId,
-      csvPath,
-      strategyId: state.focusedStrategyId,
-      executionModel,
-      priceBasis,
+      profileId: context.profileId,
+      csvPath: context.csvPath,
+      strategyId: context.strategyId,
+      executionModel: context.executionModel,
+      priceBasis: context.priceBasis,
     });
-    if (slice?.start) {
-      params.set("sliceStart", slice.start);
-    }
-    if (slice?.end) {
-      params.set("sliceEnd", slice.end);
-    }
+    params.set("sliceStart", context.sliceStart);
+    params.set("sliceEnd", context.sliceEnd);
+    appendStrategyRegimeParams(params);
     try {
-      const payload = await ui.fetchJson(`/api/backtests/thread-timeline?${params.toString()}`);
-      state.threadTimelineCache[cacheKey] = payload;
+      const payload = await ui.fetchJson(`/api/backtests/thread-timeline?${params.toString()}`, { signal: controller.signal });
+      if (state.threadTimelineController !== controller) {
+        return;
+      }
+      state.threadTimelineController = null;
+      if (!shouldAcceptThreadTimelinePayload({
+        activeRequestId: state.strategySliceRequestId,
+        requestId,
+        payload,
+        context,
+      })) {
+        return;
+      }
       if (state.focusedStrategyId !== payload.meta.strategy_id) {
         return;
       }
+      state.threadTimelineCache[cacheKey] = payload;
       state.threadTimeline = payload;
       resetThreadHistoryPage();
       renderThreadViews();
     } catch (error) {
+      if (state.threadTimelineController === controller) {
+        state.threadTimelineController = null;
+      }
+      if (ui.isAbortError && ui.isAbortError(error)) {
+        return;
+      }
       state.threadTimeline = null;
       resetThreadHistoryPage();
       renderThreadViews();
@@ -2494,10 +3077,11 @@
     if (slice?.end) {
       params.set("sliceEnd", slice.end);
     }
+    appendStrategyRegimeParams(params);
     state.strategyRankingLoading = true;
     state.strategyRankingError = "";
     renderStrategyRankingMessage("콤보 랭킹을 계산하는 중입니다.");
-    setNotice("strategy-meta-note", "");
+    resetStrategyMetaNotice();
     try {
       const payload = await ui.fetchJson(`/api/backtests/strategy-ranking?${params.toString()}`, { signal: controller.signal });
       if (state.strategyRankingController !== controller || state.strategySliceRequestId !== requestId) {
@@ -2527,7 +3111,7 @@
 
   function scheduleStrategyDetailsAndTimelineLoad(requestId = state.strategySliceRequestId) {
     const selectedIds = [...state.selectedStrategyIds];
-    void ensureStrategyDetails(selectedIds)
+    void ensureStrategyDetails(selectedIds, requestId)
       .then(() => {
         if (state.strategySliceRequestId !== requestId) {
           return;
@@ -2542,10 +3126,10 @@
         if (ui.isAbortError && ui.isAbortError(error)) {
           return;
         }
-        setNotice("strategy-meta-note", error instanceof Error ? error.message : "선택 콤보 상세를 불러오지 못했습니다.");
+        setStrategyDetailError(error instanceof Error ? error.message : "선택 콤보 상세를 불러오지 못했습니다.");
       });
     if (state.strategySliceRequestId === requestId) {
-      void loadThreadTimeline();
+      void loadThreadTimeline(requestId);
     }
   }
 
@@ -2584,7 +3168,11 @@
       );
     }
     const [firstPayload, secondPayload] = await Promise.all(requests);
+    abortStrategyDetailRequests();
+    abortThreadTimelineRequest();
     state.strategyDetails = {};
+    state.strategyDetailPending = {};
+    state.strategyDetailControllers = {};
     state.threadTimelineCache = {};
     state.officialExplorer = officialEnabled ? firstPayload : null;
     state.officialMatrix = null;
@@ -2642,9 +3230,22 @@
     state.profileId = profilesPayload.defaultProfileId || state.profileId;
     renderProfileSummary(currentProfile());
     applyWorkspaceDefaults(workspace);
+    renderStrategyRegimeCard();
     renderDataStatus(dataStatus);
     await Promise.all([loadStrategyData(), loadLatestSweep()]);
   }
+
+  window.__strategyDashboardTestHooks = {
+    makeStrategyDetailStateKey,
+    makeThreadTimelineStateKey,
+    normalizeStrategyDetailPayload,
+    strategyDetailMatchesContext,
+    threadTimelineMatchesContext,
+    strategyDetailReturnPct,
+    strategyDetailMatchesRanking,
+    shouldAcceptStrategyDetailPayload,
+    shouldAcceptThreadTimelinePayload,
+  };
 
   document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll("[data-tab]").forEach((button) => {
@@ -2666,6 +3267,8 @@
 
     document.getElementById("strategy-apply-button").addEventListener("click", async (event) => {
       event.preventDefault();
+      syncStrategyRegimeStateFromInputs();
+      renderStrategyRegimeCard();
       state.selectedStrategyPresetId = "custom";
       resetThreadHistoryPage();
       setStrategyApplyPending(true);
@@ -2692,6 +3295,62 @@
         }
         resetStrategyRankingPage();
         renderStrategyRanking();
+      });
+    });
+
+    const regimeEnabled = document.getElementById("strategy-regime-enabled");
+    if (regimeEnabled instanceof HTMLInputElement) {
+      regimeEnabled.addEventListener("change", () => {
+        syncStrategyRegimeStateFromInputs();
+        renderStrategyRegimeCard();
+      });
+    }
+
+    const strategyRegimeHelpOpen = document.getElementById("strategy-regime-help-open");
+    if (strategyRegimeHelpOpen instanceof HTMLButtonElement) {
+      strategyRegimeHelpOpen.addEventListener("click", () => {
+        openStrategyRegimeHelp();
+      });
+    }
+
+    const strategyRegimeHelpClose = document.getElementById("strategy-regime-help-close");
+    if (strategyRegimeHelpClose instanceof HTMLButtonElement) {
+      strategyRegimeHelpClose.addEventListener("click", () => {
+        closeStrategyRegimeHelp();
+      });
+    }
+
+    const strategyRegimeHelpBackdrop = document.getElementById("strategy-regime-help-backdrop");
+    if (strategyRegimeHelpBackdrop instanceof HTMLElement) {
+      strategyRegimeHelpBackdrop.addEventListener("click", () => {
+        closeStrategyRegimeHelp();
+      });
+    }
+
+    [
+      "strategy-regime-rsi-period",
+      "strategy-regime-bear-high-threshold",
+      "strategy-regime-bear-mid-low-threshold",
+      "strategy-regime-bear-mid-high-threshold",
+      "strategy-regime-bull-low-threshold",
+      "strategy-regime-bull-mid-low-threshold",
+      "strategy-regime-bull-mid-high-threshold",
+      "strategy-regime-base-stop",
+      "strategy-regime-base-buy",
+      "strategy-regime-base-sell",
+      "strategy-regime-bull-stop",
+      "strategy-regime-bull-buy",
+      "strategy-regime-bull-sell",
+      "strategy-regime-bear-stop",
+      "strategy-regime-bear-buy",
+      "strategy-regime-bear-sell",
+    ].forEach((id) => {
+      const input = document.getElementById(id);
+      if (!(input instanceof HTMLInputElement)) {
+        return;
+      }
+      input.addEventListener("change", () => {
+        syncStrategyRegimeStateFromInputs();
       });
     });
 
@@ -2799,6 +3458,7 @@
           state.strategyRankingOpenFilterKey = null;
           renderStrategyRankingFilters();
         }
+        closeStrategyRegimeHelp();
         closeThreadDrawer();
       }
     });

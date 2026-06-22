@@ -37,6 +37,9 @@ class StrategyTest(unittest.TestCase):
                 "execution_model": "ideal_same_close",
                 "price_basis": "adjusted_close",
                 "sizing_mode": "fixed_principal",
+                "commission_bps": "0",
+                "transaction_tax_bps": "0",
+                "slippage_bps": "0",
                 **overrides,
             }
         )
@@ -149,6 +152,43 @@ class StrategyTest(unittest.TestCase):
         base = self.make_config()
         changed = self.make_config(take_profit_pct="5", entry_drop_pct="2", stop_loss_pct="10", take_profit_operator="gte")
         self.assertNotEqual(base.config_hash(), changed.config_hash())
+
+    def test_default_trade_fees_are_recorded(self) -> None:
+        run = run_backtest(
+            [bar(2, "10"), bar(3, "9"), bar(4, "11")],
+            StrategyConfig.from_mapping(
+                {
+                    "symbol": "SOXL",
+                    "thread_count": 1,
+                    "stop_sessions": 10,
+                    "initial_capital": 1000,
+                    "execution_model": "ideal_same_close",
+                    "price_basis": "adjusted_close",
+                    "sizing_mode": "fixed_principal",
+                }
+            ),
+        )
+        self.assertEqual(run.config.commission_bps, D("25"))
+        self.assertEqual(run.trades[0].entry_fee, D("2.48"))
+        self.assertEqual(run.trades[0].exit_fee, D("3.03"))
+
+    def test_regime_disabled_uses_current_strategy_thresholds_not_regime_base_defaults(self) -> None:
+        run = run_backtest(
+            [bar(2, "10"), bar(3, "9"), bar(4, "9.5")],
+            self.make_config(
+                thread_count=1,
+                stop_sessions=40,
+                take_profit_pct="10",
+                entry_drop_pct="-10",
+                regime_enabled=False,
+                regime_base_stop_sessions=30,
+                regime_base_buy_pct="0",
+                regime_base_sell_pct="0",
+            ),
+        )
+        self.assertEqual(run.daily[-1].open_threads, 1)
+        self.assertIn("ENTRY", [event.event_type for event in run.events])
+        self.assertNotIn("EXIT", [event.event_type for event in run.events])
 
 
 if __name__ == "__main__":

@@ -6,9 +6,13 @@
   - `SOXL` 워크스페이스는 `설명`, `전략`, `파라미터 테스트`, `멘토 래퍼런스` 탭을 모두 노출한다. 이때 `멘토 래퍼런스` 탭 안에는 Yahoo 공식 기준선 카드와 SOXL 전용 legacy mentor 카드가 함께 들어간다.
   - `TQQQ` 워크스페이스는 같은 4번째 탭 위치를 재사용하지만, 라벨을 `공식 기준선`으로 바꾸고 official explorer/matrix만 보여준다.
   - `0193T0`, `233740`, `462330`는 동일 템플릿을 재사용하되 4번째 reference 탭 자체를 숨긴다.
-  - `설명` 탭은 각 workspace별 입문 설명을 제공하며, 현재 기본 익절(`take_profit_pct=0`)과 향후 QQQ 레짐 기반 익절 파라미터 계획을 공통으로 안내한다.
+  - `설명` 탭은 각 workspace별 입문 설명을 제공한다. 이 중 `SOXL`은 실제 구현된 `QQQ Regime` 기능과 bull / bear / base 파라미터 의미를 함께 안내하고, 나머지 workspace는 기존 4파라미터 전략 설명만 유지한다.
   - 전략 탭 상단은 KPI 묶음 대신 `기간 설정` 카드를 사용하며, `시작일 / 종료일 / 구간 적용`과 그 아래의 기간 프리셋을 한 섹션에 배치한다.
-  - 전략 탭의 `콤보 랭킹`은 726개 4파라미터 조합(`thread_count`, `stop_sessions`, `buy_pct`, `sell_pct`)을 기준으로 렌더링하고, `cagr_pct`, `max_drawdown_pct`, `full_return_pct`를 핵심 컬럼으로 사용한다.
+  - `SOXL` 전략 탭은 `기간 설정`과 `콤보 랭킹` 사이에 `Regime 설정` 카드를 추가로 렌더링한다.
+  - `Regime 설정` 카드는 기본 화면에서 `Regime 적용` 토글만 보여주고, 우측 상단 `?` 버튼으로 여는 팝업 안에서 `QQQ / 주봉 RSI(14) Wilder / 전주 확정값` 기준과 `Base`, `Bull`, `Bear`별 threshold, `손절일`, `매수%`, `매도%` 입력을 함께 제공한다.
+  - 비-`SOXL` workspace의 전략 탭은 기존 구조를 유지하며 `Regime 설정` 카드를 렌더링하지 않는다.
+  - 일반 전략 탭의 `콤보 랭킹`은 726개 4파라미터 조합(`thread_count`, `stop_sessions`, `buy_pct`, `sell_pct`)을 기준으로 렌더링하고, `cagr_pct`, `max_drawdown_pct`, `trade_count`, `full_return_pct`를 핵심 컬럼으로 사용한다.
+  - `SOXL`에서 `Regime 적용`을 켜면 `콤보 랭킹`은 현재 form의 `base / bull / bear` 값 조합을 바탕으로 한 regime row 집합으로 전환되며, COMBO 표시와 필터도 `Bull 손절일`, `Bull 매수%`, `Bull 매도%`, `Bear 손절일`, `Bear 매수%`, `Bear 매도%`를 기준으로 바뀐다.
   - 전략 탭에서 `기간 설정`을 바꾸면 `콤보 랭킹`, `Rebased Equity`, `월별`, `롤링`, `Thread Timeline`은 모두 같은 slice 바 집합으로 다시 실행한 결과를 사용한다. 전체 기간 실행을 잘라낸 곡선과 slice 재실행 랭킹을 섞지 않는다.
   - `Thread Timeline`은 `thread-scroll-panel` 하단의 viewport bar를 제공하며, 가운데를 드래그해 이동하고 양 끝 핸들을 드래그해 프리미어 프로 스타일로 확대/축소한다. 짧은 구간도 전체 보기와 세부 보기 사이를 넓은 범위로 오갈 수 있어야 한다.
   - `Thread Timeline` 바로 아래에는 현재 Focus 전략과 선택 구간의 거래 이력을 row 단위로 보여주는 paginated table이 있어야 하며, page size 기본값은 20이다.

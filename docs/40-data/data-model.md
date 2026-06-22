@@ -6,6 +6,7 @@
 - 표준 스냅샷 경로는 심볼 레지스트리가 결정하는 `data/raw/{symbol_specific_filename}.csv`다.
   - `SOXL`: `data/raw/soxl_daily_2011_present.csv`
   - `TQQQ`: `data/raw/tqqq_daily_2011_present.csv`
+  - `QQQ`: `data/raw/qqq_daily_2011_present.csv`
   - `000660`: `data/raw/000660_daily_2015_present.csv`
   - `0193T0`: `data/raw/0193t0_daily_2015_present.csv`
   - `233740`: `data/raw/233740_daily_2015_present.csv`
@@ -13,6 +14,7 @@
 - 표준 매니페스트 경로는 대응하는 `data/manifests/{csv_stem}.json`이다.
 - 현재 공식 SOXL 기준선은 `data/raw/soxl_daily_2011_present.csv`와 `data/manifests/soxl_daily_2011_present.json`이다.
 - 현재 공식 TQQQ 기준선은 `data/raw/tqqq_daily_2011_present.csv`와 `data/manifests/tqqq_daily_2011_present.json`이다.
+- `QQQ` canonical snapshot은 `SOXL` regime 보조 데이터셋으로 사용하며, 경로는 `data/raw/qqq_daily_2011_present.csv`와 `data/manifests/qqq_daily_2011_present.json`이다.
 - SOXL 공식 기준선은 checked-in golden fixture와 결합된 제품 gate다.
 - TQQQ 공식 기준선은 runtime canonical profile이며, golden fixture/parity 기준은 계속 SOXL 전용 `official_reference_matrix.json`과 `official_explorer_summary.json`에 둔다.
 - `SOXL`, `TQQQ`는 Yahoo chart를 우선 소스로 사용하며 실패 시 Investing, Stooq fallback을 사용한다.
@@ -32,14 +34,23 @@
 - snapshot manifest에는 `symbol`, `source`, `generated_at`, `rows`, `start`, `end`, `data_hash`, `output_csv`, `warnings`, `errors`를 저장한다.
 - `db/migrations/0001_initial.sql`에 PostgreSQL 마이그레이션 스켈레톤이 존재한다.
 - 백테스트 trade의 `shares`는 항상 양의 정수다. 진입 예산이 1주 미만이면 해당 진입은 `ENTRY_SKIPPED`로 기록한다.
+- 기본 백테스트 비용 모델은 거래마다 `commission_bps=25`와 심볼별 `transaction_tax_bps`를 적용한다.
+  - 현재 `SOXL`, `TQQQ`, `0193T0`, `233740`, `462330` 기본 기타거래세는 `0bps`다.
+  - 현재 `000660` 기본 기타거래세는 `15bps`다.
 - open thread equity는 미투자 현금과 mark-to-market 포지션 가치를 함께 보존해야 한다.
 - 모든 백테스트 실행과 연구 산출물은 `config_hash`, `data_hash`, `code_commit`를 함께 보관해야 한다.
+- `SOXL` regime 실행은 위 공통 메타데이터 외에 `regime_data_hash`와 `regime_config_hash`도 함께 보관해야 한다.
+- `regime_data_hash`는 `QQQ` 보조 바 집합 해시이며, `regime_config_hash`는 bull / bear / base stop-buy-sell과 threshold를 포함한 regime 설정 해시다.
+- `SOXL` regime 판정은 `QQQ` 일봉을 주봉 종가로 집계한 뒤 `14-week Wilder RSI`를 계산하고, 각 SOXL 일봉 세션에는 `직전 완료 주`의 RSI 판정만 적용한다.
+- 어떤 주가 bull / bear 조건에 모두 걸리지 않으면 직전 regime을 유지하며, 최초 판정 전 구간은 `base` 파라미터를 사용한다.
 - `code_commit`은 현재 저장소의 git HEAD를 기본으로 하고, 연구 관련 경로(`engine`, `dashboard`, `configs`, 루트 manifest`)에 미커밋 변경이 있으면 dirty fingerprint를 덧붙여 캐시 재사용 기준으로 사용한다.
 - `backtest_research_artifacts`는 `Strategy Explorer`, `Strategy Ranking`, `Sweep Explorer`의 정규화된 저장소다.
   - 공통 메타데이터: `artifact_key`, `artifact_kind`, `profile_id`, `symbol`, `csv_path`, `execution_model`, `price_basis`, `data_hash`, `code_commit`, `created_at`
   - 선택 메타데이터: `catalog_id`, `catalog_hash`, `sweep_id`, `sweep_hash`, `payload_hash`
   - 본문: `payload JSONB`
 - `Strategy Detail`과 `Thread Timeline`은 현재 저장형 연구 artifact가 아니라, slice-aware 메모리 캐시만 사용한다.
+  - 두 payload 모두 거래별 `entry_fee`, `exit_fee`, `total_fees`와 비용 메타데이터(`commission_bps`, `transaction_tax_bps`, `slippage_bps`)를 포함한다.
+  - `SOXL` regime payload는 추가로 `applied_regime`, `entry_regime`, `regime_data_hash`, `regime_config_hash`를 포함하며, slice-aware 캐시 키도 regime 해시를 구분해야 한다.
 - `backtest_research_sweep_rows`는 현재 `core4_v4` sweep 결과를 row 단위로 펼쳐 저장한다.
   - UI sweep 파라미터는 `thread_count`, `stop_sessions`, `buy_pct`, `sell_pct` 4개이며 총 726조합이다.
   - DB 호환 컬럼은 기존 스키마를 유지한다.
@@ -47,7 +58,7 @@
   - `entry_drop_pct` 컬럼에는 UI의 `buy_pct` 값이 저장된다.
   - `stop_loss_pct`는 현재 고정값 `0`이다.
   - `max_entries_per_session`은 현재 고정값 `1`이다.
-  - 대시보드의 현재 전략/스윕 랭킹 핵심 지표는 `full_return_pct`, `cagr_pct`, `max_drawdown_pct`다.
+  - 대시보드의 현재 전략/스윕 랭킹 핵심 지표는 `full_return_pct`, `cagr_pct`, `max_drawdown_pct`, `trade_count`다.
   - `cagr_pct`는 항상 유한해야 한다. 종료 자산이 `0` 이하이거나 연환산 계산이 비정상이면 엔진은 총수익률을 대체 저장한다.
   - 강건성 컬럼: `mean_segment_return_pct`, `segment_stddev_pct`, `worst_segment_return_pct`, `positive_segment_ratio_pct`, `recent_segment_return_pct`
   - Pareto 컬럼: `pareto_return_mdd`, `pareto_return_stability`

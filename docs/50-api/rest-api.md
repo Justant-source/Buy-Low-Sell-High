@@ -37,21 +37,30 @@
   - 응답에는 `benchmark`(`Buy & Hold`) 일별 시계열이 포함되며, 대시보드는 이를 전략 비교용 pseudo row로 재사용한다.
   - 응답에는 모든 워크스페이스가 공통으로 쓰는 전체 기간 `rankings`와 `meta.ranking_basis`가 포함될 수 있지만, 현재 대시보드의 `콤보 랭킹` 박스 canonical source는 별도 `GET /api/backtests/strategy-ranking` 호출이다.
   - 대시보드의 `기간 설정`이 바뀌면 `콤보 랭킹`은 서버에 `sliceStart`, `sliceEnd`를 넘겨 선택 slice 기준으로 다시 계산한다. `strategy-explorer`의 전체 기간 `daily`를 클라이언트에서 재정렬하는 경로가 아니다.
-  - UI 랭킹 표시는 `full_return_pct`, `cagr_pct`, `max_drawdown_pct`를 사용한다.
+  - `SOXL`은 선택적으로 `regimeEnabled`, `regimeSymbol`, `regimeRsiPeriodWeeks`, bear/bull threshold, `regimeBase*`, `regimeBull*`, `regimeBear*` query를 받아 동일 전체 기간을 regime-aware config로 실행할 수 있다.
+  - regime-aware 응답 `meta`는 `regime_enabled`, `regime_symbol`, `regime_data_hash`, `regime_config_hash`를 함께 반환한다.
+  - UI 랭킹 표시는 `full_return_pct`, `cagr_pct`, `max_drawdown_pct`, `trade_count`를 사용한다.
   - UI 랭킹 정렬은 선택 slice의 `cagr_pct desc`, `max_drawdown_pct desc`, `full_return_pct desc`를 사용한다.
   - `Buy & Hold` row는 UI에서 항상 최상단에 고정되며 선택은 가능하지만 `Focus` 대상은 아니다.
 - `GET /api/backtests/strategy-ranking`
-  - 전략 탭 `콤보 랭킹` 전용 4파라미터 ranking payload를 반환한다.
+  - 전략 탭 `콤보 랭킹` payload를 반환한다.
   - 전체 기간은 같은 `profileId`, `initialCapital`, `executionModel`, `priceBasis`, `data_hash`를 가진 `core4_v4` sweep artifact가 있고 그 `code_commit`이 현재 코드 fingerprint와 일치할 때만 재사용한다.
   - 수동 slice는 `sliceStart`, `sliceEnd`, `executionModel`, `priceBasis` 기준으로 `STRATEGY_RANKING` 연구 아티팩트와 서버 메모리 캐시를 재사용하되, 저장된 `code_commit`이 현재 코드 fingerprint와 일치해야 한다.
   - 캐시 미스 수동 slice 계산은 상주 Python daemon이 처리하며, daemon 내부의 `8-worker` 프로세스풀이 최대 `1시간` idle까지 유지된다.
   - `기간 프리셋` 구간은 서버 시작 직후 선계산해 저장하고, 프리셋 버튼 클릭은 저장된 랭킹 payload를 로드하는 경로를 우선 사용한다.
-  - `limit=0`이면 전체 combo rows를 반환하고, 현재 대시보드의 `콤보 랭킹` 박스는 이 전체 rows에 대해 클라이언트에서 페이지네이션, 정렬, 4파라미터 필터를 적용한다.
+  - 기본 모드에서 `limit=0`이면 전체 726개 4파라미터 combo rows를 반환하고, 현재 대시보드의 `콤보 랭킹` 박스는 이 전체 rows에 대해 클라이언트에서 페이지네이션, 정렬, 4파라미터 필터를 적용한다.
+  - `SOXL`에서 `regimeEnabled=true`면 ranking generator가 QQQ regime-aware row 집합으로 전환되며, row는 `bull_stop_sessions`, `bull_buy_pct`, `bull_sell_pct`, `bear_stop_sessions`, `bear_buy_pct`, `bear_sell_pct`를 포함한다.
+  - regime-aware `meta`는 `regime_enabled`, `regime_symbol`, `regime_data_hash`, `regime_config_hash`를 함께 반환한다.
+  - 비-`SOXL` workspace는 regime query를 보내더라도 기존 4파라미터 ranking 의미론을 유지한다.
   - `Buy & Hold`는 API row가 아니라 UI pseudo row이며, 항상 최상단에 고정되고 `Focus` 대상은 아니다.
   - `cagr_pct`는 항상 유한한 숫자여야 한다. 종료 자산이 `0` 이하인 slice에서는 총수익률 기반 fallback 값이 들어간다.
 - `GET /api/backtests/strategy-detail`
   - 선택된 4파라미터 콤보 1개의 일별 equity, 월별, 구간 요약 payload를 반환한다.
   - `sliceStart`, `sliceEnd`가 오면 해당 구간 바만으로 전략을 다시 실행한 payload를 반환한다. 전체 실행을 잘라낸 payload가 아니다.
+  - 응답 `meta`는 실제 계산에 사용된 `strategy_id`, `period_start`, `period_end`, `execution_model`, `price_basis`, `data_hash`, `code_commit`를 echo 해서, 대시보드가 stale detail 응답을 현재 slice와 구분할 수 있어야 한다.
+  - `SOXL` regime detail은 위 meta에 `regime_enabled`, `regime_symbol`, `regime_data_hash`, `regime_config_hash`를 추가로 포함한다.
+  - `daily` row는 `applied_regime`을 포함한다.
+  - `trades` row는 `entry_fee`, `exit_fee`, `total_fees`를 포함해야 하며, 비용은 기본 `0.25% + 기타거래세` 기준을 따른다. `SOXL` regime trade는 추가로 `entry_regime`, `entry_stop_sessions`, `entry_buy_pct`, `entry_sell_pct`를 포함한다.
   - 동일 `strategyId`/데이터셋/실행모델/구간 조합은 서버 메모리 캐시로 재사용한다.
   - 현재 이 payload는 PostgreSQL/SQLite 연구 artifact로 저장하지 않는다.
 - `GET /api/backtests/official-explorer`
@@ -67,9 +76,12 @@
   - 전략 탭의 `focus` 콤보 1개에 대한 swimlane/Gantt payload를 반환한다.
   - `sliceStart`, `sliceEnd`가 오면 해당 구간 바만으로 전략을 다시 실행한 timeline을 반환한다.
   - `lanes`, `sessions`, `summary`를 포함하며, 세션 상태는 `end-of-session` 기준이다.
-  - `entry_batch`는 Total 레인의 매수 상세 drill-down 원본이며 `Thread`, `배정 자본금`, `진입 날짜`, `진입 가격`, `진입 수량`을 보여줄 수 있는 필드를 담는다.
+  - `entry_batch`는 Total 레인의 매수 상세 drill-down 원본이며 `Thread`, `배정 자본금`, `진입 날짜`, `진입 가격`, `진입 수량`, `entry_fee`를 보여줄 수 있는 필드를 담는다.
+  - `exit_batch`와 lane interval은 거래별 `entry_fee`, `exit_fee`, `total_fees`를 포함하며, meta에는 `commission_bps`, `transaction_tax_bps`, `slippage_bps`가 들어간다.
   - `exit_batch`는 Total 레인의 당일 매도 수 drill-down 원본이며 thread별 `익절 상세`/`손절 상세`, `return`, `holding_sessions`, 합산 PnL 표시를 지원한다.
   - `open_positions`는 세션 종료 시점에 살아 있는 thread만 담는다.
+  - `SOXL` regime timeline meta는 `regime_enabled`, `regime_symbol`, `regime_data_hash`, `regime_config_hash`를 포함한다.
+  - `SOXL` regime timeline session row는 `applied_regime`, `entry_batch`/`exit_batch` row는 `entry_regime`를 포함한다.
   - 동일 `strategyId`/데이터셋/실행모델/구간 조합은 서버 메모리 캐시를 사용한다.
   - 현재 이 payload는 PostgreSQL/SQLite 연구 artifact로 저장하지 않는다.
 - `POST /api/backtests/jobs`
@@ -106,5 +118,5 @@
   - 동일 `profileId`, `initialCapital`, `csv_path`, `execution_model`, `price_basis`, `data_hash`, `sweep_id` 조합의 sweep 산출물 중 현재 코드 fingerprint와 `code_commit`이 일치하는 결과만 반환한다.
 - `GET /api/backtests/sweeps/runs/:artifactId`
   - `combo_count`, Pareto 플래그, 구간 강건성 지표, 정렬 가능한 row 목록을 포함한 저장된 sweep 산출물을 반환한다.
-  - 대시보드의 현재 주요 비교 컬럼은 `full_return_pct`, `cagr_pct`, `max_drawdown_pct`다.
+  - 대시보드의 현재 주요 비교 컬럼은 `full_return_pct`, `cagr_pct`, `max_drawdown_pct`, `trade_count`다.
   - 대시보드의 `파라미터 테스트` 표는 이 row 목록 중 상위 10개만 렌더링한다.

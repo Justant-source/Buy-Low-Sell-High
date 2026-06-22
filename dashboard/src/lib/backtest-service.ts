@@ -91,6 +91,7 @@ export interface StrategyExplorerInput {
   catalogId?: string;
   executionModel?: string;
   priceBasis?: string;
+  overrides?: BacktestOverrides;
 }
 
 export interface StrategyRankingInput {
@@ -102,6 +103,7 @@ export interface StrategyRankingInput {
   sliceStart?: string;
   sliceEnd?: string;
   limit?: number;
+  overrides?: BacktestOverrides;
 }
 
 export interface StrategyDetailInput {
@@ -113,6 +115,7 @@ export interface StrategyDetailInput {
   sliceEnd?: string;
   executionModel?: string;
   priceBasis?: string;
+  overrides?: BacktestOverrides;
 }
 
 export interface OfficialExplorerInput {
@@ -130,6 +133,7 @@ export interface ThreadTimelineInput {
   sliceEnd?: string;
   executionModel?: string;
   priceBasis?: string;
+  overrides?: BacktestOverrides;
 }
 
 export interface SweepJobInput {
@@ -152,7 +156,7 @@ export interface OfficialMatrixInput {
 
 function buildOverrideArgs(
   overrides?: BacktestOverrides,
-  options: { includeThreadCount?: boolean; includeStopSessions?: boolean } = {},
+  options: { includeThreadCount?: boolean; includeStopSessions?: boolean; includePriceBasis?: boolean } = {},
 ): string[] {
   if (!overrides) {
     return [];
@@ -160,6 +164,7 @@ function buildOverrideArgs(
   const args: string[] = [];
   const includeThreadCount = options.includeThreadCount ?? true;
   const includeStopSessions = options.includeStopSessions ?? true;
+  const includePriceBasis = options.includePriceBasis ?? true;
   if (includeThreadCount && overrides.threadCount != null) {
     args.push("--thread-count", String(overrides.threadCount));
   }
@@ -184,8 +189,62 @@ function buildOverrideArgs(
   if (overrides.sizingMode) {
     args.push("--sizing-mode", overrides.sizingMode);
   }
-  if (overrides.priceBasis) {
+  if (includePriceBasis && overrides.priceBasis) {
     args.push("--price-basis", overrides.priceBasis);
+  }
+  if (overrides.regimeEnabled) {
+    args.push("--regime-enabled");
+  }
+  if (overrides.regimeSymbol) {
+    args.push("--regime-symbol", overrides.regimeSymbol);
+  }
+  if (overrides.regimeRsiPeriodWeeks != null) {
+    args.push("--regime-rsi-period-weeks", String(overrides.regimeRsiPeriodWeeks));
+  }
+  if (overrides.regimeBearHighThreshold != null) {
+    args.push("--regime-bear-high-threshold", String(overrides.regimeBearHighThreshold));
+  }
+  if (overrides.regimeBearMidLowThreshold != null) {
+    args.push("--regime-bear-mid-low-threshold", String(overrides.regimeBearMidLowThreshold));
+  }
+  if (overrides.regimeBearMidHighThreshold != null) {
+    args.push("--regime-bear-mid-high-threshold", String(overrides.regimeBearMidHighThreshold));
+  }
+  if (overrides.regimeBullLowThreshold != null) {
+    args.push("--regime-bull-low-threshold", String(overrides.regimeBullLowThreshold));
+  }
+  if (overrides.regimeBullMidLowThreshold != null) {
+    args.push("--regime-bull-mid-low-threshold", String(overrides.regimeBullMidLowThreshold));
+  }
+  if (overrides.regimeBullMidHighThreshold != null) {
+    args.push("--regime-bull-mid-high-threshold", String(overrides.regimeBullMidHighThreshold));
+  }
+  if (overrides.regimeBaseStopSessions != null) {
+    args.push("--regime-base-stop-sessions", String(overrides.regimeBaseStopSessions));
+  }
+  if (overrides.regimeBaseBuyPct != null) {
+    args.push("--regime-base-buy-pct", String(overrides.regimeBaseBuyPct));
+  }
+  if (overrides.regimeBaseSellPct != null) {
+    args.push("--regime-base-sell-pct", String(overrides.regimeBaseSellPct));
+  }
+  if (overrides.regimeBullStopSessions != null) {
+    args.push("--regime-bull-stop-sessions", String(overrides.regimeBullStopSessions));
+  }
+  if (overrides.regimeBullBuyPct != null) {
+    args.push("--regime-bull-buy-pct", String(overrides.regimeBullBuyPct));
+  }
+  if (overrides.regimeBullSellPct != null) {
+    args.push("--regime-bull-sell-pct", String(overrides.regimeBullSellPct));
+  }
+  if (overrides.regimeBearStopSessions != null) {
+    args.push("--regime-bear-stop-sessions", String(overrides.regimeBearStopSessions));
+  }
+  if (overrides.regimeBearBuyPct != null) {
+    args.push("--regime-bear-buy-pct", String(overrides.regimeBearBuyPct));
+  }
+  if (overrides.regimeBearSellPct != null) {
+    args.push("--regime-bear-sell-pct", String(overrides.regimeBearSellPct));
   }
   return args;
 }
@@ -381,9 +440,12 @@ function tradesToCsv(run: BacktestDetailPayload): string {
     "entry_price",
     "shares",
     "invested_amount",
+    "entry_fee",
     "exit_signal_date",
     "fill_exit_date",
     "exit_price",
+    "exit_fee",
+    "total_fees",
     "holding_sessions",
     "pnl",
     "return_pct",
@@ -397,9 +459,12 @@ function tradesToCsv(run: BacktestDetailPayload): string {
       trade.entry_price,
       trade.shares,
       trade.invested_amount,
+      trade.entry_fee,
       trade.exit_signal_date ?? "",
       trade.fill_exit_date ?? "",
       trade.exit_price ?? "",
+      trade.exit_fee,
+      trade.total_fees,
       trade.holding_sessions ?? "",
       trade.pnl,
       trade.return_pct,
@@ -433,6 +498,18 @@ function shortDigest(parts: Array<string | number | undefined | null>): string {
   return createHash("sha256").update(raw).digest("hex");
 }
 
+function stableOverrideKey(overrides?: BacktestOverrides): string {
+  if (!overrides || !Object.keys(overrides).length) {
+    return "";
+  }
+  const normalized = Object.fromEntries(
+    Object.entries(overrides)
+      .filter(([, value]) => value != null && value !== "")
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
+  return shortDigest([JSON.stringify(normalized)]);
+}
+
 function makeStrategyPresetWarmupKey(input: {
   profileId: string;
   csvPath: string;
@@ -440,6 +517,7 @@ function makeStrategyPresetWarmupKey(input: {
   initialCapital: number;
   executionModel: string;
   priceBasis: string;
+  overridesKey?: string;
 }): string {
   return shortDigest([
     "strategy-preset-warmup-v1",
@@ -449,6 +527,7 @@ function makeStrategyPresetWarmupKey(input: {
     input.initialCapital,
     input.executionModel,
     input.priceBasis,
+    input.overridesKey,
   ]);
 }
 
@@ -480,6 +559,7 @@ function makeStrategyArtifactKey(input: {
   executionModel: string;
   priceBasis: string;
   catalogId: string;
+  overridesKey?: string;
 }): string {
   return shortDigest([
     STRATEGY_EXPLORER_VERSION,
@@ -490,6 +570,7 @@ function makeStrategyArtifactKey(input: {
     input.executionModel,
     input.priceBasis,
     input.catalogId,
+    input.overridesKey,
   ]);
 }
 
@@ -523,6 +604,7 @@ function makeStrategyRankingCacheKey(input: {
   priceBasis: string;
   sliceStart?: string;
   sliceEnd?: string;
+  overridesKey?: string;
 }): string {
   return shortDigest([
     STRATEGY_RANKING_VERSION,
@@ -534,6 +616,7 @@ function makeStrategyRankingCacheKey(input: {
     input.priceBasis,
     input.sliceStart,
     input.sliceEnd,
+    input.overridesKey,
   ]);
 }
 
@@ -562,6 +645,7 @@ function makeStrategyDetailCacheKey(input: {
   strategyId: string;
   sliceStart?: string;
   sliceEnd?: string;
+  overridesKey?: string;
 }): string {
   return shortDigest([
     STRATEGY_DETAIL_VERSION,
@@ -574,6 +658,7 @@ function makeStrategyDetailCacheKey(input: {
     input.strategyId,
     input.sliceStart,
     input.sliceEnd,
+    input.overridesKey,
   ]);
 }
 
@@ -587,6 +672,7 @@ function makeThreadTimelineCacheKey(input: {
   strategyId: string;
   sliceStart?: string;
   sliceEnd?: string;
+  overridesKey?: string;
 }): string {
   return shortDigest([
     THREAD_TIMELINE_VERSION,
@@ -599,6 +685,7 @@ function makeThreadTimelineCacheKey(input: {
     input.strategyId,
     input.sliceStart,
     input.sliceEnd,
+    input.overridesKey,
   ]);
 }
 
@@ -727,6 +814,7 @@ export class BacktestService {
       initialCapital: number;
       executionModel: string;
       priceBasis: string;
+      overridesKey?: string;
     },
     slicePresets: Array<{ preset_id: string; start: string; end: string }>,
     dataHash: string,
@@ -817,6 +905,7 @@ export class BacktestService {
     const catalogId = input.catalogId ?? DEFAULT_STRATEGY_CATALOG_ID;
     const executionModel = input.executionModel ?? defaultStrategyExecutionModel(profile);
     const priceBasis = input.priceBasis ?? defaultStrategyPriceBasis(profile);
+    const overridesKey = stableOverrideKey(input.overrides);
     const [dataStatus, store] = await Promise.all([getDataStatus(csvPath, profile.symbol), getResearchStore()]);
     const artifactKey = makeStrategyArtifactKey({
       profileId: input.profileId,
@@ -826,6 +915,7 @@ export class BacktestService {
       executionModel,
       priceBasis,
       catalogId,
+      overridesKey,
     });
     const cached = await store.findByKey<StrategyExplorerPayload>(artifactKey);
     if (isReusableResearchArtifact(cached)) {
@@ -836,6 +926,7 @@ export class BacktestService {
           initialCapital,
           executionModel,
           priceBasis,
+          overridesKey,
         },
         cached.payload.meta.slice_presets,
         dataStatus.data_hash,
@@ -854,6 +945,7 @@ export class BacktestService {
       "--initial-capital",
       String(initialCapital),
       ...buildResearchArgs({ catalogId, executionModel, priceBasis }),
+      ...buildOverrideArgs(input.overrides, { includePriceBasis: false }),
     ]);
     await saveStrategyArtifact(payload, {
       artifactKey,
@@ -868,6 +960,7 @@ export class BacktestService {
         initialCapital,
         executionModel,
         priceBasis,
+        overridesKey,
       },
       payload.meta.slice_presets,
       dataStatus.data_hash,
@@ -880,6 +973,7 @@ export class BacktestService {
     const executionModel = input.executionModel ?? defaultStrategyExecutionModel(profile);
     const priceBasis = input.priceBasis ?? defaultStrategyPriceBasis(profile);
     const limit = input.limit ?? 0;
+    const overridesKey = stableOverrideKey(input.overrides);
     const dataStatus = await getDataStatus(csvPath, profile.symbol);
     const cacheKey = makeStrategyRankingCacheKey({
       profileId: input.profileId,
@@ -890,6 +984,7 @@ export class BacktestService {
       priceBasis,
       sliceStart: input.sliceStart,
       sliceEnd: input.sliceEnd,
+      overridesKey,
     });
     const cached = this.strategyRankingCache.get(cacheKey);
     if (cached && isCompleteStrategyRankingPayload(cached)) {
@@ -908,7 +1003,7 @@ export class BacktestService {
     const fullPeriod =
       (!input.sliceStart || input.sliceStart === dataStatus.start) &&
       (!input.sliceEnd || input.sliceEnd === dataStatus.end);
-    if (fullPeriod) {
+    if (fullPeriod && !overridesKey) {
       const latestSweep = await this.getLatestSweep({
         profileId: input.profileId,
         csvPath,
@@ -948,6 +1043,7 @@ export class BacktestService {
               full_return_pct: row.metrics.full_return_pct,
               cagr_pct: row.metrics.cagr_pct,
               max_drawdown_pct: row.metrics.max_drawdown_pct,
+              trade_count: row.metrics.trade_count,
               rank: 0,
             }))
             .sort(compareStrategyRankingRows)
@@ -965,6 +1061,7 @@ export class BacktestService {
         sliceStart: input.sliceStart,
         sliceEnd: input.sliceEnd,
         limit: 0,
+        overrides: input.overrides,
       });
     })();
     this.strategyRankingPending.set(cacheKey, loader);
@@ -989,6 +1086,7 @@ export class BacktestService {
     const { profile, csvPath, initialCapital } = await resolveProfileContext(input);
     const executionModel = input.executionModel ?? defaultStrategyExecutionModel(profile);
     const priceBasis = input.priceBasis ?? defaultStrategyPriceBasis(profile);
+    const overridesKey = stableOverrideKey(input.overrides);
     const dataStatus = await getDataStatus(csvPath, profile.symbol);
     const cacheKey = makeStrategyDetailCacheKey({
       profileId: input.profileId,
@@ -1000,6 +1098,7 @@ export class BacktestService {
       strategyId: input.strategyId,
       sliceStart: input.sliceStart,
       sliceEnd: input.sliceEnd,
+      overridesKey,
     });
     const cached = this.strategyDetailCache.get(cacheKey);
     if (cached) {
@@ -1028,6 +1127,7 @@ export class BacktestService {
       executionModel,
       "--price-basis",
       priceBasis,
+      ...buildOverrideArgs(input.overrides, { includeThreadCount: false, includeStopSessions: false, includePriceBasis: false }),
     ]);
     this.strategyDetailPending.set(cacheKey, loader);
     try {
@@ -1059,6 +1159,7 @@ export class BacktestService {
     const { profile, csvPath, initialCapital } = await resolveProfileContext(input);
     const executionModel = input.executionModel ?? defaultStrategyExecutionModel(profile);
     const priceBasis = input.priceBasis ?? defaultStrategyPriceBasis(profile);
+    const overridesKey = stableOverrideKey(input.overrides);
     const dataStatus = await getDataStatus(csvPath, profile.symbol);
     const cacheKey = makeThreadTimelineCacheKey({
       profileId: input.profileId,
@@ -1070,6 +1171,7 @@ export class BacktestService {
       strategyId: input.strategyId,
       sliceStart: input.sliceStart,
       sliceEnd: input.sliceEnd,
+      overridesKey,
     });
     const cached = this.threadTimelineCache.get(cacheKey);
     if (cached) {
@@ -1098,6 +1200,7 @@ export class BacktestService {
       executionModel,
       "--price-basis",
       priceBasis,
+      ...buildOverrideArgs(input.overrides, { includeThreadCount: false, includeStopSessions: false, includePriceBasis: false }),
     ]);
     this.threadTimelinePending.set(cacheKey, loader);
     try {
@@ -1138,6 +1241,7 @@ export class BacktestService {
     const { profile, csvPath, initialCapital } = await resolveProfileContext(input);
     const executionModel = input.executionModel ?? defaultStrategyExecutionModel(profile);
     const priceBasis = input.priceBasis ?? defaultStrategyPriceBasis(profile);
+    const overridesKey = stableOverrideKey(input.overrides);
     const payload = await this.strategyExplorer({
       profileId: input.profileId,
       csvPath,
@@ -1145,6 +1249,7 @@ export class BacktestService {
       catalogId: input.catalogId,
       executionModel,
       priceBasis,
+      overrides: input.overrides,
     });
     const dataStatus = await getDataStatus(csvPath, profile.symbol);
     await this.ensureStrategyRankingPresets(
@@ -1154,6 +1259,7 @@ export class BacktestService {
         initialCapital,
         executionModel,
         priceBasis,
+        overridesKey,
       },
       payload.meta.slice_presets,
       dataStatus.data_hash,
@@ -1182,6 +1288,7 @@ export class BacktestService {
       initialCapital: number;
       executionModel: string;
       priceBasis: string;
+      overridesKey?: string;
     },
     slicePresets: Array<{ preset_id: string; start: string; end: string }>,
     dataHash: string,
@@ -1193,6 +1300,7 @@ export class BacktestService {
       initialCapital: input.initialCapital,
       executionModel: input.executionModel,
       priceBasis: input.priceBasis,
+      overridesKey: input.overridesKey,
     });
     const pending = this.strategyPresetWarmupPending.get(warmupKey);
     if (pending) {

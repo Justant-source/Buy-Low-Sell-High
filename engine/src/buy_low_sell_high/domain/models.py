@@ -9,6 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from ..code_version import current_code_commit
+from ..symbols import get_symbol_definition
 from .enums import CloseReason, EndOfTestMode, EventOrder, ExecutionModel, PriceBasis, SizingMode, ThreadSelector, ThreadState, YearBoundary
 from .money import D, ZERO, quantize_money, quantize_shares
 
@@ -48,6 +49,15 @@ class DataImportReport:
     warnings: list[str]
 
 
+DEFAULT_COMMISSION_BPS = D("25")
+
+
+def default_transaction_tax_bps(symbol: object) -> Decimal:
+    resolved_symbol = str(symbol or "SOXL").upper()
+    definition = get_symbol_definition(resolved_symbol)
+    return D(definition.transaction_tax_bps)
+
+
 @dataclass
 class StrategyConfig:
     symbol: str = "SOXL"
@@ -70,8 +80,28 @@ class StrategyConfig:
     execution_model: ExecutionModel = ExecutionModel.IDEAL_SAME_CLOSE
     initial_capital: Decimal = D("10000")
     allow_fractional_shares: bool = False
-    commission_bps: Decimal = ZERO
+    commission_bps: Decimal = DEFAULT_COMMISSION_BPS
+    transaction_tax_bps: Decimal = ZERO
     slippage_bps: Decimal = ZERO
+    regime_enabled: bool = False
+    regime_symbol: str = "QQQ"
+    regime_rsi_period_weeks: int = 14
+    regime_bear_high_threshold: Decimal = D("65")
+    regime_bear_mid_low_threshold: Decimal = D("40")
+    regime_bear_mid_high_threshold: Decimal = D("50")
+    regime_bull_low_threshold: Decimal = D("35")
+    regime_bull_mid_low_threshold: Decimal = D("50")
+    regime_bull_mid_high_threshold: Decimal = D("60")
+    regime_base_stop_sessions: int = 30
+    regime_base_buy_pct: Decimal = D("0")
+    regime_base_sell_pct: Decimal = D("0")
+    regime_bull_stop_sessions: int = 30
+    regime_bull_buy_pct: Decimal = D("0")
+    regime_bull_sell_pct: Decimal = D("0")
+    regime_bear_stop_sessions: int = 30
+    regime_bear_buy_pct: Decimal = D("0")
+    regime_bear_sell_pct: Decimal = D("0")
+    regime_csv_path: str = ""
     profile_id: str = "custom"
 
     @classmethod
@@ -80,11 +110,30 @@ class StrategyConfig:
         payload["thread_count"] = int(payload.get("thread_count", 7))
         payload["stop_sessions"] = int(payload.get("stop_sessions", 30))
         payload["max_entries_per_session"] = int(payload.get("max_entries_per_session", 1))
+        payload["regime_rsi_period_weeks"] = int(payload.get("regime_rsi_period_weeks", 14))
         payload["take_profit_pct"] = D(payload.get("take_profit_pct", 0))
         payload["entry_drop_pct"] = D(payload.get("entry_drop_pct", 0))
         payload["stop_loss_pct"] = D(payload.get("stop_loss_pct", 0))
+        payload["regime_bear_high_threshold"] = D(payload.get("regime_bear_high_threshold", 65))
+        payload["regime_bear_mid_low_threshold"] = D(payload.get("regime_bear_mid_low_threshold", 40))
+        payload["regime_bear_mid_high_threshold"] = D(payload.get("regime_bear_mid_high_threshold", 50))
+        payload["regime_bull_low_threshold"] = D(payload.get("regime_bull_low_threshold", 35))
+        payload["regime_bull_mid_low_threshold"] = D(payload.get("regime_bull_mid_low_threshold", 50))
+        payload["regime_bull_mid_high_threshold"] = D(payload.get("regime_bull_mid_high_threshold", 60))
+        payload["regime_base_stop_sessions"] = int(payload.get("regime_base_stop_sessions", payload["stop_sessions"]))
+        payload["regime_base_buy_pct"] = D(payload.get("regime_base_buy_pct", payload.get("entry_drop_pct", 0)))
+        payload["regime_base_sell_pct"] = D(payload.get("regime_base_sell_pct", payload.get("take_profit_pct", 0)))
+        payload["regime_bull_stop_sessions"] = int(payload.get("regime_bull_stop_sessions", payload["stop_sessions"]))
+        payload["regime_bull_buy_pct"] = D(payload.get("regime_bull_buy_pct", payload.get("entry_drop_pct", 0)))
+        payload["regime_bull_sell_pct"] = D(payload.get("regime_bull_sell_pct", payload.get("take_profit_pct", 0)))
+        payload["regime_bear_stop_sessions"] = int(payload.get("regime_bear_stop_sessions", payload["stop_sessions"]))
+        payload["regime_bear_buy_pct"] = D(payload.get("regime_bear_buy_pct", payload.get("entry_drop_pct", 0)))
+        payload["regime_bear_sell_pct"] = D(payload.get("regime_bear_sell_pct", payload.get("take_profit_pct", 0)))
         payload["initial_capital"] = D(payload.get("initial_capital", "10000"))
-        payload["commission_bps"] = D(payload.get("commission_bps", 0))
+        payload["commission_bps"] = D(payload.get("commission_bps", DEFAULT_COMMISSION_BPS))
+        payload["transaction_tax_bps"] = D(
+            payload.get("transaction_tax_bps", default_transaction_tax_bps(payload.get("symbol", "SOXL"))),
+        )
         payload["slippage_bps"] = D(payload.get("slippage_bps", 0))
         payload["event_order"] = EventOrder(payload.get("event_order", EventOrder.EXITS_THEN_ENTRY))
         payload["thread_selector"] = ThreadSelector(payload.get("thread_selector", ThreadSelector.ROUND_ROBIN))
@@ -96,6 +145,7 @@ class StrategyConfig:
         payload["allow_same_session_thread_reuse"] = bool(payload.get("allow_same_session_thread_reuse", True))
         payload["profit_precedes_stop"] = bool(payload.get("profit_precedes_stop", True))
         payload["allow_fractional_shares"] = bool(payload.get("allow_fractional_shares", False))
+        payload["regime_enabled"] = bool(payload.get("regime_enabled", False))
         return cls(**payload)
 
     def config_hash(self) -> str:
@@ -121,7 +171,54 @@ class StrategyConfig:
                 "initial_capital": str(self.initial_capital),
                 "allow_fractional_shares": self.allow_fractional_shares,
                 "commission_bps": str(self.commission_bps),
+                "transaction_tax_bps": str(self.transaction_tax_bps),
                 "slippage_bps": str(self.slippage_bps),
+                "regime": {
+                    "enabled": self.regime_enabled,
+                    "symbol": self.regime_symbol,
+                    "rsi_period_weeks": self.regime_rsi_period_weeks,
+                    "bear_high_threshold": str(self.regime_bear_high_threshold),
+                    "bear_mid_low_threshold": str(self.regime_bear_mid_low_threshold),
+                    "bear_mid_high_threshold": str(self.regime_bear_mid_high_threshold),
+                    "bull_low_threshold": str(self.regime_bull_low_threshold),
+                    "bull_mid_low_threshold": str(self.regime_bull_mid_low_threshold),
+                    "bull_mid_high_threshold": str(self.regime_bull_mid_high_threshold),
+                    "base_stop_sessions": self.regime_base_stop_sessions,
+                    "base_buy_pct": str(self.regime_base_buy_pct),
+                    "base_sell_pct": str(self.regime_base_sell_pct),
+                    "bull_stop_sessions": self.regime_bull_stop_sessions,
+                    "bull_buy_pct": str(self.regime_bull_buy_pct),
+                    "bull_sell_pct": str(self.regime_bull_sell_pct),
+                    "bear_stop_sessions": self.regime_bear_stop_sessions,
+                    "bear_buy_pct": str(self.regime_bear_buy_pct),
+                    "bear_sell_pct": str(self.regime_bear_sell_pct),
+                },
+            },
+            sort_keys=True,
+        )
+        return sha256(raw.encode("utf-8")).hexdigest()
+
+    def regime_config_hash(self) -> str:
+        raw = json.dumps(
+            {
+                "enabled": self.regime_enabled,
+                "symbol": self.regime_symbol,
+                "rsi_period_weeks": self.regime_rsi_period_weeks,
+                "bear_high_threshold": str(self.regime_bear_high_threshold),
+                "bear_mid_low_threshold": str(self.regime_bear_mid_low_threshold),
+                "bear_mid_high_threshold": str(self.regime_bear_mid_high_threshold),
+                "bull_low_threshold": str(self.regime_bull_low_threshold),
+                "bull_mid_low_threshold": str(self.regime_bull_mid_low_threshold),
+                "bull_mid_high_threshold": str(self.regime_bull_mid_high_threshold),
+                "base_stop_sessions": self.regime_base_stop_sessions,
+                "base_buy_pct": str(self.regime_base_buy_pct),
+                "base_sell_pct": str(self.regime_base_sell_pct),
+                "bull_stop_sessions": self.regime_bull_stop_sessions,
+                "bull_buy_pct": str(self.regime_bull_buy_pct),
+                "bull_sell_pct": str(self.regime_bull_sell_pct),
+                "bear_stop_sessions": self.regime_bear_stop_sessions,
+                "bear_buy_pct": str(self.regime_bear_buy_pct),
+                "bear_sell_pct": str(self.regime_bear_sell_pct),
             },
             sort_keys=True,
         )
@@ -140,6 +237,10 @@ class CapitalThread:
     entry_date: date | None = None
     invested_amount: Decimal = ZERO
     last_closed_session_index: int | None = None
+    active_regime: str = "base"
+    active_stop_sessions: int = 0
+    active_take_profit_pct: Decimal = ZERO
+    active_buy_pct: Decimal = ZERO
 
     def total_equity(self, mark_price: Decimal) -> Decimal:
         if self.state == ThreadState.OPEN:
@@ -167,13 +268,19 @@ class Trade:
     entry_price: Decimal
     shares: Decimal
     invested_amount: Decimal
+    entry_fee: Decimal = ZERO
     exit_signal_date: date | None = None
     fill_exit_date: date | None = None
     exit_price: Decimal | None = None
+    exit_fee: Decimal = ZERO
     holding_sessions: int | None = None
     pnl: Decimal = ZERO
     return_pct: Decimal = ZERO
     close_reason: CloseReason | None = None
+    entry_regime: str = "base"
+    entry_stop_sessions: int = 0
+    entry_buy_pct: Decimal = ZERO
+    entry_sell_pct: Decimal = ZERO
 
 
 @dataclass(frozen=True)
@@ -188,6 +295,7 @@ class DailySnapshot:
     take_profits: int
     time_stops: int
     skipped_entries: int
+    applied_regime: str = "base"
 
 
 @dataclass
@@ -201,6 +309,8 @@ class BacktestRun:
     yearly: dict[int, dict[str, Any]]
     metrics: dict[str, Decimal | int | str]
     code_commit: str = field(default_factory=current_code_commit)
+    regime_data_hash: str | None = None
+    regime_config_hash: str | None = None
 
 
 @dataclass

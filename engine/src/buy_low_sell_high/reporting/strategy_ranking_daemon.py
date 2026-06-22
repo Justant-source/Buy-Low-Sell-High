@@ -9,12 +9,51 @@ from threading import Lock, Timer
 from time import monotonic
 from typing import Any
 
-from ..config import load_strategy_config
+from ..config import load_strategy_mapping
 from ..data.normalize import normalize_bars
 from ..data.providers.csv_provider import CsvMarketDataProvider
 from ..data.quality import compute_data_hash
-from ..domain.models import MarketBar
+from ..domain.models import MarketBar, StrategyConfig
 from .strategy_explorer import build_slice_strategy_rankings, filter_bars_to_slice
+
+
+def _normalized_overrides(raw: dict[str, Any] | None) -> dict[str, Any]:
+    if not raw:
+        return {}
+    mapping = {
+        "threadCount": "thread_count",
+        "stopSessions": "stop_sessions",
+        "takeProfitPct": "take_profit_pct",
+        "takeProfitOperator": "take_profit_operator",
+        "entryDropPct": "entry_drop_pct",
+        "stopLossPct": "stop_loss_pct",
+        "maxEntriesPerSession": "max_entries_per_session",
+        "sizingMode": "sizing_mode",
+        "priceBasis": "price_basis",
+        "regimeEnabled": "regime_enabled",
+        "regimeSymbol": "regime_symbol",
+        "regimeRsiPeriodWeeks": "regime_rsi_period_weeks",
+        "regimeBearHighThreshold": "regime_bear_high_threshold",
+        "regimeBearMidLowThreshold": "regime_bear_mid_low_threshold",
+        "regimeBearMidHighThreshold": "regime_bear_mid_high_threshold",
+        "regimeBullLowThreshold": "regime_bull_low_threshold",
+        "regimeBullMidLowThreshold": "regime_bull_mid_low_threshold",
+        "regimeBullMidHighThreshold": "regime_bull_mid_high_threshold",
+        "regimeBaseStopSessions": "regime_base_stop_sessions",
+        "regimeBaseBuyPct": "regime_base_buy_pct",
+        "regimeBaseSellPct": "regime_base_sell_pct",
+        "regimeBullStopSessions": "regime_bull_stop_sessions",
+        "regimeBullBuyPct": "regime_bull_buy_pct",
+        "regimeBullSellPct": "regime_bull_sell_pct",
+        "regimeBearStopSessions": "regime_bear_stop_sessions",
+        "regimeBearBuyPct": "regime_bear_buy_pct",
+        "regimeBearSellPct": "regime_bear_sell_pct",
+    }
+    return {
+        mapping.get(key, key): value
+        for key, value in raw.items()
+        if value is not None
+    }
 
 
 class StrategyRankingPoolDaemon:
@@ -63,7 +102,9 @@ class StrategyRankingPoolDaemon:
         try:
             profile_path = str(payload["profile_path"])
             initial_capital = float(payload["initial_capital"])
-            config = load_strategy_config(profile_path, initial_capital=initial_capital)
+            config_mapping = load_strategy_mapping(profile_path, initial_capital=initial_capital)
+            config_mapping.update(_normalized_overrides(payload.get("overrides")))
+            config = StrategyConfig.from_mapping(config_mapping)
             symbol = str(payload.get("symbol") or config.symbol)
             csv_path = str(payload["csv_path"])
             bars, data_hash = self._load_bars(csv_path, symbol)

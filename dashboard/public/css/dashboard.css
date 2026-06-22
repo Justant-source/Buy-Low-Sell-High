@@ -600,6 +600,251 @@
   gap: 6px;
 }
 
+.strategy-regime-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font: 600 13px/1.2 var(--font-sans);
+}
+
+.strategy-regime-toggle input {
+  margin: 0;
+}
+
+.strategy-regime-help-button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font: 700 16px/1 var(--font-sans);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-1);
+}
+
+.strategy-regime-help-button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.strategy-regime-help-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  outline-offset: 2px;
+}
+
+.regime-help-dialog {
+  position: fixed;
+  inset: 0;
+  display: none;
+  z-index: 80;
+}
+
+.regime-help-dialog.visible {
+  display: block;
+}
+
+.regime-help-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 18, 26, 0.46);
+  backdrop-filter: blur(3px);
+}
+
+.regime-help-panel {
+  position: relative;
+  width: min(1160px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  margin: 24px auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.regime-help-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--primary) 8%, var(--surface)), var(--surface)),
+    var(--surface);
+}
+
+.regime-help-body {
+  overflow-y: auto;
+  padding: 20px 22px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.regime-help-overview,
+.regime-help-section {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  padding: 18px;
+}
+
+.regime-help-kicker {
+  color: var(--text-soft);
+  font: 700 11px/1.1 var(--font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.regime-help-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.regime-help-overview-card {
+  min-height: 98px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.regime-help-overview-card strong {
+  color: var(--text);
+  font: 700 14px/1.35 var(--font-sans);
+}
+
+.regime-help-overview-card .muted {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.regime-help-overview-label {
+  color: var(--text-soft);
+  font: 600 11px/1.2 var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.regime-help-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.regime-help-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.regime-help-section.bull {
+  border-color: color-mix(in srgb, #0b8b63 26%, var(--border));
+  background: linear-gradient(180deg, color-mix(in srgb, #0b8b63 10%, var(--surface-2)), var(--surface-2));
+}
+
+.regime-help-section.bear {
+  border-color: color-mix(in srgb, #c03b2b 26%, var(--border));
+  background: linear-gradient(180deg, color-mix(in srgb, #c03b2b 9%, var(--surface-2)), var(--surface-2));
+}
+
+.regime-help-section.base {
+  margin-top: 16px;
+}
+
+.regime-help-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.regime-help-section-head h3 {
+  margin: 6px 0 0;
+  color: var(--text);
+  font: 700 18px/1.2 var(--font-sans);
+}
+
+.regime-help-section-head .muted {
+  max-width: 320px;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.regime-help-rule-grid,
+.regime-help-threshold-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.regime-help-rule-grid.three-col,
+.regime-help-threshold-grid.three-col {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.regime-help-rule-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.regime-help-rule-title,
+.regime-help-group-title {
+  color: var(--text);
+  font: 700 13px/1.2 var(--font-sans);
+}
+
+.regime-help-rule-pairs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.regime-help-rule-cell {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.regime-help-rule-cell span {
+  color: var(--text-soft);
+  font: 600 11px/1.2 var(--font-sans);
+}
+
+.regime-help-rule-cell strong {
+  color: var(--text);
+  font: 700 13px/1.25 var(--font-sans);
+}
+
+.regime-help-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .strategy-filter-chip {
   display: inline-flex;
   align-items: center;
@@ -1275,6 +1520,36 @@
 }
 
 @media (max-width: 980px) {
+  .regime-help-panel {
+    width: min(1120px, calc(100vw - 16px));
+    max-height: calc(100vh - 16px);
+    margin: 8px auto;
+  }
+
+  .regime-help-head,
+  .regime-help-section-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .regime-help-section-head .muted {
+    max-width: none;
+    text-align: left;
+  }
+
+  .regime-help-layout,
+  .regime-help-overview-grid,
+  .regime-help-rule-grid.three-col,
+  .regime-help-threshold-grid.three-col {
+    grid-template-columns: 1fr;
+  }
+
+  .regime-help-rule-grid,
+  .regime-help-threshold-grid,
+  .regime-help-rule-pairs {
+    grid-template-columns: 1fr;
+  }
+
   .thread-drawer {
     top: 0;
     right: 0;
@@ -1405,5 +1680,9 @@
   .research-grid,
   .sweep-filter-grid {
     grid-template-columns: 1fr;
+  }
+
+  .regime-help-body {
+    padding: 16px;
   }
 }

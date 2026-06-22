@@ -5,7 +5,7 @@ import readline from "node:readline";
 
 import { CliInvocationError, cliEnv, resolvePythonBinary } from "./python.js";
 import { repoRoot } from "./paths.js";
-import type { StrategyRankingPayload } from "./types.js";
+import type { BacktestOverrides, StrategyRankingPayload } from "./types.js";
 
 interface StrategyRankingDaemonRequestPayload {
   profilePath: string;
@@ -17,6 +17,7 @@ interface StrategyRankingDaemonRequestPayload {
   sliceStart?: string;
   sliceEnd?: string;
   limit: number;
+  overrides?: BacktestOverrides;
 }
 
 interface StrategyRankingDaemonResponse {
@@ -61,6 +62,7 @@ class StrategyRankingDaemonClient {
         slice_start: payload.sliceStart,
         slice_end: payload.sliceEnd,
         limit: payload.limit,
+        overrides: payload.overrides,
       },
     };
     return new Promise<StrategyRankingPayload>((resolve, reject) => {

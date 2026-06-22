@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from concurrent.futures import ProcessPoolExecutor
 from datetime import date, timedelta
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 
+from buy_low_sell_high.data.providers.yahoo_provider import write_bars_to_csv
 from buy_low_sell_high.domain.models import MarketBar, StrategyConfig
 from buy_low_sell_high.domain.money import D
 from buy_low_sell_high.reporting.strategy_explorer import build_slice_strategy_rankings, build_strategy_detail, build_strategy_explorer, filter_bars_to_slice
@@ -27,7 +30,27 @@ def bar(year: int, month: int, day: int, close: str) -> MarketBar:
     return dated_bar(date(year, month, day), close)
 
 
+def weekly_bar(start_friday: date, week_offset: int, close: str) -> MarketBar:
+    return MarketBar(
+        symbol="QQQ",
+        session_date=start_friday + timedelta(weeks=week_offset),
+        open=D(close),
+        high=D(close) + D("1"),
+        low=D(close) - D("1"),
+        close=D(close),
+        adj_close=D(close),
+        source="test",
+    )
+
+
 class StrategyExplorerTest(unittest.TestCase):
+    def _write_regime_csv(self, bars: list[MarketBar]) -> str:
+        temp_dir = TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        csv_path = Path(temp_dir.name) / "qqq.csv"
+        write_bars_to_csv(csv_path, bars)
+        return str(csv_path)
+
     def test_strategy_explorer_returns_catalog_payload(self) -> None:
         bars = [
             bar(2023, 12, 29, "10"),
@@ -143,6 +166,7 @@ class StrategyExplorerTest(unittest.TestCase):
         self.assertIn("BUY", payload["rows"][0]["display_params"])
         self.assertIn("cagr_pct", payload["rows"][0])
         self.assertIn("max_drawdown_pct", payload["rows"][0])
+        self.assertIn("trade_count", payload["rows"][0])
 
     def test_slice_strategy_rankings_limit_zero_returns_all_dynamic_combos(self) -> None:
         bars = [
@@ -229,6 +253,63 @@ class StrategyExplorerTest(unittest.TestCase):
         self.assertEqual(payload["meta"]["combo_count"], 726)
         self.assertEqual(len(payload["rows"]), 10)
         self.assertEqual(payload["rows"][0]["rank"], 1)
+
+    def test_slice_strategy_rankings_support_soxl_regime_rows(self) -> None:
+        bars = [
+            bar(2024, 4, 22, "10"),
+            bar(2024, 4, 23, "9"),
+            bar(2024, 4, 24, "11"),
+            bar(2024, 4, 25, "12"),
+        ]
+        regime_bars = [weekly_bar(date(2024, 1, 5), index, str(100 + index)) for index in range(15)] + [
+            weekly_bar(date(2024, 1, 5), 15, "113")
+        ]
+        config = StrategyConfig.from_mapping(
+            {
+                "symbol": "SOXL",
+                "thread_count": 5,
+                "stop_sessions": 30,
+                "initial_capital": 1000,
+                "execution_model": "ideal_same_close",
+                "price_basis": "adjusted_close",
+                "commission_bps": "0",
+                "transaction_tax_bps": "0",
+                "slippage_bps": "0",
+                "regime_enabled": True,
+                "regime_symbol": "QQQ",
+                "regime_csv_path": self._write_regime_csv(regime_bars),
+                "regime_base_stop_sessions": 30,
+                "regime_base_buy_pct": "0",
+                "regime_base_sell_pct": "0",
+                "regime_bull_stop_sessions": 40,
+                "regime_bull_buy_pct": "-2",
+                "regime_bull_sell_pct": "3",
+                "regime_bear_stop_sessions": 10,
+                "regime_bear_buy_pct": "-5",
+                "regime_bear_sell_pct": "1",
+            }
+        )
+
+        payload = build_slice_strategy_rankings(
+            bars,
+            config,
+            data_hash="fixture-hash",
+            execution_model="ideal_same_close",
+            price_basis="adjusted_close",
+            limit=10,
+            max_workers=1,
+        )
+
+        self.assertEqual(payload["meta"]["regime_enabled"], True)
+        self.assertEqual(payload["meta"]["regime_symbol"], "QQQ")
+        self.assertEqual(payload["meta"]["combo_count"], 192)
+        self.assertTrue(payload["meta"]["regime_config_hash"])
+        self.assertTrue(payload["meta"]["regime_data_hash"])
+        self.assertTrue(payload["rows"][0]["strategy_id"].startswith("rt"))
+        self.assertIn("Bull", payload["rows"][0]["display_params"])
+        self.assertIn("Bear", payload["rows"][0]["display_params"])
+        self.assertIn("bull_stop_sessions", payload["rows"][0])
+        self.assertIn("bear_sell_pct", payload["rows"][0])
 
 
 if __name__ == "__main__":

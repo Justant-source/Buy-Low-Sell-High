@@ -61,6 +61,14 @@ dashboard_npm() {
   npm --prefix "${ROOT_DIR}/dashboard" --script-shell /bin/bash "$@"
 }
 
+ensure_dashboard_dist() {
+  if [[ -f "${ROOT_DIR}/dashboard/dist/server.js" ]]; then
+    return
+  fi
+  echo "dashboard dist missing; running build first" >&2
+  dashboard_npm run build
+}
+
 activate_toolchain
 
 if [[ -z "${DATABASE_URL:-}" && -z "${SQLITE_PATH:-}" ]]; then
@@ -83,6 +91,7 @@ case "${subcommand}" in
     dashboard_npm test
     ;;
   start)
+    ensure_dashboard_dist
     exec node "${ROOT_DIR}/dashboard/dist/server.js" "$@"
     ;;
   npm)

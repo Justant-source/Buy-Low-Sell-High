@@ -13,6 +13,7 @@ class SymbolDefinition:
     actual_start_date: str | None = None
     underlying_symbol: str | None = None
     leverage_factor: str | None = None
+    transaction_tax_bps: str = "0"
 
 
 _SYMBOLS: dict[str, SymbolDefinition] = {
@@ -28,11 +29,18 @@ _SYMBOLS: dict[str, SymbolDefinition] = {
         dataset_start_date="2011-01-01",
         sync_mode="market_fallback",
     ),
+    "QQQ": SymbolDefinition(
+        symbol="QQQ",
+        csv_filename="qqq_daily_2011_present.csv",
+        dataset_start_date="2011-01-01",
+        sync_mode="market_fallback",
+    ),
     "000660": SymbolDefinition(
         symbol="000660",
         csv_filename="000660_daily_2015_present.csv",
         dataset_start_date="2015-01-01",
         sync_mode="naver_daily",
+        transaction_tax_bps="15",
     ),
     "0193T0": SymbolDefinition(
         symbol="0193T0",

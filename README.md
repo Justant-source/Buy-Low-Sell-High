@@ -64,6 +64,7 @@ PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile co
 - The script first uses system `node`/`npm` when available.
 - If the environment has no working system Node toolchain, it automatically downloads and reuses a local Node `v20.19.5` toolchain under `.tools/`.
 - The wrapper also forces `npm --script-shell /bin/bash`, which avoids the `spawn sh ENOENT` failure seen in restricted environments.
+- `./scripts/dashboard_exec.sh start` now auto-builds once if `dashboard/dist/server.js` is missing, so a clean checkout does not fail with a dead port.
 - If neither `DATABASE_URL` nor `SQLITE_PATH` is set, the wrapper defaults the dashboard research store to `data/runtime/buy-low-sell-high.sqlite`.
 - This requirement is intentional: future agents should not call raw `npm --prefix dashboard ...` unless they have already verified the local environment.
 
@@ -84,6 +85,7 @@ In the current Codex snap environment, the Docker CLI can be installed locally, 
 
 ## Dashboard Routes
 - Default dashboard port: `3232`
+- Default dashboard host binding: `0.0.0.0` (`HOST` or `DASHBOARD_HOST`로 override 가능)
 - `http://localhost:3232/backtests`
 - `http://localhost:3232/backtests/soxl`
 - `http://localhost:3232/backtests/tqqq`

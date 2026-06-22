@@ -1,0 +1,14 @@
+{
+  "data_hash": "5917d92df5fd9145eb88108b46f2d3502b6c37b4697c984aa2eaa6651deb1f65",
+  "end": "2026-06-18",
+  "errors": [],
+  "generated_at": "2026-06-21T14:56:48.729862+00:00",
+  "output_csv": "/home/justant/Data/Buy-Low-Sell-High/data/raw/qqq_daily_2011_present.csv",
+  "rows": 3888,
+  "source": "yahoo_chart",
+  "start": "2011-01-03",
+  "symbol": "QQQ",
+  "warnings": [
+    "Requested start date 2011-01-01 is not a trading session; first row is 2011-01-03"
+  ]
+}

@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && rm -rf dist/public && mkdir -p dist && cp -R public dist/public",
     "dev": "npm run build && node dist/server.js",
     "start": "node dist/server.js",
-    "test": "npm run build"
+    "test": "npm run build && node --test tests/*.test.mjs"
   },
   "dependencies": {
     "express": "^4.19.2",

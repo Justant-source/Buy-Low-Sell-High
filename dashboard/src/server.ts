@@ -14,6 +14,7 @@ import { defaultWorkspaceDefinition } from "./lib/workspaces.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? process.env.DASHBOARD_PORT ?? 3232);
+const host = process.env.HOST ?? process.env.DASHBOARD_HOST ?? "0.0.0.0";
 const backtestService = new BacktestService();
 const startedAt = Date.now();
 
@@ -64,8 +65,8 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`Buy-Low-Sell-High dashboard listening on ${port}`);
+app.listen(port, host, () => {
+  console.log(`Buy-Low-Sell-High dashboard listening on http://${host}:${port}`);
   console.log(`Research store: ${describeResearchStoreTarget()}`);
   void backtestService.warmDefaultStrategyPresetRankings().then(() => {
     console.log("Preset ranking warmup completed for default workspaces");

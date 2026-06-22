@@ -26,6 +26,43 @@ function parseOptionalNumberField(
   return parsed;
 }
 
+function parseOptionalSignedNumberField(
+  value: unknown,
+  fieldName: string,
+  { integer = false }: { integer?: boolean } = {},
+): number | undefined {
+  if (value == null || value === "") {
+    return undefined;
+  }
+  const parsed = parseNumber(value, Number.NaN);
+  if (!Number.isFinite(parsed)) {
+    throw new HttpError(400, `Invalid ${fieldName}`);
+  }
+  if (integer && !Number.isInteger(parsed)) {
+    throw new HttpError(400, `${fieldName} must be an integer`);
+  }
+  return parsed;
+}
+
+function parseOptionalBooleanField(value: unknown, fieldName: string): boolean | undefined {
+  if (value == null || value === "") {
+    return undefined;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") {
+      return true;
+    }
+    if (normalized === "false") {
+      return false;
+    }
+  }
+  throw new HttpError(400, `Invalid ${fieldName}`);
+}
+
 function parseOptionalEnumField<T extends string>(value: unknown, fieldName: string, allowed: readonly T[]): T | undefined {
   if (value == null || value === "") {
     return undefined;
@@ -36,8 +73,12 @@ function parseOptionalEnumField<T extends string>(value: unknown, fieldName: str
   return value as T;
 }
 
-function parseOverrides(source: Record<string, unknown>): BacktestOverrides | undefined {
+function parseOverrides(
+  source: Record<string, unknown>,
+  options: { includePriceBasis?: boolean } = {},
+): BacktestOverrides | undefined {
   const overrides: BacktestOverrides = {};
+  const includePriceBasis = options.includePriceBasis ?? true;
   const threadCount = parseOptionalNumberField(source.threadCount, "threadCount", { integer: true, min: 1 });
   const stopSessions = parseOptionalNumberField(source.stopSessions, "stopSessions", { integer: true, min: 1 });
   const takeProfitPct = parseOptionalNumberField(source.takeProfitPct, "takeProfitPct", { min: 0 });
@@ -47,16 +88,48 @@ function parseOverrides(source: Record<string, unknown>): BacktestOverrides | un
     integer: true,
     min: 1,
   });
+  const regimeEnabled = parseOptionalBooleanField(source.regimeEnabled, "regimeEnabled");
+  const regimeSymbol = typeof source.regimeSymbol === "string" && source.regimeSymbol.trim() !== "" ? source.regimeSymbol.trim() : undefined;
+  const regimeRsiPeriodWeeks = parseOptionalNumberField(source.regimeRsiPeriodWeeks, "regimeRsiPeriodWeeks", {
+    integer: true,
+    min: 1,
+  });
+  const regimeBearHighThreshold = parseOptionalSignedNumberField(source.regimeBearHighThreshold, "regimeBearHighThreshold");
+  const regimeBearMidLowThreshold = parseOptionalSignedNumberField(source.regimeBearMidLowThreshold, "regimeBearMidLowThreshold");
+  const regimeBearMidHighThreshold = parseOptionalSignedNumberField(source.regimeBearMidHighThreshold, "regimeBearMidHighThreshold");
+  const regimeBullLowThreshold = parseOptionalSignedNumberField(source.regimeBullLowThreshold, "regimeBullLowThreshold");
+  const regimeBullMidLowThreshold = parseOptionalSignedNumberField(source.regimeBullMidLowThreshold, "regimeBullMidLowThreshold");
+  const regimeBullMidHighThreshold = parseOptionalSignedNumberField(source.regimeBullMidHighThreshold, "regimeBullMidHighThreshold");
+  const regimeBaseStopSessions = parseOptionalNumberField(source.regimeBaseStopSessions, "regimeBaseStopSessions", {
+    integer: true,
+    min: 1,
+  });
+  const regimeBaseBuyPct = parseOptionalSignedNumberField(source.regimeBaseBuyPct, "regimeBaseBuyPct");
+  const regimeBaseSellPct = parseOptionalSignedNumberField(source.regimeBaseSellPct, "regimeBaseSellPct");
+  const regimeBullStopSessions = parseOptionalNumberField(source.regimeBullStopSessions, "regimeBullStopSessions", {
+    integer: true,
+    min: 1,
+  });
+  const regimeBullBuyPct = parseOptionalSignedNumberField(source.regimeBullBuyPct, "regimeBullBuyPct");
+  const regimeBullSellPct = parseOptionalSignedNumberField(source.regimeBullSellPct, "regimeBullSellPct");
+  const regimeBearStopSessions = parseOptionalNumberField(source.regimeBearStopSessions, "regimeBearStopSessions", {
+    integer: true,
+    min: 1,
+  });
+  const regimeBearBuyPct = parseOptionalSignedNumberField(source.regimeBearBuyPct, "regimeBearBuyPct");
+  const regimeBearSellPct = parseOptionalSignedNumberField(source.regimeBearSellPct, "regimeBearSellPct");
   const takeProfitOperator = parseOptionalEnumField(source.takeProfitOperator, "takeProfitOperator", ["gt", "gte"]);
   const sizingMode = parseOptionalEnumField(source.sizingMode, "sizingMode", [
     "fixed_principal",
     "thread_compound",
     "portfolio_rebalance_compound",
   ]);
-  const priceBasis = parseOptionalEnumField(source.priceBasis, "priceBasis", [
-    "adjusted_close",
-    "raw_close_with_actions",
-  ]);
+  const priceBasis = includePriceBasis
+    ? parseOptionalEnumField(source.priceBasis, "priceBasis", [
+      "adjusted_close",
+      "raw_close_with_actions",
+    ])
+    : undefined;
   if (threadCount != null) overrides.threadCount = threadCount;
   if (stopSessions != null) overrides.stopSessions = stopSessions;
   if (takeProfitPct != null) overrides.takeProfitPct = takeProfitPct;
@@ -66,6 +139,24 @@ function parseOverrides(source: Record<string, unknown>): BacktestOverrides | un
   if (maxEntriesPerSession != null) overrides.maxEntriesPerSession = maxEntriesPerSession;
   if (sizingMode) overrides.sizingMode = sizingMode;
   if (priceBasis) overrides.priceBasis = priceBasis;
+  if (regimeEnabled != null) overrides.regimeEnabled = regimeEnabled;
+  if (regimeSymbol) overrides.regimeSymbol = regimeSymbol;
+  if (regimeRsiPeriodWeeks != null) overrides.regimeRsiPeriodWeeks = regimeRsiPeriodWeeks;
+  if (regimeBearHighThreshold != null) overrides.regimeBearHighThreshold = regimeBearHighThreshold;
+  if (regimeBearMidLowThreshold != null) overrides.regimeBearMidLowThreshold = regimeBearMidLowThreshold;
+  if (regimeBearMidHighThreshold != null) overrides.regimeBearMidHighThreshold = regimeBearMidHighThreshold;
+  if (regimeBullLowThreshold != null) overrides.regimeBullLowThreshold = regimeBullLowThreshold;
+  if (regimeBullMidLowThreshold != null) overrides.regimeBullMidLowThreshold = regimeBullMidLowThreshold;
+  if (regimeBullMidHighThreshold != null) overrides.regimeBullMidHighThreshold = regimeBullMidHighThreshold;
+  if (regimeBaseStopSessions != null) overrides.regimeBaseStopSessions = regimeBaseStopSessions;
+  if (regimeBaseBuyPct != null) overrides.regimeBaseBuyPct = regimeBaseBuyPct;
+  if (regimeBaseSellPct != null) overrides.regimeBaseSellPct = regimeBaseSellPct;
+  if (regimeBullStopSessions != null) overrides.regimeBullStopSessions = regimeBullStopSessions;
+  if (regimeBullBuyPct != null) overrides.regimeBullBuyPct = regimeBullBuyPct;
+  if (regimeBullSellPct != null) overrides.regimeBullSellPct = regimeBullSellPct;
+  if (regimeBearStopSessions != null) overrides.regimeBearStopSessions = regimeBearStopSessions;
+  if (regimeBearBuyPct != null) overrides.regimeBearBuyPct = regimeBearBuyPct;
+  if (regimeBearSellPct != null) overrides.regimeBearSellPct = regimeBearSellPct;
   return Object.keys(overrides).length ? overrides : undefined;
 }
 
@@ -87,6 +178,7 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
         "adjusted_close",
         "raw_close_with_actions",
       ]);
+      const overrides = parseOverrides(req.query as Record<string, unknown>, { includePriceBasis: false });
       res.json(
         await backtestService.strategyExplorer({
           profileId,
@@ -94,6 +186,7 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
           initialCapital,
           executionModel,
           priceBasis,
+          overrides,
         }),
       );
     }),
@@ -117,6 +210,7 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
       const limit = parseOptionalNumberField(req.query.limit, "limit", { integer: true, min: 0 }) ?? 0;
       const sliceStart = typeof req.query.sliceStart === "string" && req.query.sliceStart.trim() !== "" ? req.query.sliceStart : undefined;
       const sliceEnd = typeof req.query.sliceEnd === "string" && req.query.sliceEnd.trim() !== "" ? req.query.sliceEnd : undefined;
+      const overrides = parseOverrides(req.query as Record<string, unknown>, { includePriceBasis: false });
       res.json(
         await backtestService.strategyRanking({
           profileId,
@@ -127,6 +221,7 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
           sliceStart,
           sliceEnd,
           limit,
+          overrides,
         }),
       );
     }),
@@ -150,6 +245,7 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
         "adjusted_close",
         "raw_close_with_actions",
       ]);
+      const overrides = parseOverrides(req.query as Record<string, unknown>, { includePriceBasis: false });
       res.json(
         await backtestService.strategyDetail({
           profileId,
@@ -160,6 +256,7 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
           sliceEnd,
           executionModel,
           priceBasis,
+          overrides,
         }),
       );
     }),
@@ -199,6 +296,7 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
         "adjusted_close",
         "raw_close_with_actions",
       ]);
+      const overrides = parseOverrides(req.query as Record<string, unknown>, { includePriceBasis: false });
       res.json(
         await backtestService.threadTimeline({
           profileId,
@@ -209,6 +307,7 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
           sliceEnd,
           executionModel,
           priceBasis,
+          overrides,
         }),
       );
     }),

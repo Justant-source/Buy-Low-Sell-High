@@ -71,6 +71,19 @@ SOXL checked-in official baseline과 현재 TQQQ official profile은 모두 `5x4
 - 전략 탭 현재 우선 정렬: `cagr desc`, `max_drawdown desc`, `full_return desc`
 - 종료 자산이 `0` 이하인 slice에서는 CAGR을 정의하지 않고 총수익률 fallback을 사용한다.
 
+### SOXL QQQ Regime 모드
+
+- `SOXL`만 `QQQ` 보조 시계열을 사용한 regime 모드를 지원한다.
+- regime 입력은 `regime_enabled`, `regime_symbol=QQQ`, `regime_rsi_period_weeks=14`, bear/bull threshold, `regime_base_*`, `regime_bull_*`, `regime_bear_*`다.
+- `QQQ`는 Yahoo 일봉을 주봉 종가로 집계한 뒤 `14-week Wilder RSI`를 계산한다.
+- 각 SOXL 세션은 `직전 완료 주`의 판정만 사용한다. 현재 진행 중인 주의 RSI 값은 사용하지 않는다.
+- 판정 규칙:
+  - `bear`: `RSI > 65` 영역에서 하락, 또는 `40 < RSI < 50` 구간에서 하락, 또는 `50` 하향 이탈
+  - `bull`: `50` 상향 돌파, 또는 `50 < RSI < 60` 구간에서 상승, 또는 `RSI < 35` 영역에서 상승
+- 어느 조건에도 걸리지 않으면 직전 regime을 유지한다.
+- 최초 판정 전 구간은 `base` 파라미터를 사용한다.
+- regime이 확정되면 해당 세션의 신규 진입은 `base` 또는 `bull` 또는 `bear`별 `손절일`, `매수%`, `매도%`를 사용하고, 이미 열린 포지션은 진입 시점 파라미터를 끝까지 유지한다.
+
 ---
 
 ## 4. 매매 로직
@@ -155,7 +168,8 @@ session_price <= entry_price × (1 - stop_loss_pct / 100)
 | `year_boundary` | `carry` | 연도 경계 처리 (현재 엔진 미소비) |
 | `thread_selector` | `round_robin` | 진입할 스레드 선택 방식 |
 | `end_of_test` | `mark_to_market` | 백테스트 종료 처리 |
-| `commission_bps` | 0 | 수수료 (basis points) |
+| `commission_bps` | 25 | 거래 수수료 0.25% (basis points) |
+| `transaction_tax_bps` | symbol default | 기타거래세 (basis points) |
 | `slippage_bps` | 0 | 슬리피지 (basis points) |
 
 ---
@@ -322,6 +336,8 @@ session_price <= entry_price × (1 - stop_loss_pct / 100)
 10. **공식 golden fixture와 멘토 fixture를 임의 수정하지 않는다.** drift를 숨기기 위해 fixture를 바꾸는 행위는 레퍼런스 무결성 원칙 위반이다.
 11. **slice 랭킹용 CAGR은 항상 유한해야 한다.** 종료 자산이 `0` 이하인 slice에서는 총수익률 fallback을 사용한다.
 12. **전략 탭 slice 비교는 동일한 바 집합 재실행으로 맞춘다.** `콤보 랭킹`, `Rebased Equity`, `월별`, `롤링`, `Thread Timeline`이 전체 기간 carry run 일부와 slice 재실행 결과를 섞어 쓰면 안 된다.
+13. **SOXL regime 판정은 직전 완료 주의 `QQQ 14-week Wilder RSI`만 사용한다.** 당주 진행 중 데이터로 bull / bear를 바꾸면 안 된다.
+14. **neutral 주간은 직전 regime을 유지한다.** 어떤 주도 bull / bear에 속하지 않는다고 해서 자동으로 base로 되돌리면 안 된다.
 
 ---
 

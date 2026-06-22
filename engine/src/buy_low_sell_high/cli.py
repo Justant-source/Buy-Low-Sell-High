@@ -82,6 +82,7 @@ def _add_strategy_override_arguments(
     *,
     include_thread_count: bool = True,
     include_stop_sessions: bool = True,
+    include_price_basis: bool = True,
 ) -> None:
     if include_thread_count:
         parser.add_argument("--thread-count", type=int)
@@ -93,7 +94,27 @@ def _add_strategy_override_arguments(
     parser.add_argument("--stop-loss-pct")
     parser.add_argument("--max-entries-per-session", type=int)
     parser.add_argument("--sizing-mode")
-    parser.add_argument("--price-basis")
+    if include_price_basis:
+        parser.add_argument("--price-basis")
+    parser.add_argument("--regime-enabled", action="store_true")
+    parser.add_argument("--regime-symbol")
+    parser.add_argument("--regime-rsi-period-weeks", type=int)
+    parser.add_argument("--regime-bear-high-threshold")
+    parser.add_argument("--regime-bear-mid-low-threshold")
+    parser.add_argument("--regime-bear-mid-high-threshold")
+    parser.add_argument("--regime-bull-low-threshold")
+    parser.add_argument("--regime-bull-mid-low-threshold")
+    parser.add_argument("--regime-bull-mid-high-threshold")
+    parser.add_argument("--regime-base-stop-sessions", type=int)
+    parser.add_argument("--regime-base-buy-pct")
+    parser.add_argument("--regime-base-sell-pct")
+    parser.add_argument("--regime-bull-stop-sessions", type=int)
+    parser.add_argument("--regime-bull-buy-pct")
+    parser.add_argument("--regime-bull-sell-pct")
+    parser.add_argument("--regime-bear-stop-sessions", type=int)
+    parser.add_argument("--regime-bear-buy-pct")
+    parser.add_argument("--regime-bear-sell-pct")
+    parser.add_argument("--regime-csv-path")
 
 
 def _strategy_overrides_from_args(args: argparse.Namespace) -> dict[str, object]:
@@ -107,6 +128,25 @@ def _strategy_overrides_from_args(args: argparse.Namespace) -> dict[str, object]
         "max_entries_per_session": getattr(args, "max_entries_per_session", None),
         "sizing_mode": getattr(args, "sizing_mode", None),
         "price_basis": getattr(args, "price_basis", None),
+        "regime_enabled": True if getattr(args, "regime_enabled", False) else None,
+        "regime_symbol": getattr(args, "regime_symbol", None),
+        "regime_rsi_period_weeks": getattr(args, "regime_rsi_period_weeks", None),
+        "regime_bear_high_threshold": getattr(args, "regime_bear_high_threshold", None),
+        "regime_bear_mid_low_threshold": getattr(args, "regime_bear_mid_low_threshold", None),
+        "regime_bear_mid_high_threshold": getattr(args, "regime_bear_mid_high_threshold", None),
+        "regime_bull_low_threshold": getattr(args, "regime_bull_low_threshold", None),
+        "regime_bull_mid_low_threshold": getattr(args, "regime_bull_mid_low_threshold", None),
+        "regime_bull_mid_high_threshold": getattr(args, "regime_bull_mid_high_threshold", None),
+        "regime_base_stop_sessions": getattr(args, "regime_base_stop_sessions", None),
+        "regime_base_buy_pct": getattr(args, "regime_base_buy_pct", None),
+        "regime_base_sell_pct": getattr(args, "regime_base_sell_pct", None),
+        "regime_bull_stop_sessions": getattr(args, "regime_bull_stop_sessions", None),
+        "regime_bull_buy_pct": getattr(args, "regime_bull_buy_pct", None),
+        "regime_bull_sell_pct": getattr(args, "regime_bull_sell_pct", None),
+        "regime_bear_stop_sessions": getattr(args, "regime_bear_stop_sessions", None),
+        "regime_bear_buy_pct": getattr(args, "regime_bear_buy_pct", None),
+        "regime_bear_sell_pct": getattr(args, "regime_bear_sell_pct", None),
+        "regime_csv_path": getattr(args, "regime_csv_path", None),
     }
     return {key: value for key, value in mapping.items() if value is not None}
 
@@ -133,6 +173,29 @@ def _serialize_config(config: StrategyConfig) -> dict[str, object]:
         "sizing_mode": config.sizing_mode.value,
         "year_boundary": config.year_boundary.value,
         "end_of_test": config.end_of_test.value,
+        "commission_bps": str(config.commission_bps),
+        "transaction_tax_bps": str(config.transaction_tax_bps),
+        "slippage_bps": str(config.slippage_bps),
+        "regime_enabled": config.regime_enabled,
+        "regime_symbol": config.regime_symbol,
+        "regime_rsi_period_weeks": config.regime_rsi_period_weeks,
+        "regime_bear_high_threshold": str(config.regime_bear_high_threshold),
+        "regime_bear_mid_low_threshold": str(config.regime_bear_mid_low_threshold),
+        "regime_bear_mid_high_threshold": str(config.regime_bear_mid_high_threshold),
+        "regime_bull_low_threshold": str(config.regime_bull_low_threshold),
+        "regime_bull_mid_low_threshold": str(config.regime_bull_mid_low_threshold),
+        "regime_bull_mid_high_threshold": str(config.regime_bull_mid_high_threshold),
+        "regime_base_stop_sessions": config.regime_base_stop_sessions,
+        "regime_base_buy_pct": str(config.regime_base_buy_pct),
+        "regime_base_sell_pct": str(config.regime_base_sell_pct),
+        "regime_bull_stop_sessions": config.regime_bull_stop_sessions,
+        "regime_bull_buy_pct": str(config.regime_bull_buy_pct),
+        "regime_bull_sell_pct": str(config.regime_bull_sell_pct),
+        "regime_bear_stop_sessions": config.regime_bear_stop_sessions,
+        "regime_bear_buy_pct": str(config.regime_bear_buy_pct),
+        "regime_bear_sell_pct": str(config.regime_bear_sell_pct),
+        "regime_config_hash": config.regime_config_hash(),
+        "regime_csv_path": config.regime_csv_path,
         "config_hash": config.config_hash(),
         "initial_capital": str(config.initial_capital),
     }
@@ -145,6 +208,8 @@ def _serialize_run(run: object, config: StrategyConfig) -> dict[str, object]:
         "code_commit": run.code_commit,
         "data_hash": run.data_hash,
         "config_hash": config.config_hash(),
+        "regime_data_hash": run.regime_data_hash,
+        "regime_config_hash": run.regime_config_hash,
         "config": _serialize_config(config),
         "metrics": {key: str(value) for key, value in run.metrics.items()},
         "yearly": {
@@ -163,6 +228,7 @@ def _serialize_run(run: object, config: StrategyConfig) -> dict[str, object]:
                 "take_profits": snapshot.take_profits,
                 "time_stops": snapshot.time_stops,
                 "skipped_entries": snapshot.skipped_entries,
+                "applied_regime": snapshot.applied_regime,
             }
             for snapshot in run.daily
         ],
@@ -174,13 +240,20 @@ def _serialize_run(run: object, config: StrategyConfig) -> dict[str, object]:
                 "entry_price": str(trade.entry_price),
                 "shares": str(trade.shares),
                 "invested_amount": str(trade.invested_amount),
+                "entry_fee": str(trade.entry_fee),
                 "exit_signal_date": trade.exit_signal_date.isoformat() if trade.exit_signal_date else None,
                 "fill_exit_date": trade.fill_exit_date.isoformat() if trade.fill_exit_date else None,
                 "exit_price": str(trade.exit_price) if trade.exit_price is not None else None,
+                "exit_fee": str(trade.exit_fee),
+                "total_fees": str(trade.entry_fee + trade.exit_fee),
                 "holding_sessions": trade.holding_sessions,
                 "pnl": str(trade.pnl),
                 "return_pct": str(trade.return_pct),
                 "close_reason": trade.close_reason.value if trade.close_reason else None,
+                "entry_regime": trade.entry_regime,
+                "entry_stop_sessions": trade.entry_stop_sessions,
+                "entry_buy_pct": str(trade.entry_buy_pct),
+                "entry_sell_pct": str(trade.entry_sell_pct),
             }
             for trade in run.trades
         ],
@@ -301,7 +374,7 @@ def _parse_combo_csv(raw: str) -> tuple[int, ...]:
 
 
 def _backtest_strategy_explorer(args: argparse.Namespace) -> int:
-    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    config = _load_strategy_config_with_overrides(args)
     bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     return _print_json(
         build_strategy_explorer(
@@ -316,7 +389,7 @@ def _backtest_strategy_explorer(args: argparse.Namespace) -> int:
 
 
 def _backtest_strategy_ranking(args: argparse.Namespace) -> int:
-    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    config = _load_strategy_config_with_overrides(args)
     bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     sliced_bars = filter_bars_to_slice(
         bars,
@@ -337,7 +410,7 @@ def _backtest_strategy_ranking(args: argparse.Namespace) -> int:
 
 
 def _backtest_strategy_detail(args: argparse.Namespace) -> int:
-    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    config = _load_strategy_config_with_overrides(args)
     bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     sliced_bars = filter_bars_to_slice(
         bars,
@@ -357,7 +430,7 @@ def _backtest_strategy_detail(args: argparse.Namespace) -> int:
 
 
 def _backtest_parameter_sweep(args: argparse.Namespace) -> int:
-    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    config = _load_strategy_config_with_overrides(args)
     bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     return _print_json(
         build_parameter_sweep(
@@ -396,7 +469,7 @@ def _backtest_official_matrix(args: argparse.Namespace) -> int:
 
 
 def _backtest_thread_timeline(args: argparse.Namespace) -> int:
-    config = load_strategy_config(args.profile, initial_capital=args.initial_capital)
+    config = _load_strategy_config_with_overrides(args)
     bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
     sliced_bars = filter_bars_to_slice(
         bars,
@@ -552,6 +625,7 @@ def main() -> int:
         default="adjusted_close",
         choices=["adjusted_close", "raw_close_with_actions"],
     )
+    _add_strategy_override_arguments(backtest_strategy_explorer_parser, include_price_basis=False)
     backtest_strategy_explorer_parser.set_defaults(handler=_backtest_strategy_explorer)
     backtest_strategy_ranking_parser = backtest_subparsers.add_parser("strategy-ranking")
     backtest_strategy_ranking_parser.add_argument("--profile", required=True)
@@ -572,6 +646,12 @@ def main() -> int:
         default="adjusted_close",
         choices=["adjusted_close", "raw_close_with_actions"],
     )
+    _add_strategy_override_arguments(
+        backtest_strategy_ranking_parser,
+        include_thread_count=False,
+        include_stop_sessions=False,
+        include_price_basis=False,
+    )
     backtest_strategy_ranking_parser.set_defaults(handler=_backtest_strategy_ranking)
     backtest_strategy_detail_parser = backtest_subparsers.add_parser("strategy-detail")
     backtest_strategy_detail_parser.add_argument("--profile", required=True)
@@ -591,6 +671,12 @@ def main() -> int:
         default="adjusted_close",
         choices=["adjusted_close", "raw_close_with_actions"],
     )
+    _add_strategy_override_arguments(
+        backtest_strategy_detail_parser,
+        include_thread_count=False,
+        include_stop_sessions=False,
+        include_price_basis=False,
+    )
     backtest_strategy_detail_parser.set_defaults(handler=_backtest_strategy_detail)
     backtest_parameter_sweep_parser = backtest_subparsers.add_parser("parameter-sweep")
     backtest_parameter_sweep_parser.add_argument("--profile", required=True)
@@ -607,6 +693,12 @@ def main() -> int:
         "--price-basis",
         default="adjusted_close",
         choices=["adjusted_close", "raw_close_with_actions"],
+    )
+    _add_strategy_override_arguments(
+        backtest_parameter_sweep_parser,
+        include_thread_count=False,
+        include_stop_sessions=False,
+        include_price_basis=False,
     )
     backtest_parameter_sweep_parser.set_defaults(handler=_backtest_parameter_sweep)
     backtest_official_explorer_parser = backtest_subparsers.add_parser("official-explorer")
@@ -642,6 +734,12 @@ def main() -> int:
         "--price-basis",
         default="adjusted_close",
         choices=["adjusted_close", "raw_close_with_actions"],
+    )
+    _add_strategy_override_arguments(
+        backtest_thread_timeline_parser,
+        include_thread_count=False,
+        include_stop_sessions=False,
+        include_price_basis=False,
     )
     backtest_thread_timeline_parser.set_defaults(handler=_backtest_thread_timeline)
     backtest_mentor_matrix_parser = backtest_subparsers.add_parser("mentor-matrix")

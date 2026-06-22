@@ -6,7 +6,8 @@ from decimal import Decimal
 from typing import Any
 
 from ..backtest.engine import run_backtest
-from ..backtest.execution import signal_price
+from ..backtest.execution import effective_buy_fee_amount, effective_sell_fee_amount, signal_price
+from ..backtest.regime import load_regime_context
 from ..backtest.sizing import entry_budget
 from ..domain.enums import CloseReason, ThreadState
 from ..domain.models import CapitalThread, MarketBar, StrategyConfig, Trade, compute_trade_pnl
@@ -40,6 +41,8 @@ def _make_trade_id(strategy_id: str, thread_id: int, entry_date: date, sequence:
 def _serialize_interval(position: dict[str, Any], period_end: date) -> dict[str, Any]:
     exit_trade = position.get("closed_trade")
     end_date = exit_trade.fill_exit_date if exit_trade and exit_trade.fill_exit_date else None
+    entry_fee = D(position.get("entry_fee", ZERO))
+    exit_fee = D(exit_trade.exit_fee) if exit_trade else ZERO
     return {
         "trade_id": position["trade_id"],
         "thread_id": position["thread_id"],
@@ -50,6 +53,9 @@ def _serialize_interval(position: dict[str, Any], period_end: date) -> dict[str,
         "exit_price": str(exit_trade.exit_price) if exit_trade and exit_trade.exit_price is not None else None,
         "shares": str(position["entry_shares"]),
         "invested_amount": str(position["invested_amount"]),
+        "entry_fee": str(entry_fee),
+        "exit_fee": str(exit_fee),
+        "total_fees": str(quantize_money(entry_fee + exit_fee)),
         "close_reason": exit_trade.close_reason.value if exit_trade and exit_trade.close_reason else None,
         "pnl": str(exit_trade.pnl) if exit_trade else None,
         "return_pct": str(exit_trade.return_pct) if exit_trade else None,
@@ -73,13 +79,14 @@ def build_thread_timeline(
         raise ValueError("No bars provided")
 
     strategy_spec = resolve_strategy_spec(strategy_id, catalog=catalog)
+    regime_context = load_regime_context(bars, base_config)
     config = build_strategy_config(
         base_config,
         strategy_spec,
         execution_model=execution_model,
         price_basis=price_basis,
     )
-    run = run_backtest(bars, config, data_hash=data_hash)
+    run = run_backtest(bars, config, data_hash=data_hash, regime_context=regime_context)
     period_start = bars[0].session_date
     period_end = bars[-1].session_date
     daily_by_date = {snapshot.session_date: snapshot for snapshot in run.daily}
@@ -154,6 +161,12 @@ def build_thread_timeline(
                 entry_price = Decimal(event.price) if event.price is not None else session_price
                 shares = matched_trade.shares if matched_trade is not None else quantize_entry_shares(D(budget) / D(entry_price))
                 invested_amount = matched_trade.invested_amount if matched_trade is not None else quantize_money(shares * D(entry_price))
+                entry_fee = matched_trade.entry_fee if matched_trade is not None else effective_buy_fee_amount(
+                    invested_amount,
+                    config.commission_bps,
+                    config.transaction_tax_bps,
+                    config.slippage_bps,
+                )
                 interval_sequence += 1
                 trade_id = _make_trade_id(strategy_id, thread_id, bar.session_date, interval_sequence)
                 position = {
@@ -166,6 +179,7 @@ def build_thread_timeline(
                     "entry_shares": shares,
                     "current_shares": shares,
                     "invested_amount": invested_amount,
+                    "entry_fee": D(entry_fee),
                     "matched_trade": matched_trade,
                     "closed_trade": None,
                 }
@@ -185,6 +199,8 @@ def build_thread_timeline(
                         "entry_price": str(position["entry_price"]),
                         "shares": str(position["entry_shares"]),
                         "invested_amount": str(position["invested_amount"]),
+                        "entry_fee": str(position["entry_fee"]),
+                        "entry_regime": matched_trade.entry_regime if matched_trade is not None else "base",
                     }
                 )
                 continue
@@ -206,9 +222,16 @@ def build_thread_timeline(
                     entry_price=position["entry_price"],
                     shares=position["entry_shares"],
                     invested_amount=position["invested_amount"],
+                    entry_fee=D(position.get("entry_fee", ZERO)),
                     exit_signal_date=bar.session_date,
                     fill_exit_date=bar.session_date,
                     exit_price=D(exit_price),
+                    exit_fee=effective_sell_fee_amount(
+                        quantize_money(position["current_shares"] * D(exit_price)),
+                        config.commission_bps,
+                        config.transaction_tax_bps,
+                        config.slippage_bps,
+                    ),
                     holding_sessions=daily_snapshot.session_index - position["entry_session_index"],
                     close_reason=close_reason,
                 )
@@ -233,9 +256,13 @@ def build_thread_timeline(
                     "close_reason": matched_trade.close_reason.value if matched_trade.close_reason else close_reason.value,
                     "entry_price": str(position["entry_price"]),
                     "exit_price": str(matched_trade.exit_price if matched_trade.exit_price is not None else exit_price),
+                    "entry_fee": str(position.get("entry_fee", ZERO)),
+                    "exit_fee": str(matched_trade.exit_fee),
+                    "total_fees": str(quantize_money(D(position.get("entry_fee", ZERO)) + D(matched_trade.exit_fee))),
                     "pnl": str(matched_trade.pnl),
                     "return_pct": str(matched_trade.return_pct),
                     "holding_sessions": matched_trade.holding_sessions,
+                    "entry_regime": matched_trade.entry_regime,
                 }
             )
 
@@ -251,6 +278,7 @@ def build_thread_timeline(
                     "entry_price": str(position["current_entry_price"]),
                     "shares": str(position["current_shares"]),
                     "invested_amount": str(position["invested_amount"]),
+                    "entry_fee": str(position.get("entry_fee", ZERO)),
                     "mark_price": str(session_price),
                     "marked_value": str(marked_value),
                     "unrealized_pnl": str(unrealized_pnl),
@@ -267,6 +295,7 @@ def build_thread_timeline(
                 "entries": len(entry_batch),
                 "exit_count": len(exit_batch),
                 "skipped_entries": daily_snapshot.skipped_entries,
+                "applied_regime": daily_snapshot.applied_regime,
                 "entry_batch": entry_batch,
                 "exit_batch": exit_batch,
                 "open_positions": open_position_rows,
@@ -300,6 +329,13 @@ def build_thread_timeline(
             "code_commit": run.code_commit,
             "execution_model": config.execution_model.value,
             "price_basis": config.price_basis.value,
+            "commission_bps": str(config.commission_bps),
+            "transaction_tax_bps": str(config.transaction_tax_bps),
+            "slippage_bps": str(config.slippage_bps),
+            "regime_enabled": config.regime_enabled,
+            "regime_symbol": config.regime_symbol,
+            "regime_data_hash": run.regime_data_hash,
+            "regime_config_hash": run.regime_config_hash,
         },
         "lanes": lane_payload,
         "sessions": sessions,
