@@ -8,8 +8,8 @@
 - 공식 제품 게이트는 현재 SOXL `official_reference_matrix.json`과 `official_explorer_summary.json`에 대한 exact golden 비교다.
 - 공식 기준선 계열은 Yahoo 스냅샷, `price_basis=adjusted_close`, `execution_model=ideal_same_close`, `sizing_mode=fixed_principal`을 사용한다.
 - checked-in 제품 게이트는 `SOXL`에 있고, `TQQQ`는 같은 공식 기준선 계열을 runtime canonical profile로만 사용한다.
-- 공식 기본 프로필은 `soxl_official_ddeolsao_pal_v1`이며, 현재 코어 6조합 중 `5x40`을 채택한다.
-- 공식 프로필 선정 기준은 `mean_segment_return desc`, `segment_stddev asc`, `full_return desc`다.
+- 공식 기본 프로필은 `soxl_official_ddeolsao_pal_v1`이며, 현재 `5x40 / buy 0 / sell 0` baseline으로 고정한다.
+- 공식 코어 비교 집합은 `5x30`, `5x40`, `6x30`, `6x40`, `7x30`, `7x40` 6개다.
 - `official-explorer`와 `official-matrix`는 위 공식 기준선을 재현하는 canonical 리포트다.
 - 2026-06-20 기준 공식 golden은 idle-cash preservation과 `ENTRY_SKIPPED` semantics를 반영한 상태여야 한다.
 - `Strategy Explorer`와 `Sweep Explorer`의 일반 연구 경로는 계속 유지하되, 기본 스윕 평가는 `execution_model=next_open`, `price_basis=adjusted_close`를 사용한다.
@@ -21,4 +21,5 @@
 - 멘토 parity와 `mentor_floor`는 `legacy comparison` 진단으로만 유지한다.
 - `mentor_floor` 기본 허용치는 멘토 대비 `-5.0` 퍼센트포인트지만, CI 실패 조건이 아니라 수동 triage 정보다.
 - `data_hash`가 다르면 멘토 parity를 `PASS`라고 주장하지 않는다.
+- SOXL regime SSOT는 `QQQ` 직전 완료 주 `14-week Wilder RSI`의 `3상태 상태머신`이다. `RSI >= 55 => attack`, `RSI <= 45 => defense`, 그 사이는 `neutral`이다.
 - Bit-Mania 참조는 계속 유지한다. 구현과 UI 검토 시 `/home/justant/Data/Bit-Mania/backtest/dashboards/strategy_dashboard.html`과 `/home/justant/Data/Bit-Mania/backtest/dashboards/supertrend_sweep_dashboard.html`을 명시적으로 확인한다.

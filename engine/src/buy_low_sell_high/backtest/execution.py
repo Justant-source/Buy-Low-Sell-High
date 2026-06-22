@@ -15,7 +15,7 @@ class ScheduledAction:
     signal_date: object
     price_hint: object
     reason: str | None = None
-    regime: str = "base"
+    regime: str = "neutral"
     stop_sessions: int = 0
     take_profit_pct: object = 0
     buy_pct: object = 0

@@ -13,12 +13,12 @@
   };
   const REGIME_STRATEGY_FILTER_CONFIG = {
     threadCount: { rowKey: "thread_count", label: "Thread 수" },
-    bullStopSessions: { rowKey: "bull_stop_sessions", label: "Bull 손절일" },
-    bullBuyPct: { rowKey: "bull_buy_pct", label: "Bull 매수 %" },
-    bullSellPct: { rowKey: "bull_sell_pct", label: "Bull 매도 %" },
-    bearStopSessions: { rowKey: "bear_stop_sessions", label: "Bear 손절일" },
-    bearBuyPct: { rowKey: "bear_buy_pct", label: "Bear 매수 %" },
-    bearSellPct: { rowKey: "bear_sell_pct", label: "Bear 매도 %" },
+    bullStopSessions: { rowKey: "bull_stop_sessions", label: "Attack 손절일" },
+    bullBuyPct: { rowKey: "bull_buy_pct", label: "Attack 매수 %" },
+    bullSellPct: { rowKey: "bull_sell_pct", label: "Attack 매도 %" },
+    bearStopSessions: { rowKey: "bear_stop_sessions", label: "Defense 손절일" },
+    bearBuyPct: { rowKey: "bear_buy_pct", label: "Defense 매수 %" },
+    bearSellPct: { rowKey: "bear_sell_pct", label: "Defense 매도 %" },
   };
   const THREAD_SESSION_PX_BASE = 14;
   const THREAD_TRACK_MIN_WIDTH = 0;
@@ -386,12 +386,12 @@
       enabled: false,
       symbol: "QQQ",
       rsiPeriodWeeks: 14,
-      bearHighThreshold: 65,
-      bearMidLowThreshold: 40,
-      bearMidHighThreshold: 50,
-      bullLowThreshold: 35,
-      bullMidLowThreshold: 50,
-      bullMidHighThreshold: 60,
+      bearHighThreshold: 45,
+      bearMidLowThreshold: 45,
+      bearMidHighThreshold: 45,
+      bullLowThreshold: 55,
+      bullMidLowThreshold: 55,
+      bullMidHighThreshold: 55,
       baseStopSessions: defaultStop,
       baseBuyPct: 0,
       baseSellPct: 0,
@@ -421,12 +421,12 @@
       regimeEnabled: true,
       regimeSymbol: regime.symbol || "QQQ",
       regimeRsiPeriodWeeks: Number(regime.rsiPeriodWeeks || 14),
-      regimeBearHighThreshold: Number(regime.bearHighThreshold || 65),
-      regimeBearMidLowThreshold: Number(regime.bearMidLowThreshold || 40),
-      regimeBearMidHighThreshold: Number(regime.bearMidHighThreshold || 50),
-      regimeBullLowThreshold: Number(regime.bullLowThreshold || 35),
-      regimeBullMidLowThreshold: Number(regime.bullMidLowThreshold || 50),
-      regimeBullMidHighThreshold: Number(regime.bullMidHighThreshold || 60),
+      regimeBearHighThreshold: Number(regime.bearHighThreshold || 45),
+      regimeBearMidLowThreshold: Number(regime.bearMidLowThreshold || 45),
+      regimeBearMidHighThreshold: Number(regime.bearMidHighThreshold || 45),
+      regimeBullLowThreshold: Number(regime.bullLowThreshold || 55),
+      regimeBullMidLowThreshold: Number(regime.bullMidLowThreshold || 55),
+      regimeBullMidHighThreshold: Number(regime.bullMidHighThreshold || 55),
       regimeBaseStopSessions: Number(regime.baseStopSessions || 40),
       regimeBaseBuyPct: Number(regime.baseBuyPct || 0),
       regimeBaseSellPct: Number(regime.baseSellPct || 0),
@@ -478,7 +478,7 @@
       return;
     }
     if (strategyRankingUsesRegimeFilters()) {
-      target.textContent = "SOXL regime 모드: Thread 수 x Bull 손절/매수/매도 x Bear 손절/매수/매도";
+      target.textContent = "SOXL regime 모드: Thread 수 x Attack 손절/매수/매도 x Defense 손절/매수/매도 (Neutral은 baseline)";
       return;
     }
     target.textContent = "Thread 수 x 손절일 x 매수% x 매도%";
@@ -684,12 +684,20 @@
     regime.enabled = enabledInput instanceof HTMLInputElement ? enabledInput.checked : Boolean(regime.enabled);
     regime.symbol = document.getElementById("strategy-regime-symbol")?.value || "QQQ";
     regime.rsiPeriodWeeks = getNumber("strategy-regime-rsi-period", 14);
-    regime.bearHighThreshold = getNumber("strategy-regime-bear-high-threshold", 65);
-    regime.bearMidLowThreshold = getNumber("strategy-regime-bear-mid-low-threshold", 40);
-    regime.bearMidHighThreshold = getNumber("strategy-regime-bear-mid-high-threshold", 50);
-    regime.bullLowThreshold = getNumber("strategy-regime-bull-low-threshold", 35);
-    regime.bullMidLowThreshold = getNumber("strategy-regime-bull-mid-low-threshold", 50);
-    regime.bullMidHighThreshold = getNumber("strategy-regime-bull-mid-high-threshold", 60);
+    const defenseThreshold = getNumber(
+      "strategy-regime-bear-mid-high-threshold",
+      getNumber("strategy-regime-bear-mid-low-threshold", getNumber("strategy-regime-bear-high-threshold", 45)),
+    );
+    const attackThreshold = getNumber(
+      "strategy-regime-bull-mid-low-threshold",
+      getNumber("strategy-regime-bull-low-threshold", getNumber("strategy-regime-bull-mid-high-threshold", 55)),
+    );
+    regime.bearHighThreshold = defenseThreshold;
+    regime.bearMidLowThreshold = defenseThreshold;
+    regime.bearMidHighThreshold = defenseThreshold;
+    regime.bullLowThreshold = attackThreshold;
+    regime.bullMidLowThreshold = attackThreshold;
+    regime.bullMidHighThreshold = attackThreshold;
     regime.baseStopSessions = getNumber("strategy-regime-base-stop", regime.baseStopSessions || 40);
     regime.baseBuyPct = getNumber("strategy-regime-base-buy", 0);
     regime.baseSellPct = getNumber("strategy-regime-base-sell", 0);

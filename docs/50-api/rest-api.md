@@ -37,7 +37,7 @@
   - 응답에는 `benchmark`(`Buy & Hold`) 일별 시계열이 포함되며, 대시보드는 이를 전략 비교용 pseudo row로 재사용한다.
   - 응답에는 모든 워크스페이스가 공통으로 쓰는 전체 기간 `rankings`와 `meta.ranking_basis`가 포함될 수 있지만, 현재 대시보드의 `콤보 랭킹` 박스 canonical source는 별도 `GET /api/backtests/strategy-ranking` 호출이다.
   - 대시보드의 `기간 설정`이 바뀌면 `콤보 랭킹`은 서버에 `sliceStart`, `sliceEnd`를 넘겨 선택 slice 기준으로 다시 계산한다. `strategy-explorer`의 전체 기간 `daily`를 클라이언트에서 재정렬하는 경로가 아니다.
-  - `SOXL`은 선택적으로 `regimeEnabled`, `regimeSymbol`, `regimeRsiPeriodWeeks`, bear/bull threshold, `regimeBase*`, `regimeBull*`, `regimeBear*` query를 받아 동일 전체 기간을 regime-aware config로 실행할 수 있다.
+  - `SOXL`은 선택적으로 `regimeEnabled`, `regimeSymbol`, `regimeRsiPeriodWeeks`, legacy bull/bear threshold, `regimeBase*`, `regimeBull*`, `regimeBear*` query를 받아 동일 전체 기간을 regime-aware config로 실행할 수 있다. 런타임 SSOT는 `Neutral / Attack / Defense` 3상태이며, legacy threshold 입력은 `Attack=55`, `Defense=45` 단일 경계값으로 정규화된다.
   - regime-aware 응답 `meta`는 `regime_enabled`, `regime_symbol`, `regime_data_hash`, `regime_config_hash`를 함께 반환한다.
   - UI 랭킹 표시는 `full_return_pct`, `cagr_pct`, `max_drawdown_pct`, `trade_count`를 사용한다.
   - UI 랭킹 정렬은 선택 slice의 `cagr_pct desc`, `max_drawdown_pct desc`, `full_return_pct desc`를 사용한다.
@@ -49,7 +49,7 @@
   - 캐시 미스 수동 slice 계산은 상주 Python daemon이 처리하며, daemon 내부의 `8-worker` 프로세스풀이 최대 `1시간` idle까지 유지된다.
   - `기간 프리셋` 구간은 서버 시작 직후 선계산해 저장하고, 프리셋 버튼 클릭은 저장된 랭킹 payload를 로드하는 경로를 우선 사용한다.
   - 기본 모드에서 `limit=0`이면 전체 726개 4파라미터 combo rows를 반환하고, 현재 대시보드의 `콤보 랭킹` 박스는 이 전체 rows에 대해 클라이언트에서 페이지네이션, 정렬, 4파라미터 필터를 적용한다.
-  - `SOXL`에서 `regimeEnabled=true`면 ranking generator가 QQQ regime-aware row 집합으로 전환되며, row는 `bull_stop_sessions`, `bull_buy_pct`, `bull_sell_pct`, `bear_stop_sessions`, `bear_buy_pct`, `bear_sell_pct`를 포함한다.
+  - `SOXL`에서 `regimeEnabled=true`면 ranking generator가 QQQ regime-aware row 집합으로 전환되며, row는 legacy key 이름을 유지한 `bull_stop_sessions`, `bull_buy_pct`, `bull_sell_pct`, `bear_stop_sessions`, `bear_buy_pct`, `bear_sell_pct`를 포함한다. 의미론은 각각 `Attack`, `Defense`다.
   - regime-aware `meta`는 `regime_enabled`, `regime_symbol`, `regime_data_hash`, `regime_config_hash`를 함께 반환한다.
   - 비-`SOXL` workspace는 regime query를 보내더라도 기존 4파라미터 ranking 의미론을 유지한다.
   - `Buy & Hold`는 API row가 아니라 UI pseudo row이며, 항상 최상단에 고정되고 `Focus` 대상은 아니다.

@@ -86,12 +86,12 @@ class StrategyConfig:
     regime_enabled: bool = False
     regime_symbol: str = "QQQ"
     regime_rsi_period_weeks: int = 14
-    regime_bear_high_threshold: Decimal = D("65")
-    regime_bear_mid_low_threshold: Decimal = D("40")
-    regime_bear_mid_high_threshold: Decimal = D("50")
-    regime_bull_low_threshold: Decimal = D("35")
-    regime_bull_mid_low_threshold: Decimal = D("50")
-    regime_bull_mid_high_threshold: Decimal = D("60")
+    regime_bear_high_threshold: Decimal = D("45")
+    regime_bear_mid_low_threshold: Decimal = D("45")
+    regime_bear_mid_high_threshold: Decimal = D("45")
+    regime_bull_low_threshold: Decimal = D("55")
+    regime_bull_mid_low_threshold: Decimal = D("55")
+    regime_bull_mid_high_threshold: Decimal = D("55")
     regime_base_stop_sessions: int = 30
     regime_base_buy_pct: Decimal = D("0")
     regime_base_sell_pct: Decimal = D("0")
@@ -114,12 +114,30 @@ class StrategyConfig:
         payload["take_profit_pct"] = D(payload.get("take_profit_pct", 0))
         payload["entry_drop_pct"] = D(payload.get("entry_drop_pct", 0))
         payload["stop_loss_pct"] = D(payload.get("stop_loss_pct", 0))
-        payload["regime_bear_high_threshold"] = D(payload.get("regime_bear_high_threshold", 65))
-        payload["regime_bear_mid_low_threshold"] = D(payload.get("regime_bear_mid_low_threshold", 40))
-        payload["regime_bear_mid_high_threshold"] = D(payload.get("regime_bear_mid_high_threshold", 50))
-        payload["regime_bull_low_threshold"] = D(payload.get("regime_bull_low_threshold", 35))
-        payload["regime_bull_mid_low_threshold"] = D(payload.get("regime_bull_mid_low_threshold", 50))
-        payload["regime_bull_mid_high_threshold"] = D(payload.get("regime_bull_mid_high_threshold", 60))
+        attack_threshold = D(
+            payload.get(
+                "regime_bull_mid_low_threshold",
+                payload.get(
+                    "regime_bull_low_threshold",
+                    payload.get("regime_bull_mid_high_threshold", 55),
+                ),
+            )
+        )
+        defense_threshold = D(
+            payload.get(
+                "regime_bear_mid_high_threshold",
+                payload.get(
+                    "regime_bear_mid_low_threshold",
+                    payload.get("regime_bear_high_threshold", 45),
+                ),
+            )
+        )
+        payload["regime_bear_high_threshold"] = defense_threshold
+        payload["regime_bear_mid_low_threshold"] = defense_threshold
+        payload["regime_bear_mid_high_threshold"] = defense_threshold
+        payload["regime_bull_low_threshold"] = attack_threshold
+        payload["regime_bull_mid_low_threshold"] = attack_threshold
+        payload["regime_bull_mid_high_threshold"] = attack_threshold
         payload["regime_base_stop_sessions"] = int(payload.get("regime_base_stop_sessions", payload["stop_sessions"]))
         payload["regime_base_buy_pct"] = D(payload.get("regime_base_buy_pct", payload.get("entry_drop_pct", 0)))
         payload["regime_base_sell_pct"] = D(payload.get("regime_base_sell_pct", payload.get("take_profit_pct", 0)))
@@ -237,7 +255,7 @@ class CapitalThread:
     entry_date: date | None = None
     invested_amount: Decimal = ZERO
     last_closed_session_index: int | None = None
-    active_regime: str = "base"
+    active_regime: str = "neutral"
     active_stop_sessions: int = 0
     active_take_profit_pct: Decimal = ZERO
     active_buy_pct: Decimal = ZERO
@@ -277,7 +295,7 @@ class Trade:
     pnl: Decimal = ZERO
     return_pct: Decimal = ZERO
     close_reason: CloseReason | None = None
-    entry_regime: str = "base"
+    entry_regime: str = "neutral"
     entry_stop_sessions: int = 0
     entry_buy_pct: Decimal = ZERO
     entry_sell_pct: Decimal = ZERO
@@ -295,7 +313,7 @@ class DailySnapshot:
     take_profits: int
     time_stops: int
     skipped_entries: int
-    applied_regime: str = "base"
+    applied_regime: str = "neutral"
 
 
 @dataclass

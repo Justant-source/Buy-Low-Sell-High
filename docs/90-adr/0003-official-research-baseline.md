@@ -34,13 +34,13 @@
   - 데이터 스냅샷: `data/raw/tqqq_daily_2011_present.csv`
   - 공식 프로필: `configs/strategies/tqqq_official_ddeolsao_pal_v1.yaml`
 
-공식 프로필 선택 방식:
+공식 프로필 고정 방식:
 
-- 후보군: 코어 6조합 `5x30`부터 `7x40`
-- 정렬 기준: `mean_segment_return desc`, `segment_stddev asc`, `full_return desc`
+- 후보 비교군: 코어 6조합 `5x30`, `5x40`, `6x30`, `6x40`, `7x30`, `7x40`
 - 현재 checked-in SOXL 공식 profile id: `soxl_official_ddeolsao_pal_v1`
 - 현재 checked-in TQQQ 공식 profile id: `tqqq_official_ddeolsao_pal_v1`
-- 현재 두 official profile YAML은 모두 `5x40` 조합을 사용한다.
+- 현재 두 official profile YAML은 모두 `5x40 / buy 0 / sell 0` baseline을 사용한다.
+- 이 baseline은 자동 재선정하지 않는다. baseline 변경은 새 ADR과 새 golden fixture를 동반한 명시적 결정으로만 허용한다.
 
 2026-06-20 기준 고정 메타데이터:
 
@@ -54,7 +54,7 @@
 - `official-reference-check`가 현재 SOXL 공식 제품 CI gate다.
 - `bootstrap-check`와 `ci`는 SOXL golden 비교를 통과해야 한다.
 - `TQQQ` official explorer/matrix는 canonical runtime report지만 checked-in exact-golden gate는 아니다.
-- 멘토 parity와 `mentor_floor`는 `legacy comparison` 진단으로만 남기고 CI gate에서 제외한다.
+- 멘토 parity와 `mentor_floor`는 `legacy comparison` 진단으로만 남기고 CI gate에서 제외한다. 멘토 데이터는 참고용이며 공식 baseline 판정에는 관여하지 않는다.
 
 ## 결과
 - `SOXL` 기본 프로필은 `soxl_official_ddeolsao_pal_v1`, `TQQQ` 기본 프로필은 `tqqq_official_ddeolsao_pal_v1`가 된다.

@@ -306,8 +306,8 @@ class StrategyExplorerTest(unittest.TestCase):
         self.assertTrue(payload["meta"]["regime_config_hash"])
         self.assertTrue(payload["meta"]["regime_data_hash"])
         self.assertTrue(payload["rows"][0]["strategy_id"].startswith("rt"))
-        self.assertIn("Bull", payload["rows"][0]["display_params"])
-        self.assertIn("Bear", payload["rows"][0]["display_params"])
+        self.assertIn("Attack", payload["rows"][0]["display_params"])
+        self.assertIn("Defense", payload["rows"][0]["display_params"])
         self.assertIn("bull_stop_sessions", payload["rows"][0])
         self.assertIn("bear_sell_pct", payload["rows"][0])
 

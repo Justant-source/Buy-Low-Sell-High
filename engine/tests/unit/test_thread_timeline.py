@@ -214,8 +214,8 @@ class ThreadTimelineTest(unittest.TestCase):
         self.assertEqual(interval["total_fees"], "5.51")
 
     def test_regime_metadata_and_session_labels_are_exposed_for_soxl(self) -> None:
-        regime_bars = [qqq_weekly_bar(date(2024, 1, 5), index, str(100 + index)) for index in range(15)] + [
-            qqq_weekly_bar(date(2024, 1, 5), 15, "113")
+        regime_bars = [qqq_weekly_bar(date(2024, 1, 5), index, str(100 - index)) for index in range(15)] + [
+            qqq_weekly_bar(date(2024, 1, 5), 15, "84")
         ]
         payload = build_thread_timeline(
             [
@@ -256,9 +256,9 @@ class ThreadTimelineTest(unittest.TestCase):
         self.assertEqual(payload["meta"]["regime_symbol"], "QQQ")
         self.assertTrue(payload["meta"]["regime_data_hash"])
         self.assertTrue(payload["meta"]["regime_config_hash"])
-        self.assertEqual(payload["sessions"][0]["applied_regime"], "bear")
-        self.assertEqual(payload["sessions"][1]["entry_batch"][0]["entry_regime"], "bear")
-        self.assertEqual(payload["sessions"][2]["exit_batch"][0]["entry_regime"], "bear")
+        self.assertEqual(payload["sessions"][0]["applied_regime"], "defense")
+        self.assertEqual(payload["sessions"][1]["entry_batch"][0]["entry_regime"], "defense")
+        self.assertEqual(payload["sessions"][2]["exit_batch"][0]["entry_regime"], "defense")
 
 
 if __name__ == "__main__":

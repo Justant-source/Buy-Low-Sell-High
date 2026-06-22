@@ -48,8 +48,8 @@ def format_strategy_label(spec: dict[str, Any]) -> str:
     if spec.get("regime_enabled"):
         return (
             f"T{spec['thread_count']} | "
-            f"Bull {spec['bull_stop_sessions']}S / BUY {Decimal(str(spec['bull_buy_pct'])):+.0f}% / SELL {Decimal(str(spec['bull_sell_pct'])):+.0f}% | "
-            f"Bear {spec['bear_stop_sessions']}S / BUY {Decimal(str(spec['bear_buy_pct'])):+.0f}% / SELL {Decimal(str(spec['bear_sell_pct'])):+.0f}%"
+            f"Attack {spec['bull_stop_sessions']}S / BUY {Decimal(str(spec['bull_buy_pct'])):+.0f}% / SELL {Decimal(str(spec['bull_sell_pct'])):+.0f}% | "
+            f"Defense {spec['bear_stop_sessions']}S / BUY {Decimal(str(spec['bear_buy_pct'])):+.0f}% / SELL {Decimal(str(spec['bear_sell_pct'])):+.0f}%"
         )
     buy_pct = Decimal(str(spec.get("buy_pct", 0)))
     sell_pct = Decimal(str(spec.get("sell_pct", 0)))
@@ -118,8 +118,8 @@ def parse_regime_strategy_id(strategy_id: str) -> dict[str, Any] | None:
         "strategy_id": strategy_id,
         "label": (
             f"T{thread_count} | "
-            f"Bull {bull_stop_sessions}S / BUY {bull_buy_pct:+.0f}% / SELL {bull_sell_pct:+.0f}% | "
-            f"Bear {bear_stop_sessions}S / BUY {bear_buy_pct:+.0f}% / SELL {bear_sell_pct:+.0f}%"
+            f"Attack {bull_stop_sessions}S / BUY {bull_buy_pct:+.0f}% / SELL {bull_sell_pct:+.0f}% | "
+            f"Defense {bear_stop_sessions}S / BUY {bear_buy_pct:+.0f}% / SELL {bear_sell_pct:+.0f}%"
         ),
         "thread_count": thread_count,
         "bull_stop_sessions": bull_stop_sessions,
@@ -208,8 +208,8 @@ def iter_regime_strategy_specs(base_config: StrategyConfig) -> list[dict[str, An
                                         "strategy_id": strategy_id,
                                         "label": (
                                             f"T{thread_count} | "
-                                            f"Bull {bull_stop}S / BUY {Decimal(str(bull_buy)):+.0f}% / SELL {Decimal(str(bull_sell)):+.0f}% | "
-                                            f"Bear {bear_stop}S / BUY {Decimal(str(bear_buy)):+.0f}% / SELL {Decimal(str(bear_sell)):+.0f}%"
+                                            f"Attack {bull_stop}S / BUY {Decimal(str(bull_buy)):+.0f}% / SELL {Decimal(str(bull_sell)):+.0f}% | "
+                                            f"Defense {bear_stop}S / BUY {Decimal(str(bear_buy)):+.0f}% / SELL {Decimal(str(bear_sell)):+.0f}%"
                                         ),
                                         "thread_count": thread_count,
                                         "bull_stop_sessions": int(bull_stop),

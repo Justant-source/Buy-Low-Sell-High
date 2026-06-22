@@ -238,7 +238,7 @@ def run_strategy(
                     thread.entry_session_index = None
                     thread.entry_date = None
                     thread.invested_amount = ZERO
-                    thread.active_regime = "base"
+                    thread.active_regime = "neutral"
                     thread.active_stop_sessions = 0
                     thread.active_take_profit_pct = ZERO
                     thread.active_buy_pct = ZERO
@@ -323,7 +323,7 @@ def run_strategy(
                 thread.entry_session_index = None
                 thread.entry_date = None
                 thread.invested_amount = ZERO
-                thread.active_regime = "base"
+                thread.active_regime = "neutral"
                 thread.active_stop_sessions = 0
                 thread.active_take_profit_pct = ZERO
                 thread.active_buy_pct = ZERO

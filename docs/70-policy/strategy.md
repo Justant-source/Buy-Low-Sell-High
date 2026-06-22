@@ -15,6 +15,10 @@
 - 레퍼런스 무결성을 지킨다. 불일치를 숨기기 위해 fixture를 수정하지 않는다.
 - 공식 연구 기준선은 Yahoo `adjusted_close` 스냅샷과 `ideal_same_close` 실행 모델을 사용한다.
 - checked-in 공식 제품 게이트는 현재 SOXL에 있고, TQQQ는 같은 의미론을 runtime canonical baseline으로만 사용한다.
+- checked-in SOXL 공식 baseline은 현재 `5x40 / buy 0 / sell 0`으로 고정한다.
+- 공식 코어 비교 조합은 `5x30`, `5x40`, `6x30`, `6x40`, `7x30`, `7x40` 6개만 사용한다.
+- 멘토 데이터와 parity는 계속 `legacy comparison` 참고자료로만 유지하며, 제품 baseline이나 백테스트 정답에 영향을 주지 않는다.
+- SOXL regime SSOT는 `QQQ 14-week Wilder RSI`의 `3상태 상태머신`이다. `RSI >= 55 => attack`, `RSI <= 45 => defense`, 그 사이는 `neutral`이며, warmup 전 구간도 `neutral`을 사용한다.
 - CAGR은 종료 자산이 0 이하인 구간에서는 수학적으로 정의되지 않으므로, 엔진은 해당 slice에서 총수익률을 대체 표시해 연구/대시보드 프로세스를 중단시키지 않는다.
 - 대시보드 preset warmup 실패는 캐시 예열 실패일 뿐 프로세스 생존성 실패가 아니다. 실패는 로그로 격리해야 한다.
 - 모든 백테스트 실행은 `config_hash`, `data_hash`, `code_commit`를 저장해야 한다.

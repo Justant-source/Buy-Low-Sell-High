@@ -15,9 +15,9 @@ from ..symbols import default_market_data_csv
 
 
 SUPPORTED_PRIMARY_SYMBOL = "SOXL"
-DEFAULT_REGIME_LABEL = "base"
-BULL_REGIME_LABEL = "bull"
-BEAR_REGIME_LABEL = "bear"
+DEFAULT_REGIME_LABEL = "neutral"
+ATTACK_REGIME_LABEL = "attack"
+DEFENSE_REGIME_LABEL = "defense"
 
 
 @dataclass(frozen=True)
@@ -26,8 +26,7 @@ class SessionRegimeParameters:
     stop_sessions: int
     buy_pct: Decimal
     sell_pct: Decimal
-    rsi_two_weeks_ago: Decimal | None = None
-    rsi_one_week_ago: Decimal | None = None
+    completed_week_rsi: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -65,14 +64,14 @@ def disabled_regime_parameters(config: StrategyConfig) -> SessionRegimeParameter
 
 
 def _base_parameters(config: StrategyConfig, regime: str = DEFAULT_REGIME_LABEL) -> SessionRegimeParameters:
-    if regime == BULL_REGIME_LABEL:
+    if regime == ATTACK_REGIME_LABEL:
         return SessionRegimeParameters(
             regime=regime,
             stop_sessions=config.regime_bull_stop_sessions,
             buy_pct=config.regime_bull_buy_pct,
             sell_pct=config.regime_bull_sell_pct,
         )
-    if regime == BEAR_REGIME_LABEL:
+    if regime == DEFENSE_REGIME_LABEL:
         return SessionRegimeParameters(
             regime=regime,
             stop_sessions=config.regime_bear_stop_sessions,
@@ -91,8 +90,7 @@ def _parameters_for_regime(
     config: StrategyConfig,
     regime: str,
     *,
-    rsi_two_weeks_ago: Decimal | None = None,
-    rsi_one_week_ago: Decimal | None = None,
+    completed_week_rsi: Decimal | None = None,
 ) -> SessionRegimeParameters:
     base = _base_parameters(config, regime)
     return SessionRegimeParameters(
@@ -100,8 +98,7 @@ def _parameters_for_regime(
         stop_sessions=base.stop_sessions,
         buy_pct=base.buy_pct,
         sell_pct=base.sell_pct,
-        rsi_two_weeks_ago=rsi_two_weeks_ago,
-        rsi_one_week_ago=rsi_one_week_ago,
+        completed_week_rsi=completed_week_rsi,
     )
 
 
@@ -150,37 +147,15 @@ def _apply_weekly_rsi(points: list[dict[str, Decimal | date | None]], period: in
 def _evaluate_regime(
     config: StrategyConfig,
     *,
-    rsi_two_weeks_ago: Decimal,
-    rsi_one_week_ago: Decimal,
-    previous_regime: str,
+    completed_week_rsi: Decimal | None,
 ) -> str:
-    bear = (
-        (rsi_two_weeks_ago > config.regime_bear_high_threshold and rsi_one_week_ago < rsi_two_weeks_ago)
-        or (
-            config.regime_bear_mid_low_threshold < rsi_one_week_ago < config.regime_bear_mid_high_threshold
-            and rsi_one_week_ago < rsi_two_weeks_ago
-        )
-        or (
-            rsi_two_weeks_ago >= config.regime_bear_mid_high_threshold
-            and rsi_one_week_ago < config.regime_bear_mid_high_threshold
-        )
-    )
-    bull = (
-        (
-            rsi_two_weeks_ago <= config.regime_bull_mid_low_threshold
-            and rsi_one_week_ago > config.regime_bull_mid_low_threshold
-        )
-        or (
-            config.regime_bull_mid_low_threshold < rsi_one_week_ago < config.regime_bull_mid_high_threshold
-            and rsi_one_week_ago > rsi_two_weeks_ago
-        )
-        or (rsi_two_weeks_ago < config.regime_bull_low_threshold and rsi_one_week_ago > rsi_two_weeks_ago)
-    )
-    if bull and not bear:
-        return BULL_REGIME_LABEL
-    if bear and not bull:
-        return BEAR_REGIME_LABEL
-    return previous_regime
+    if completed_week_rsi is None:
+        return DEFAULT_REGIME_LABEL
+    if completed_week_rsi >= config.regime_bull_mid_low_threshold:
+        return ATTACK_REGIME_LABEL
+    if completed_week_rsi <= config.regime_bear_mid_high_threshold:
+        return DEFENSE_REGIME_LABEL
+    return DEFAULT_REGIME_LABEL
 
 
 def build_regime_context(
@@ -221,27 +196,21 @@ def build_regime_context(
         primary_weeks.setdefault(_week_start(bar.session_date), []).append(bar.session_date)
 
     completed_index = 0
-    current_regime = DEFAULT_REGIME_LABEL
     session_parameters: dict[date, SessionRegimeParameters] = {}
     for week_start, session_dates in primary_weeks.items():
         while completed_index < len(completed_points) and completed_points[completed_index]["week_end"] < week_start:
             completed_index += 1
-        rsi_two_weeks_ago: Decimal | None = None
-        rsi_one_week_ago: Decimal | None = None
-        if completed_index >= 2:
-            rsi_two_weeks_ago = D(completed_points[completed_index - 2]["rsi"])
-            rsi_one_week_ago = D(completed_points[completed_index - 1]["rsi"])
-            current_regime = _evaluate_regime(
-                config,
-                rsi_two_weeks_ago=rsi_two_weeks_ago,
-                rsi_one_week_ago=rsi_one_week_ago,
-                previous_regime=current_regime,
-            )
+        completed_week_rsi: Decimal | None = None
+        if completed_index >= 1:
+            completed_week_rsi = D(completed_points[completed_index - 1]["rsi"])
+        current_regime = _evaluate_regime(
+            config,
+            completed_week_rsi=completed_week_rsi,
+        )
         parameters = _parameters_for_regime(
             config,
             current_regime,
-            rsi_two_weeks_ago=rsi_two_weeks_ago,
-            rsi_one_week_ago=rsi_one_week_ago,
+            completed_week_rsi=completed_week_rsi,
         )
         for session_date in session_dates:
             session_parameters[session_date] = parameters

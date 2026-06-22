@@ -40,9 +40,9 @@
 - open thread equity는 미투자 현금과 mark-to-market 포지션 가치를 함께 보존해야 한다.
 - 모든 백테스트 실행과 연구 산출물은 `config_hash`, `data_hash`, `code_commit`를 함께 보관해야 한다.
 - `SOXL` regime 실행은 위 공통 메타데이터 외에 `regime_data_hash`와 `regime_config_hash`도 함께 보관해야 한다.
-- `regime_data_hash`는 `QQQ` 보조 바 집합 해시이며, `regime_config_hash`는 bull / bear / base stop-buy-sell과 threshold를 포함한 regime 설정 해시다.
+- `regime_data_hash`는 `QQQ` 보조 바 집합 해시이며, `regime_config_hash`는 neutral / attack / defense stop-buy-sell과 RSI threshold를 포함한 regime 설정 해시다.
 - `SOXL` regime 판정은 `QQQ` 일봉을 주봉 종가로 집계한 뒤 `14-week Wilder RSI`를 계산하고, 각 SOXL 일봉 세션에는 `직전 완료 주`의 RSI 판정만 적용한다.
-- 어떤 주가 bull / bear 조건에 모두 걸리지 않으면 직전 regime을 유지하며, 최초 판정 전 구간은 `base` 파라미터를 사용한다.
+- 현재 SSOT는 `RSI >= 55 => attack`, `RSI <= 45 => defense`, 그 사이는 `neutral`이다. 최초 RSI warmup 전 구간도 `neutral` 파라미터를 사용한다.
 - `code_commit`은 현재 저장소의 git HEAD를 기본으로 하고, 연구 관련 경로(`engine`, `dashboard`, `configs`, 루트 manifest`)에 미커밋 변경이 있으면 dirty fingerprint를 덧붙여 캐시 재사용 기준으로 사용한다.
 - `backtest_research_artifacts`는 `Strategy Explorer`, `Strategy Ranking`, `Sweep Explorer`의 정규화된 저장소다.
   - 공통 메타데이터: `artifact_key`, `artifact_kind`, `profile_id`, `symbol`, `csv_path`, `execution_model`, `price_basis`, `data_hash`, `code_commit`, `created_at`

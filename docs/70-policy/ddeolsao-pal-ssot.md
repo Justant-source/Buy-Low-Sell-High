@@ -23,11 +23,11 @@
 - 공식 연구 기준선 계열은 Yahoo 스냅샷, `price_basis=adjusted_close`, `execution_model=ideal_same_close`, `sizing_mode=fixed_principal`을 사용한다.
 - SOXL checked-in 제품 baseline은 `data/raw/soxl_daily_2011_present.csv`와 `configs/strategies/soxl_official_ddeolsao_pal_v1.yaml`이다.
 - TQQQ runtime official baseline은 `data/raw/tqqq_daily_2011_present.csv`와 `configs/strategies/tqqq_official_ddeolsao_pal_v1.yaml`이다.
-- 현재 두 official profile YAML은 모두 `thread_count=5`, `stop_sessions=40` 조합을 사용한다.
-- 공식 profile 선정 기준은 코어 6조합을 `mean_segment_return desc`, `segment_stddev asc`, `full_return desc`로 정렬하는 방식이다.
+- 현재 두 official profile YAML은 모두 `thread_count=5`, `stop_sessions=40`, `buy_pct=0`, `sell_pct=0` baseline을 사용한다.
+- 공식 baseline은 현재 `5x40 / buy 0 / sell 0`으로 고정한다. 이후 변경이 필요하면 새 ADR과 새 golden fixture를 함께 갱신한다.
 - 공식 CI 게이트는 현재 SOXL `official-explorer`와 `official-matrix` golden fixture다.
 - TQQQ official reference는 canonical runtime report지만 checked-in parity fixture를 강제하지 않는다.
-- 멘토 매트릭스와 parity는 계속 SOXL `legacy comparison` 진단으로만 유지한다.
+- 멘토 매트릭스와 parity는 계속 SOXL `legacy comparison` 진단으로만 유지한다. 멘토 데이터는 참고용이며, 공식 baseline이나 백테스트 정답을 결정하지 않는다.
 
 ---
 
@@ -74,15 +74,20 @@ SOXL checked-in official baseline과 현재 TQQQ official profile은 모두 `5x4
 ### SOXL QQQ Regime 모드
 
 - `SOXL`만 `QQQ` 보조 시계열을 사용한 regime 모드를 지원한다.
-- regime 입력은 `regime_enabled`, `regime_symbol=QQQ`, `regime_rsi_period_weeks=14`, bear/bull threshold, `regime_base_*`, `regime_bull_*`, `regime_bear_*`다.
+- regime 입력은 legacy 호환 키를 유지한 `regime_enabled`, `regime_symbol=QQQ`, `regime_rsi_period_weeks=14`, `regime_base_*`, `regime_bull_*`, `regime_bear_*`다.
+- 내부 의미론은 `Neutral / Attack / Defense` 3상태 상태머신이다.
+  - `regime_base_*` = `Neutral`
+  - `regime_bull_*` = `Attack`
+  - `regime_bear_*` = `Defense`
 - `QQQ`는 Yahoo 일봉을 주봉 종가로 집계한 뒤 `14-week Wilder RSI`를 계산한다.
 - 각 SOXL 세션은 `직전 완료 주`의 판정만 사용한다. 현재 진행 중인 주의 RSI 값은 사용하지 않는다.
-- 판정 규칙:
-  - `bear`: `RSI > 65` 영역에서 하락, 또는 `40 < RSI < 50` 구간에서 하락, 또는 `50` 하향 이탈
-  - `bull`: `50` 상향 돌파, 또는 `50 < RSI < 60` 구간에서 상승, 또는 `RSI < 35` 영역에서 상승
-- 어느 조건에도 걸리지 않으면 직전 regime을 유지한다.
-- 최초 판정 전 구간은 `base` 파라미터를 사용한다.
-- regime이 확정되면 해당 세션의 신규 진입은 `base` 또는 `bull` 또는 `bear`별 `손절일`, `매수%`, `매도%`를 사용하고, 이미 열린 포지션은 진입 시점 파라미터를 끝까지 유지한다.
+- 현재 SSOT 판정 규칙:
+  - `attack`: 직전 완료 주 `RSI >= 55`
+  - `defense`: 직전 완료 주 `RSI <= 45`
+  - `neutral`: `45 < RSI < 55`
+- 최초 RSI warmup 전 구간은 `neutral` 파라미터를 사용한다.
+- legacy bull/bear threshold 입력은 호환용으로만 남기며, 런타임에서는 `Attack=55`, `Defense=45` 단일 경계값으로 정규화한다.
+- regime이 확정되면 해당 세션의 신규 진입은 `neutral` 또는 `attack` 또는 `defense`별 `손절일`, `매수%`, `매도%`를 사용하고, 이미 열린 포지션은 진입 시점 파라미터를 끝까지 유지한다.
 
 ---
 

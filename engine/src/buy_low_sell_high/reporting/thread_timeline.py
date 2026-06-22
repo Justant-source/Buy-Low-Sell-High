@@ -200,7 +200,7 @@ def build_thread_timeline(
                         "shares": str(position["entry_shares"]),
                         "invested_amount": str(position["invested_amount"]),
                         "entry_fee": str(position["entry_fee"]),
-                        "entry_regime": matched_trade.entry_regime if matched_trade is not None else "base",
+                        "entry_regime": matched_trade.entry_regime if matched_trade is not None else "neutral",
                     }
                 )
                 continue

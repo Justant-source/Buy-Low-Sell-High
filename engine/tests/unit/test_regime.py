@@ -67,13 +67,13 @@ class RegimeTest(unittest.TestCase):
             }
         )
 
-    def test_build_regime_context_marks_bear_week_from_high_rsi_rollover(self) -> None:
+    def test_build_regime_context_marks_defense_week_when_completed_rsi_is_weak(self) -> None:
         start_friday = date(2024, 1, 5)
         regime_bars = [
-            weekly_friday(start_friday, index, str(100 + index))
+            weekly_friday(start_friday, index, str(100 - index))
             for index in range(15)
         ] + [
-            weekly_friday(start_friday, 15, "113")
+            weekly_friday(start_friday, 15, "84")
         ]
         primary_week_start = regime_bars[-1].session_date + timedelta(days=3)
         primary_bars = [
@@ -84,15 +84,15 @@ class RegimeTest(unittest.TestCase):
         regime_context = build_regime_context(primary_bars, config, regime_bars=regime_bars, regime_data_hash="fixture")
 
         self.assertTrue(regime_context.enabled)
-        self.assertEqual(regime_context.parameters_for_session(primary_bars[0].session_date).regime, "bear")
+        self.assertEqual(regime_context.parameters_for_session(primary_bars[0].session_date).regime, "defense")
 
-    def test_run_backtest_uses_bear_stop_for_entries_opened_in_bear_week(self) -> None:
+    def test_run_backtest_uses_defense_stop_for_entries_opened_in_defense_week(self) -> None:
         start_friday = date(2024, 1, 5)
         regime_bars = [
-            weekly_friday(start_friday, index, str(100 + index))
+            weekly_friday(start_friday, index, str(100 - index))
             for index in range(15)
         ] + [
-            weekly_friday(start_friday, 15, "113")
+            weekly_friday(start_friday, 15, "84")
         ]
         primary_week_start = regime_bars[-1].session_date + timedelta(days=3)
         primary_bars = [
@@ -104,18 +104,18 @@ class RegimeTest(unittest.TestCase):
 
         run = run_backtest(primary_bars, config)
 
-        self.assertEqual(run.daily[0].applied_regime, "bear")
-        self.assertEqual(run.trades[0].entry_regime, "bear")
+        self.assertEqual(run.daily[0].applied_regime, "defense")
+        self.assertEqual(run.trades[0].entry_regime, "defense")
         self.assertEqual(run.trades[0].entry_stop_sessions, 1)
         self.assertEqual(run.trades[0].holding_sessions, 1)
 
-    def test_run_backtest_uses_bull_stop_for_entries_opened_in_bull_week(self) -> None:
+    def test_run_backtest_uses_attack_stop_for_entries_opened_in_attack_week(self) -> None:
         start_friday = date(2024, 1, 5)
         regime_bars = [
-            weekly_friday(start_friday, index, str(100 - index))
+            weekly_friday(start_friday, index, str(100 + index))
             for index in range(15)
         ] + [
-            weekly_friday(start_friday, 15, "87")
+            weekly_friday(start_friday, 15, "116")
         ]
         primary_week_start = regime_bars[-1].session_date + timedelta(days=3)
         primary_bars = [
@@ -129,8 +129,8 @@ class RegimeTest(unittest.TestCase):
 
         run = run_backtest(primary_bars, config)
 
-        self.assertEqual(run.daily[0].applied_regime, "bull")
-        self.assertEqual(run.trades[0].entry_regime, "bull")
+        self.assertEqual(run.daily[0].applied_regime, "attack")
+        self.assertEqual(run.trades[0].entry_regime, "attack")
         self.assertEqual(run.trades[0].entry_stop_sessions, 3)
         self.assertEqual(run.trades[0].holding_sessions, 3)
 
