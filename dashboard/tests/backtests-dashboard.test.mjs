@@ -117,6 +117,89 @@ test("strategy detail keys are slice-aware", () => {
   assert.notEqual(left, right);
 });
 
+test("strategy combo cell formatter preserves regime line breaks", () => {
+  const hooks = loadHooks();
+  assert.equal(
+    hooks.formatStrategyComboCell("T5\nAttack 30S / BUY -3% / SELL +9%\nNeutral 40S / BUY +0% / SELL +0%"),
+    "T5<br>Attack 30S / BUY -3% / SELL +9%<br>Neutral 40S / BUY +0% / SELL +0%",
+  );
+});
+
+test("regime recommendation meta maps defer verdict to neutral label", () => {
+  const hooks = loadHooks();
+  assert.equal(
+    JSON.stringify(hooks.recommendationMeta("defer_verdict_until_semantic_fix")),
+    JSON.stringify({ label: "판정 보류", badgeClass: "neutral" }),
+  );
+  assert.equal(
+    JSON.stringify(hooks.recommendationMeta("continue_as_secondary_hypothesis")),
+    JSON.stringify({ label: "계속 연구", badgeClass: "success" }),
+  );
+});
+
+test("audit classification meta distinguishes documentation conflict from implementation bug", () => {
+  const hooks = loadHooks();
+  assert.equal(
+    JSON.stringify(hooks.auditClassificationMeta("documentation_conflict")),
+    JSON.stringify({ label: "문서 충돌", badgeClass: "warning" }),
+  );
+  assert.equal(
+    JSON.stringify(hooks.auditClassificationMeta("implementation_bug")),
+    JSON.stringify({ label: "구현 오류", badgeClass: "danger" }),
+  );
+  assert.equal(
+    JSON.stringify(hooks.auditClassificationMeta("no_semantic_issue_found")),
+    JSON.stringify({ label: "의미론 통과", badgeClass: "success" }),
+  );
+});
+
+test("regime bands collapse contiguous daily states", () => {
+  const hooks = loadHooks();
+  assert.equal(
+    JSON.stringify(hooks.buildRegimeBands([
+      { session_date: "2025-01-02", applied_regime: "attack" },
+      { session_date: "2025-01-03", applied_regime: "attack" },
+      { session_date: "2025-01-06", applied_regime: "neutral" },
+      { session_date: "2025-01-07", applied_regime: "defense" },
+      { session_date: "2025-01-08", applied_regime: "defense" },
+    ])),
+    JSON.stringify([
+      { regime: "attack", start: "2025-01-02", end: "2025-01-06" },
+      { regime: "neutral", start: "2025-01-06", end: "2025-01-07" },
+      { regime: "defense", start: "2025-01-07", end: "2025-01-08" },
+    ]),
+  );
+});
+
+test("regime background shapes exclude neutral spans", () => {
+  const hooks = loadHooks();
+  const shapes = hooks.buildRegimeBackgroundShapes([
+    { session_date: "2025-01-02", applied_regime: "attack" },
+    { session_date: "2025-01-03", applied_regime: "neutral" },
+    { session_date: "2025-01-06", applied_regime: "defense" },
+  ]);
+  assert.equal(shapes.length, 2);
+  assert.equal(shapes[0].fillcolor, "rgba(88, 184, 116, 0.16)");
+  assert.equal(shapes[1].fillcolor, "rgba(220, 108, 108, 0.15)");
+});
+
+test("visible regime state check ignores neutral-only series", () => {
+  const hooks = loadHooks();
+  assert.equal(
+    hooks.hasVisibleRegimeState([
+      { session_date: "2025-01-02", applied_regime: "neutral" },
+      { session_date: "2025-01-03", applied_regime: "neutral" },
+    ]),
+    false,
+  );
+  assert.equal(
+    hooks.hasVisibleRegimeState([
+      { session_date: "2025-01-02", applied_regime: "attack" },
+    ]),
+    true,
+  );
+});
+
 test("strategy detail context validation rejects mismatched periods", () => {
   const hooks = loadHooks();
   const context = {

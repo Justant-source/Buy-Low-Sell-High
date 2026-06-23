@@ -3,7 +3,7 @@ NPM := npm
 PYTHONPATH := engine/src
 SYMBOL ?= SOXL
 
-.PHONY: bootstrap-check lint-docs test smoke test-data test-strategy test-backtest test-integration typecheck lint ci dashboard-build dashboard-test e2e clean-room migrate worker-smoke scenario-report e2e-backtest e2e-risk reference-check backtest-reference backtest-grid backtest-run official-explorer official-matrix official-reference-check legacy-mentor-compare mentor-matrix parity-mentor-matrix mentor-floor data-import data-sync data-validate dashboard worker docker-init docker-sync docker-backtest
+.PHONY: bootstrap-check lint-docs test smoke test-data test-strategy test-backtest test-integration typecheck lint ci dashboard-build dashboard-test e2e clean-room migrate worker-smoke scenario-report e2e-backtest e2e-risk reference-check backtest-reference backtest-grid backtest-run regime-walk-forward official-explorer official-matrix official-reference-check legacy-mentor-compare mentor-matrix parity-mentor-matrix mentor-floor data-import data-sync data-validate dashboard worker docker-init docker-sync docker-backtest
 
 bootstrap-check:
 	$(PYTHON) scripts/verify_no_autotrading.py
@@ -28,6 +28,9 @@ data-sync:
 
 backtest-run:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m buy_low_sell_high.cli backtest run --profile configs/strategies/soxl_official_ddeolsao_pal_v1.yaml --symbol SOXL
+
+regime-walk-forward:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m buy_low_sell_high.cli backtest regime-walk-forward --profile configs/strategies/soxl_official_ddeolsao_pal_v1.yaml --symbol SOXL
 
 data-validate:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m buy_low_sell_high.cli data validate --symbol $(SYMBOL)

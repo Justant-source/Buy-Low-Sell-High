@@ -5,7 +5,7 @@
 
 ## 배경
 멘토 백테스트 이미지는 `/backtests` 멘토 매트릭스의 권위 있는 화면 레퍼런스다. 저장소에는 이미 부분 전사 JSON이 있었지만, 현재 런타임 엔진과 로컬 SOXL 스냅샷은 이 이미지에 대한 parity를 만족하지 않는다.
-이 ADR의 적용 범위는 `workspace.referenceMode=mentor_reference`, 현재는 `SOXL` 하나다. `TQQQ`는 official reference만 노출하고, `backtest_only` workspace는 이 화면을 숨긴다.
+이 ADR의 적용 범위는 `workspace.referenceMode=mentor_reference`, 현재는 `SOXL` 하나다. `TQQQ`, `KORU`는 official reference만 노출하고, `backtest_only` workspace는 이 화면을 숨긴다.
 
 Phase A에서는 런타임 코드에서 현재 엔진 동작을 직접 검증했다.
 

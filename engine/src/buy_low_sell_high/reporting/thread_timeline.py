@@ -79,13 +79,13 @@ def build_thread_timeline(
         raise ValueError("No bars provided")
 
     strategy_spec = resolve_strategy_spec(strategy_id, catalog=catalog)
-    regime_context = load_regime_context(bars, base_config)
     config = build_strategy_config(
         base_config,
         strategy_spec,
         execution_model=execution_model,
         price_basis=price_basis,
     )
+    regime_context = load_regime_context(bars, config)
     run = run_backtest(bars, config, data_hash=data_hash, regime_context=regime_context)
     period_start = bars[0].session_date
     period_end = bars[-1].session_date

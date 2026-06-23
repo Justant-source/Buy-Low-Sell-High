@@ -72,15 +72,17 @@ for marker in required_markers:
 
 workspaces = json.loads(get(f"http://127.0.0.1:{port}/api/workspaces"))
 workspace_ids = {row["workspaceId"] for row in workspaces.get("workspaces", [])}
-expected_workspace_ids = {"tqqq", "0193t0", "233740", "462330"}
+expected_workspace_ids = {"tqqq", "koru", "0193t0", "233740", "462330"}
 missing_workspace_ids = expected_workspace_ids - workspace_ids
 if missing_workspace_ids:
     raise SystemExit(f"workspace list missing: {sorted(missing_workspace_ids)}")
 workspace_order = [row["workspaceId"] for row in workspaces.get("workspaces", [])]
-if "soxl" not in workspace_order or "tqqq" not in workspace_order:
-    raise SystemExit("workspace order missing soxl or tqqq")
+if "soxl" not in workspace_order or "tqqq" not in workspace_order or "koru" not in workspace_order:
+    raise SystemExit("workspace order missing soxl, tqqq, or koru")
 if workspace_order.index("tqqq") != workspace_order.index("soxl") + 1:
     raise SystemExit("tqqq workspace is not directly below soxl")
+if workspace_order.index("koru") != workspace_order.index("tqqq") + 1:
+    raise SystemExit("koru workspace is not directly below tqqq")
 
 def assert_profile_bundle(workspace_id: str, default_profile_id: str, expected_profile_ids: set[str]):
     payload = json.loads(get(f"http://127.0.0.1:{port}/api/profiles?workspaceId={workspace_id}"))
@@ -124,6 +126,27 @@ if data_tqqq.get("source") != "yahoo_chart":
     raise SystemExit("tqqq data status source mismatch")
 if any("Synthetic pre-listing history present" in warning for warning in data_tqqq.get("warnings", [])):
     raise SystemExit("tqqq data status should not contain synthetic warning")
+
+workspace_koru = next(row for row in workspaces["workspaces"] if row["workspaceId"] == "koru")
+if workspace_koru.get("referenceMode") != "official_reference":
+    raise SystemExit("koru workspace referenceMode mismatch")
+assert_profile_bundle(
+    "koru",
+    "koru_official_ddeolsao_pal_v1",
+    {
+        "koru_official_ddeolsao_pal_v1",
+        "koru_default_5x30",
+        "koru_default_7x30",
+        "koru_best_avg_5x40",
+    },
+)
+data_koru = json.loads(get(f"http://127.0.0.1:{port}/api/data/status?workspaceId=koru"))
+if data_koru.get("symbol") != "KORU":
+    raise SystemExit("koru data status symbol mismatch")
+if data_koru.get("source") != "yahoo_chart":
+    raise SystemExit("koru data status source mismatch")
+if any("Synthetic pre-listing history present" in warning for warning in data_koru.get("warnings", [])):
+    raise SystemExit("koru data status should not contain synthetic warning")
 
 for workspace_id, symbol, default_profile_id in [
     ("233740", "233740", "233740_default_5x30"),

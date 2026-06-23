@@ -45,6 +45,34 @@ class ResolvedRegimeContext:
             sell_pct=ZERO,
         )
 
+    def rebind(self, config: StrategyConfig) -> "ResolvedRegimeContext":
+        if not self.enabled:
+            disabled_parameters = disabled_regime_parameters(config)
+            return ResolvedRegimeContext(
+                enabled=False,
+                symbol=config.regime_symbol,
+                data_hash=None,
+                config_hash=config.regime_config_hash(),
+                session_parameters_by_date={
+                    session_date: disabled_parameters
+                    for session_date in self.session_parameters_by_date
+                },
+            )
+        return ResolvedRegimeContext(
+            enabled=True,
+            symbol=config.regime_symbol,
+            data_hash=self.data_hash,
+            config_hash=config.regime_config_hash(),
+            session_parameters_by_date={
+                session_date: _parameters_for_regime(
+                    config,
+                    parameters.regime,
+                    completed_week_rsi=parameters.completed_week_rsi,
+                )
+                for session_date, parameters in self.session_parameters_by_date.items()
+            },
+        )
+
 
 def regime_feature_enabled(config: StrategyConfig) -> bool:
     return bool(config.regime_enabled and str(config.symbol).upper() == SUPPORTED_PRIMARY_SYMBOL)

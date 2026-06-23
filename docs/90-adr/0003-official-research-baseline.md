@@ -10,6 +10,7 @@
 
 - Yahoo chart 기반 표준 스냅샷 `data/raw/soxl_daily_2011_present.csv`
 - Yahoo chart 기반 표준 스냅샷 `data/raw/tqqq_daily_2011_present.csv`
+- Yahoo chart 기반 표준 스냅샷 `data/raw/koru_daily_2013_present.csv`
 - Yahoo chunk cache `data/snapshots/yahoo_chart/`
 - snapshot manifest writer
 - 코어 6조합 official explorer와 726조합 canonical ranking/sweep 경로
@@ -23,7 +24,7 @@
 - 가격 기준: `price_basis=adjusted_close`
 - 실행 모델: `execution_model=ideal_same_close`
 - 사이징 모드: `sizing_mode=fixed_principal`
-- 적용 범위: 현재 non-`backtest_only` workspace인 `SOXL`, `TQQQ`
+- 적용 범위: 현재 non-`backtest_only` workspace인 `SOXL`, `TQQQ`, `KORU`
 
 현재 workspace별 공식 프로필:
 
@@ -33,13 +34,17 @@
 - TQQQ runtime canonical baseline
   - 데이터 스냅샷: `data/raw/tqqq_daily_2011_present.csv`
   - 공식 프로필: `configs/strategies/tqqq_official_ddeolsao_pal_v1.yaml`
+- KORU runtime canonical baseline
+  - 데이터 스냅샷: `data/raw/koru_daily_2013_present.csv`
+  - 공식 프로필: `configs/strategies/koru_official_ddeolsao_pal_v1.yaml`
 
 공식 프로필 고정 방식:
 
 - 후보 비교군: 코어 6조합 `5x30`, `5x40`, `6x30`, `6x40`, `7x30`, `7x40`
 - 현재 checked-in SOXL 공식 profile id: `soxl_official_ddeolsao_pal_v1`
 - 현재 checked-in TQQQ 공식 profile id: `tqqq_official_ddeolsao_pal_v1`
-- 현재 두 official profile YAML은 모두 `5x40 / buy 0 / sell 0` baseline을 사용한다.
+- 현재 checked-in KORU 공식 profile id: `koru_official_ddeolsao_pal_v1`
+- 현재 세 official profile YAML은 모두 `5x40 / buy 0 / sell 0` baseline을 사용한다.
 - 이 baseline은 자동 재선정하지 않는다. baseline 변경은 새 ADR과 새 golden fixture를 동반한 명시적 결정으로만 허용한다.
 
 2026-06-20 기준 고정 메타데이터:
@@ -53,12 +58,12 @@
 
 - `official-reference-check`가 현재 SOXL 공식 제품 CI gate다.
 - `bootstrap-check`와 `ci`는 SOXL golden 비교를 통과해야 한다.
-- `TQQQ` official explorer/matrix는 canonical runtime report지만 checked-in exact-golden gate는 아니다.
+- `TQQQ`, `KORU` official explorer/matrix는 canonical runtime report지만 checked-in exact-golden gate는 아니다.
 - 멘토 parity와 `mentor_floor`는 `legacy comparison` 진단으로만 남기고 CI gate에서 제외한다. 멘토 데이터는 참고용이며 공식 baseline 판정에는 관여하지 않는다.
 
 ## 결과
-- `SOXL` 기본 프로필은 `soxl_official_ddeolsao_pal_v1`, `TQQQ` 기본 프로필은 `tqqq_official_ddeolsao_pal_v1`가 된다.
-- `/api/backtests/official-explorer`와 `/api/backtests/official-matrix`는 현재 `soxl`, `tqqq` workspace에서 공식 canonical 리포트 경로가 된다.
+- `SOXL` 기본 프로필은 `soxl_official_ddeolsao_pal_v1`, `TQQQ` 기본 프로필은 `tqqq_official_ddeolsao_pal_v1`, `KORU` 기본 프로필은 `koru_official_ddeolsao_pal_v1`가 된다.
+- `/api/backtests/official-explorer`와 `/api/backtests/official-matrix`는 현재 `soxl`, `tqqq`, `koru` workspace에서 공식 canonical 리포트 경로가 된다.
 - 멘토 매트릭스와 관련 ADR은 계속 보존하지만, 제품 성공/실패 판정 기준은 아니다.
 - SOXL checked-in baseline을 바꾸려면 새 snapshot hash, 새 golden fixture, 새 ADR 근거가 함께 필요하다.
-- TQQQ runtime canonical baseline을 바꾸려면 새 manifest/data hash와 새 ADR 근거가 함께 필요하다.
+- TQQQ 또는 KORU runtime canonical baseline을 바꾸려면 새 manifest/data hash와 새 ADR 근거가 함께 필요하다.

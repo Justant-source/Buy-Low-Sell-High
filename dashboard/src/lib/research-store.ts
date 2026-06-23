@@ -369,6 +369,7 @@ class PostgresResearchStore implements ResearchStore {
 
 class SqliteResearchStore implements ResearchStore {
   private readonly readyPromise: Promise<void>;
+  private writeQueue: Promise<void> = Promise.resolve();
 
   private constructor(
     private readonly databasePath: string,
@@ -475,6 +476,12 @@ class SqliteResearchStore implements ResearchStore {
     await rename(tempPath, this.databasePath);
   }
 
+  private enqueueWrite<T>(operation: () => Promise<T>): Promise<T> {
+    const runner = this.writeQueue.then(operation, operation);
+    this.writeQueue = runner.then(() => undefined, () => undefined);
+    return runner;
+  }
+
   async findByKey<TPayload>(artifactKey: string): Promise<ResearchArtifactRecord<TPayload> | null> {
     await this.ensureReady();
     const row = this.selectOne("SELECT * FROM backtest_research_artifacts WHERE artifact_key = ?", [artifactKey]);
@@ -512,137 +519,139 @@ class SqliteResearchStore implements ResearchStore {
     sweepRows: ParameterSweepRowPayload[] = [],
   ): Promise<ResearchArtifactRecord<TPayload>> {
     await this.ensureReady();
-    this.database.run("BEGIN");
-    try {
-      this.database.run(
-        `
-          INSERT INTO backtest_research_artifacts (
-            artifact_id,
-            artifact_key,
-            artifact_kind,
-            profile_id,
-            symbol,
-            csv_path,
-            execution_model,
-            price_basis,
-            data_hash,
-            code_commit,
-            catalog_id,
-            sweep_id,
-            catalog_hash,
-            sweep_hash,
-            payload_hash,
-            payload,
-            created_at
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(artifact_key) DO UPDATE SET
-            artifact_kind = excluded.artifact_kind,
-            profile_id = excluded.profile_id,
-            symbol = excluded.symbol,
-            csv_path = excluded.csv_path,
-            execution_model = excluded.execution_model,
-            price_basis = excluded.price_basis,
-            data_hash = excluded.data_hash,
-            code_commit = excluded.code_commit,
-            catalog_id = excluded.catalog_id,
-            sweep_id = excluded.sweep_id,
-            catalog_hash = excluded.catalog_hash,
-            sweep_hash = excluded.sweep_hash,
-            payload_hash = excluded.payload_hash,
-            payload = excluded.payload,
-            created_at = excluded.created_at
-        `,
-        [
-          artifact.artifactId,
-          artifact.artifactKey,
-          artifact.kind,
-          artifact.profileId,
-          artifact.symbol,
-          artifact.csvPath,
-          artifact.executionModel,
-          artifact.priceBasis,
-          artifact.dataHash,
-          artifact.codeCommit,
-          artifact.catalogId ?? null,
-          artifact.sweepId ?? null,
-          artifact.catalogHash ?? null,
-          artifact.sweepHash ?? null,
-          artifact.payloadHash ?? null,
-          JSON.stringify(artifact.payload),
-          artifact.createdAt,
-        ],
-      );
-      const storedRow = this.selectOne("SELECT * FROM backtest_research_artifacts WHERE artifact_key = ?", [artifact.artifactKey]);
-      if (!storedRow) {
-        throw new Error(`Failed to reload persisted artifact ${artifact.artifactKey}`);
-      }
-      const stored = parseArtifactRow<TPayload>(storedRow);
-      this.database.run("DELETE FROM backtest_research_sweep_rows WHERE artifact_id = ?", [stored.artifactId]);
-      if (artifact.kind === "PARAMETER_SWEEP" && sweepRows.length > 0) {
-        for (const [index, row] of sweepRows.entries()) {
-          this.database.run(
-            `
-              INSERT INTO backtest_research_sweep_rows (
-                artifact_id,
-                row_index,
-                combo_key,
-                thread_count,
-                stop_sessions,
-                take_profit_pct,
-                entry_drop_pct,
-                stop_loss_pct,
-                max_entries_per_session,
-                config_hash,
-                total_return_pct,
-                max_drawdown_pct,
-                volatility_pct,
-                trade_count,
-                mean_segment_return_pct,
-                segment_stddev_pct,
-                worst_segment_return_pct,
-                positive_segment_ratio_pct,
-                recent_segment_return_pct,
-                pareto_return_mdd,
-                pareto_return_stability,
-                payload
-              )
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `,
-            [
-              stored.artifactId,
-              index,
-              row.combo_key,
-              row.params.thread_count,
-              row.params.stop_sessions,
-              row.params.sell_pct,
-              row.params.buy_pct,
-              0,
-              1,
-              row.config_hash,
-              row.metrics.full_return_pct,
-              row.metrics.max_drawdown_pct,
-              row.metrics.volatility_pct,
-              row.metrics.trade_count,
-              row.metrics.mean_segment_return_pct,
-              row.metrics.segment_stddev_pct,
-              row.metrics.worst_segment_return_pct,
-              row.metrics.positive_segment_ratio_pct,
-              row.metrics.recent_segment_return_pct,
-              row.flags.pareto_return_mdd ? 1 : 0,
-              row.flags.pareto_return_stability ? 1 : 0,
-              JSON.stringify(row),
-            ],
-          );
+    return this.enqueueWrite(async () => {
+      this.database.run("BEGIN");
+      try {
+        this.database.run(
+          `
+            INSERT INTO backtest_research_artifacts (
+              artifact_id,
+              artifact_key,
+              artifact_kind,
+              profile_id,
+              symbol,
+              csv_path,
+              execution_model,
+              price_basis,
+              data_hash,
+              code_commit,
+              catalog_id,
+              sweep_id,
+              catalog_hash,
+              sweep_hash,
+              payload_hash,
+              payload,
+              created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(artifact_key) DO UPDATE SET
+              artifact_kind = excluded.artifact_kind,
+              profile_id = excluded.profile_id,
+              symbol = excluded.symbol,
+              csv_path = excluded.csv_path,
+              execution_model = excluded.execution_model,
+              price_basis = excluded.price_basis,
+              data_hash = excluded.data_hash,
+              code_commit = excluded.code_commit,
+              catalog_id = excluded.catalog_id,
+              sweep_id = excluded.sweep_id,
+              catalog_hash = excluded.catalog_hash,
+              sweep_hash = excluded.sweep_hash,
+              payload_hash = excluded.payload_hash,
+              payload = excluded.payload,
+              created_at = excluded.created_at
+          `,
+          [
+            artifact.artifactId,
+            artifact.artifactKey,
+            artifact.kind,
+            artifact.profileId,
+            artifact.symbol,
+            artifact.csvPath,
+            artifact.executionModel,
+            artifact.priceBasis,
+            artifact.dataHash,
+            artifact.codeCommit,
+            artifact.catalogId ?? null,
+            artifact.sweepId ?? null,
+            artifact.catalogHash ?? null,
+            artifact.sweepHash ?? null,
+            artifact.payloadHash ?? null,
+            JSON.stringify(artifact.payload),
+            artifact.createdAt,
+          ],
+        );
+        const storedRow = this.selectOne("SELECT * FROM backtest_research_artifacts WHERE artifact_key = ?", [artifact.artifactKey]);
+        if (!storedRow) {
+          throw new Error(`Failed to reload persisted artifact ${artifact.artifactKey}`);
         }
+        const stored = parseArtifactRow<TPayload>(storedRow);
+        this.database.run("DELETE FROM backtest_research_sweep_rows WHERE artifact_id = ?", [stored.artifactId]);
+        if (artifact.kind === "PARAMETER_SWEEP" && sweepRows.length > 0) {
+          for (const [index, row] of sweepRows.entries()) {
+            this.database.run(
+              `
+                INSERT INTO backtest_research_sweep_rows (
+                  artifact_id,
+                  row_index,
+                  combo_key,
+                  thread_count,
+                  stop_sessions,
+                  take_profit_pct,
+                  entry_drop_pct,
+                  stop_loss_pct,
+                  max_entries_per_session,
+                  config_hash,
+                  total_return_pct,
+                  max_drawdown_pct,
+                  volatility_pct,
+                  trade_count,
+                  mean_segment_return_pct,
+                  segment_stddev_pct,
+                  worst_segment_return_pct,
+                  positive_segment_ratio_pct,
+                  recent_segment_return_pct,
+                  pareto_return_mdd,
+                  pareto_return_stability,
+                  payload
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `,
+              [
+                stored.artifactId,
+                index,
+                row.combo_key,
+                row.params.thread_count,
+                row.params.stop_sessions,
+                row.params.sell_pct,
+                row.params.buy_pct,
+                0,
+                1,
+                row.config_hash,
+                row.metrics.full_return_pct,
+                row.metrics.max_drawdown_pct,
+                row.metrics.volatility_pct,
+                row.metrics.trade_count,
+                row.metrics.mean_segment_return_pct,
+                row.metrics.segment_stddev_pct,
+                row.metrics.worst_segment_return_pct,
+                row.metrics.positive_segment_ratio_pct,
+                row.metrics.recent_segment_return_pct,
+                row.flags.pareto_return_mdd ? 1 : 0,
+                row.flags.pareto_return_stability ? 1 : 0,
+                JSON.stringify(row),
+              ],
+            );
+          }
+        }
+        this.database.run("COMMIT");
+        await this.persist();
+        return stored;
+      } catch (error) {
+        this.database.run("ROLLBACK");
+        throw error;
       }
-      this.database.run("COMMIT");
-      await this.persist();
-      return stored;
-    } catch (error) {
-      this.database.run("ROLLBACK");
-      throw error;
-    }
+    });
   }
 }
 

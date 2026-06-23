@@ -4,7 +4,7 @@
 승인됨
 
 ## 배경
-이제 대시보드 워크벤치는 사용자가 선택한 `thread_count`, `stop_sessions`, 익절 임계값, 진입 하락 임계값, 가격 손절, 사이징 모드, 가격 기준으로 떨사오팔 전략을 실행할 수 있어야 한다. 이 값들은 결정성을 유지해야 하며, `config_hash`에 포함되어야 하고, `SOXL` mentor reference, `TQQQ` official reference, `backtest_only` workspace 사이에서 조용히 어긋나면 안 된다.
+이제 대시보드 워크벤치는 사용자가 선택한 `thread_count`, `stop_sessions`, 익절 임계값, 진입 하락 임계값, 가격 손절, 사이징 모드, 가격 기준으로 떨사오팔 전략을 실행할 수 있어야 한다. 이 값들은 결정성을 유지해야 하며, `config_hash`에 포함되어야 하고, `SOXL` mentor reference, `TQQQ`/`KORU` official reference, `backtest_only` workspace 사이에서 조용히 어긋나면 안 된다.
 
 ## 결정
 - `thread_count` 기본값은 `7`이다.

@@ -41,6 +41,58 @@
   min-height: 260px;
 }
 
+.chart-regime-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  color: var(--text-muted);
+  font: 500 11px/1.4 var(--font-sans);
+}
+
+.chart-regime-legend[hidden] {
+  display: none;
+}
+
+.chart-regime-legend-label {
+  color: var(--text-soft);
+  font: 700 10px/1 var(--font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chart-regime-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-regime-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  flex: 0 0 auto;
+}
+
+.chart-regime-swatch.attack {
+  background: rgba(88, 184, 116, 0.16);
+  border-color: rgba(88, 184, 116, 0.34);
+}
+
+.chart-regime-swatch.defense {
+  background: rgba(220, 108, 108, 0.15);
+  border-color: rgba(220, 108, 108, 0.34);
+}
+
+.chart-regime-swatch.neutral {
+  background:
+    linear-gradient(135deg, transparent 0 42%, color-mix(in srgb, var(--text-soft) 28%, transparent) 42% 58%, transparent 58% 100%);
+  border-style: dashed;
+}
+
 .tab-strip {
   display: flex;
   gap: 10px;
@@ -424,6 +476,11 @@
   background: color-mix(in srgb, var(--primary) 10%, var(--surface));
 }
 
+.strategy-combo-cell {
+  white-space: normal;
+  line-height: 1.5;
+}
+
 .thread-summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -603,13 +660,85 @@
 .strategy-regime-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: var(--text);
   font: 600 13px/1.2 var(--font-sans);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  position: relative;
 }
 
 .strategy-regime-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   margin: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.strategy-regime-switch {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 76%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 88%, transparent);
+  transition: background 0.18s ease, box-shadow 0.18s ease;
+  flex: 0 0 auto;
+}
+
+.strategy-regime-switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.24);
+  transition: transform 0.18s ease;
+}
+
+.strategy-regime-toggle-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.strategy-regime-toggle-label {
+  color: var(--text);
+}
+
+.strategy-regime-toggle-state {
+  color: var(--text-soft);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.strategy-regime-toggle input:checked + .strategy-regime-switch {
+  background: color-mix(in srgb, var(--primary) 82%, #0f172a);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 70%, transparent);
+}
+
+.strategy-regime-toggle input:checked + .strategy-regime-switch::after {
+  transform: translateX(20px);
+}
+
+.strategy-regime-toggle input:focus-visible + .strategy-regime-switch {
+  outline: 2px solid color-mix(in srgb, var(--primary) 28%, transparent);
+  outline-offset: 2px;
+}
+
+.strategy-regime-toggle input:disabled + .strategy-regime-switch {
+  opacity: 0.62;
+}
+
+.strategy-regime-toggle input:disabled ~ .strategy-regime-toggle-copy {
+  opacity: 0.62;
 }
 
 .strategy-regime-help-button {
@@ -710,7 +839,15 @@
   margin-top: 12px;
 }
 
-.regime-help-overview-card {
+.regime-help-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.regime-help-overview-card,
+.regime-help-summary-card {
   min-height: 98px;
   border: 1px solid var(--border);
   border-radius: var(--r-md);
@@ -722,12 +859,14 @@
   gap: 8px;
 }
 
-.regime-help-overview-card strong {
+.regime-help-overview-card strong,
+.regime-help-summary-card strong {
   color: var(--text);
   font: 700 14px/1.35 var(--font-sans);
 }
 
-.regime-help-overview-card .muted {
+.regime-help-overview-card .muted,
+.regime-help-summary-card .muted {
   font-size: 12px;
   line-height: 1.45;
 }
@@ -742,6 +881,12 @@
 .regime-help-layout {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.regime-help-state-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -762,7 +907,8 @@
 }
 
 .regime-help-section.base {
-  margin-top: 16px;
+  border-color: color-mix(in srgb, #64748b 22%, var(--border));
+  background: linear-gradient(180deg, color-mix(in srgb, #64748b 8%, var(--surface-2)), var(--surface-2));
 }
 
 .regime-help-section-head {
@@ -843,6 +989,31 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.regime-help-formula-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.regime-help-formula-card,
+.regime-help-definition {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.regime-help-formula-block {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  font: 600 12px/1.6 "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
 }
 
 .strategy-filter-chip {
@@ -1538,7 +1709,10 @@
   }
 
   .regime-help-layout,
+  .regime-help-state-grid,
+  .regime-help-summary-grid,
   .regime-help-overview-grid,
+  .regime-help-formula-grid,
   .regime-help-rule-grid.three-col,
   .regime-help-threshold-grid.three-col {
     grid-template-columns: 1fr;
@@ -1680,6 +1854,21 @@
   .research-grid,
   .sweep-filter-grid {
     grid-template-columns: 1fr;
+  }
+
+  .strategy-slice-year-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .strategy-slice-year-input-wrap {
+    width: 100%;
+  }
+
+  .strategy-slice-year-input {
+    width: 100%;
+    min-width: 0;
   }
 
   .regime-help-body {

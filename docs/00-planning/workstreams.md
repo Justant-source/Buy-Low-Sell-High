@@ -20,7 +20,7 @@
 - 워크스트림 `1-5`는 이 저장소 안에서 실행 가능한 Python 스캐폴딩과 테스트를 갖추고 있다.
 - 워크스트림 `6`은 스모크 및 결정성 테스트용 인메모리 worker/repository와 스키마 SQL을 갖추고 있다.
 - 워크스트림 `7-8`은 Express 대시보드, workspace 기반 UI, CLI 기반 API, 파일 기반 대시보드 작업 산출물, preset ranking warmup, Python strategy-ranking daemon 경로, slice-aware `strategy-detail`/`thread-timeline` 재실행 경로를 포함한다.
-- 현재 workspace navigation은 `SOXL`, `TQQQ`, `0193T0`, `233740`, `462330`를 노출한다.
+- 현재 workspace navigation은 `SOXL`, `TQQQ`, `KORU`, `0193T0`, `233740`, `462330`를 노출한다.
 - 로컬 대시보드 TypeScript 검증은 `./scripts/dashboard_exec.sh build` 와 `./scripts/dashboard_exec.sh test`를 우선 사용한다.
 - 로컬 대시보드 스모크 플로우는 `./scripts/e2e_backtest.sh`, `./scripts/e2e_risk.sh`로 실행 가능하다.
 - Phase 8 리스크 리포트는 `PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest risk-report --profile configs/strategies/soxl_official_ddeolsao_pal_v1.yaml --csv engine/tests/fixtures/sample_soxl.csv --symbol SOXL`로 직접 실행할 수 있다.

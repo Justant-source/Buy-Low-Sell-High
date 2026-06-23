@@ -9,7 +9,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/tokens.css?v=20260620-16">
 <link rel="stylesheet" href="/css/components.css?v=20260620-16">
-<link rel="stylesheet" href="/css/dashboard.css?v=20260622-01">
+<link rel="stylesheet" href="/css/dashboard.css?v=20260623-06">
+<link rel="stylesheet" href="/css/sweep-reference.css?v=20260623-07">
 <script src="/js/theme.js?v=20260620-16"></script>
 </head>
 <body>
@@ -63,6 +64,7 @@
     <div class="tab-strip" role="tablist" aria-label="백테스트 탭">
       <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="guide">설명</button>
       <button class="tab-button active" type="button" role="tab" aria-selected="true" data-tab="strategy">전략</button>
+      <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="regime-research" id="regime-research-tab-button">Regime 검증</button>
       <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="parameter">파라미터 테스트</button>
       <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="mentor" id="mentor-tab-button">멘토 래퍼런스</button>
     </div>
@@ -266,7 +268,7 @@
         <div class="card-head">
           <div>
             <div class="card-title">Regime 설정</div>
-            <div class="card-sub">SOXL 전용입니다. QQQ Yahoo 일봉으로 주봉 RSI(14) Wilder 기준 bull / bear 를 계산하고, 전주 확정값만 사용합니다.</div>
+            <div class="card-sub">SOXL 전용입니다. QQQ Yahoo 일봉으로 주봉 RSI(14) Wilder 기준 Neutral / Attack / Defense 상태를 계산하고, 전주 확정값만 사용합니다.</div>
           </div>
           <button
             class="strategy-regime-help-button"
@@ -274,14 +276,18 @@
             type="button"
             aria-haspopup="dialog"
             aria-controls="strategy-regime-help-dialog"
-            aria-label="Regime 상세 설정 열기"
+            aria-label="Regime 상세 안내 열기"
           >?</button>
         </div>
         <div class="field-grid research-grid">
           <div class="field full">
             <label class="strategy-regime-toggle">
-              <input id="strategy-regime-enabled" type="checkbox">
-              <span>Regime 적용</span>
+              <input id="strategy-regime-enabled" type="checkbox" role="switch" aria-describedby="strategy-regime-toggle-state">
+              <span class="strategy-regime-switch" aria-hidden="true"></span>
+              <span class="strategy-regime-toggle-copy">
+                <span class="strategy-regime-toggle-label">Regime 적용</span>
+                <span class="strategy-regime-toggle-state mono" id="strategy-regime-toggle-state">OFF</span>
+              </span>
             </label>
           </div>
         </div>
@@ -344,6 +350,7 @@
             </div>
           </div>
           <div class="chart-wrap" id="strategy-equity-chart"><div class="empty-state"></div></div>
+          <div class="chart-regime-legend" id="strategy-equity-regime-legend" hidden></div>
         </div>
         <div class="card">
           <div class="card-head">
@@ -353,6 +360,7 @@
             </div>
           </div>
           <div class="chart-wrap" id="strategy-drawdown-chart"><div class="empty-state"></div></div>
+          <div class="chart-regime-legend" id="strategy-drawdown-regime-legend" hidden></div>
         </div>
       </div>
 
@@ -460,120 +468,119 @@
         <section class="regime-help-panel" role="dialog" aria-modal="true" aria-labelledby="strategy-regime-help-title">
           <div class="regime-help-head">
             <div>
-              <div class="card-title" id="strategy-regime-help-title">SOXL Regime 상세 설정</div>
-              <div class="card-sub">QQQ 보조 시계열의 직전 완료 주 14주 Wilder RSI만 사용해 Neutral / Attack / Defense 상태를 나누고, 각 상태 파라미터를 따로 저장합니다.</div>
+              <div class="card-title" id="strategy-regime-help-title">SOXL Regime 상세 안내</div>
+              <div class="card-sub">QQQ 보조 시계열의 직전 완료 주 14주 Wilder RSI만 사용해 Neutral / Attack / Defense 상태를 나누고, 각 상태에 대응하는 떨사오팔 파라미터를 적용합니다.</div>
             </div>
             <button class="btn" type="button" id="strategy-regime-help-close">닫기</button>
           </div>
           <div class="regime-help-body">
-            <fieldset id="strategy-regime-fieldset" style="border:0;padding:0;margin:0">
-              <div class="regime-help-overview">
-                <div class="regime-help-kicker">기준 입력</div>
-                <div class="regime-help-overview-grid">
-                  <div class="field regime-help-overview-card">
-                    <label for="strategy-regime-symbol">Regime 심볼</label>
-                    <input class="input mono" id="strategy-regime-symbol" type="text" value="QQQ" readonly>
-                  </div>
-                  <div class="field regime-help-overview-card">
-                    <label for="strategy-regime-rsi-period">RSI 주기</label>
-                    <input class="input mono" id="strategy-regime-rsi-period" type="number" value="14" min="1" step="1">
-                  </div>
-                  <div class="regime-help-overview-card">
-                    <span class="regime-help-overview-label">주간 적용</span>
-                    <strong>전주 확정값만 사용</strong>
-                    <span class="muted">당주 진행 중 RSI는 regime 전환에 쓰지 않습니다.</span>
-                  </div>
-                  <div class="regime-help-overview-card">
-                    <span class="regime-help-overview-label">fallback</span>
-                    <strong>45~55는 Neutral, warmup 전도 Neutral</strong>
-                    <span class="muted">직전 상태 유지 대신 중립 상태를 명시적으로 사용합니다.</span>
-                  </div>
+            <div id="strategy-regime-fieldset">
+              <section class="regime-help-overview">
+                <div class="regime-help-kicker">판별 요약</div>
+                <div class="regime-help-summary-grid">
+                  <article class="regime-help-summary-card">
+                    <span class="regime-help-overview-label">입력 데이터</span>
+                    <strong>QQQ 일봉 → 주봉 종가 집계</strong>
+                    <span class="muted">SOXL 매매용 보조 시계열로만 사용합니다.</span>
+                  </article>
+                  <article class="regime-help-summary-card">
+                    <span class="regime-help-overview-label">지표</span>
+                    <strong>14-week Wilder RSI</strong>
+                    <span class="muted">Wilder RMA 평활을 사용합니다.</span>
+                  </article>
+                  <article class="regime-help-summary-card">
+                    <span class="regime-help-overview-label">적용 시점</span>
+                    <strong>SOXL 각 세션은 직전 완료 주 RSI만 사용</strong>
+                    <span class="muted">당주 진행 중 값은 regime 전환에 쓰지 않습니다.</span>
+                  </article>
+                  <article class="regime-help-summary-card">
+                    <span class="regime-help-overview-label">상태 전환</span>
+                    <strong>Attack ≥ 55 / Neutral 45~55 / Defense ≤ 45</strong>
+                    <span class="muted">첫 RSI 계산 전 warmup 구간도 Neutral입니다.</span>
+                  </article>
                 </div>
-              </div>
+              </section>
 
-              <div class="regime-help-layout">
+              <section class="regime-help-section">
+                <div class="regime-help-section-head">
+                  <div>
+                    <div class="regime-help-kicker">공통 수식</div>
+                    <h3>Wilder RSI와 세션 적용식</h3>
+                  </div>
+                  <div class="muted">주봉 RSI를 만든 뒤, 다음 주의 모든 SOXL 세션에 같은 상태를 적용합니다.</div>
+                </div>
+                <div class="regime-help-formula-grid">
+                  <article class="regime-help-formula-card">
+                    <div class="regime-help-group-title">Wilder RSI(14)</div>
+                    <pre class="regime-help-formula-block">gain_t = max(close_t - close_{t-1}, 0)
+loss_t = max(close_{t-1} - close_t, 0)
+avg_gain_t = (13 * avg_gain_{t-1} + gain_t) / 14
+avg_loss_t = (13 * avg_loss_{t-1} + loss_t) / 14
+RS_t = avg_gain_t / avg_loss_t
+RSI_t = 100 - 100 / (1 + RS_t)</pre>
+                  </article>
+                  <article class="regime-help-formula-card">
+                    <div class="regime-help-group-title">세션 적용 규칙</div>
+                    <pre class="regime-help-formula-block">For each SOXL session d in week w:
+  regime_d = state(RSI_{w-1})
+
+if RSI_{w-1} >= 55: regime_d = attack
+if RSI_{w-1} <= 45: regime_d = defense
+if 45 < RSI_{w-1} < 55: regime_d = neutral
+if RSI unavailable: regime_d = neutral</pre>
+                  </article>
+                </div>
+              </section>
+
+              <div class="regime-help-state-grid">
                 <section class="regime-help-section bull" aria-labelledby="strategy-regime-bull-title">
                   <div class="regime-help-section-head">
                     <div>
                       <div class="regime-help-kicker">Attack</div>
-                      <h3 id="strategy-regime-bull-title">공격 상태 판정</h3>
+                      <h3 id="strategy-regime-bull-title">공격 상태</h3>
                     </div>
-                    <div class="muted">직전 완료 주 RSI가 55 이상이면 Attack 손절일 / 매수 % / 매도 %를 사용합니다.</div>
+                    <div class="muted">상방 모멘텀이 충분히 강하다고 해석하는 구간입니다.</div>
                   </div>
-                  <div class="regime-help-rule-grid three-col">
-                    <article class="regime-help-rule-card">
-                      <div class="regime-help-rule-title">50 상향 돌파</div>
-                      <div class="regime-help-rule-pairs">
-                        <div class="regime-help-rule-cell">
-                          <span>2주전 RSI</span>
-                          <strong class="mono">&lt;= 50</strong>
-                        </div>
-                        <div class="regime-help-rule-cell">
-                          <span>1주전 RSI</span>
-                          <strong class="mono">&gt; 50</strong>
-                        </div>
-                      </div>
-                    </article>
-                    <article class="regime-help-rule-card">
-                      <div class="regime-help-rule-title">50 ~ 60 구간 상승</div>
-                      <div class="regime-help-rule-pairs">
-                        <div class="regime-help-rule-cell">
-                          <span>1주전 RSI</span>
-                          <strong class="mono">50 ~ 60</strong>
-                        </div>
-                        <div class="regime-help-rule-cell">
-                          <span>방향</span>
-                          <strong>상승</strong>
-                        </div>
-                      </div>
-                    </article>
-                    <article class="regime-help-rule-card">
-                      <div class="regime-help-rule-title">35 아래 반등</div>
-                      <div class="regime-help-rule-pairs">
-                        <div class="regime-help-rule-cell">
-                          <span>2주전 RSI</span>
-                          <strong class="mono">&lt; 35</strong>
-                        </div>
-                        <div class="regime-help-rule-cell">
-                          <span>방향</span>
-                          <strong>상승</strong>
-                        </div>
-                      </div>
-                    </article>
+                  <div class="regime-help-definition">
+                    <div class="regime-help-group-title">판정식</div>
+                    <pre class="regime-help-formula-block">attack if RSI_{w-1} >= 55</pre>
                   </div>
-                  <div class="regime-help-input-group">
-                    <div class="regime-help-group-title">Attack 기준값 (호환 입력은 모두 55로 정규화)</div>
-                    <div class="regime-help-threshold-grid three-col">
-                      <div class="field">
-                        <label for="strategy-regime-bull-low-threshold">Attack 기준</label>
-                        <input class="input mono" id="strategy-regime-bull-low-threshold" type="number" value="55" step="0.1">
-                      </div>
-                      <div class="field">
-                        <label for="strategy-regime-bull-mid-low-threshold">Attack 기준</label>
-                        <input class="input mono" id="strategy-regime-bull-mid-low-threshold" type="number" value="55" step="0.1">
-                      </div>
-                      <div class="field">
-                        <label for="strategy-regime-bull-mid-high-threshold">Attack 기준</label>
-                        <input class="input mono" id="strategy-regime-bull-mid-high-threshold" type="number" value="55" step="0.1">
-                      </div>
+                  <div class="regime-help-definition">
+                    <div class="regime-help-group-title">적용 파라미터</div>
+                    <pre class="regime-help-formula-block">stop_sessions = 30
+buy_pct = 0%
+sell_pct = 0%</pre>
+                  </div>
+                  <div class="regime-help-definition">
+                    <div class="regime-help-group-title">세션 레벨 적용</div>
+                    <pre class="regime-help-formula-block">if regime_d = attack:
+  params_d = attack_params</pre>
+                  </div>
+                </section>
+
+                <section class="regime-help-section base" aria-labelledby="strategy-regime-base-title">
+                  <div class="regime-help-section-head">
+                    <div>
+                      <div class="regime-help-kicker">Neutral</div>
+                      <h3 id="strategy-regime-base-title">중립 상태</h3>
                     </div>
+                    <div class="muted">추세 바이어스가 모호하거나 warmup 구간일 때 쓰는 baseline입니다.</div>
                   </div>
-                  <div class="regime-help-input-group">
-                    <div class="regime-help-group-title">Attack 적용 파라미터</div>
-                    <div class="regime-help-threshold-grid three-col">
-                      <div class="field">
-                        <label for="strategy-regime-bull-stop">Attack 손절일</label>
-                        <input class="input mono" id="strategy-regime-bull-stop" type="number" value="40" min="1" step="1">
-                      </div>
-                      <div class="field">
-                        <label for="strategy-regime-bull-buy">Attack 매수 %</label>
-                        <input class="input mono" id="strategy-regime-bull-buy" type="number" value="0" step="1">
-                      </div>
-                      <div class="field">
-                        <label for="strategy-regime-bull-sell">Attack 매도 %</label>
-                        <input class="input mono" id="strategy-regime-bull-sell" type="number" value="0" step="1">
-                      </div>
-                    </div>
+                  <div class="regime-help-definition">
+                    <div class="regime-help-group-title">판정식</div>
+                    <pre class="regime-help-formula-block">neutral if 45 &lt; RSI_{w-1} &lt; 55
+neutral if RSI unavailable</pre>
+                  </div>
+                  <div class="regime-help-definition">
+                    <div class="regime-help-group-title">적용 파라미터</div>
+                    <pre class="regime-help-formula-block">stop_sessions = 40
+buy_pct = 0%
+sell_pct = 0%</pre>
+                  </div>
+                  <div class="regime-help-definition">
+                    <div class="regime-help-group-title">세션 레벨 적용</div>
+                    <pre class="regime-help-formula-block">if regime_d = neutral:
+  params_d = baseline_params</pre>
                   </div>
                 </section>
 
@@ -581,112 +588,53 @@
                   <div class="regime-help-section-head">
                     <div>
                       <div class="regime-help-kicker">Defense</div>
-                      <h3 id="strategy-regime-bear-title">방어 상태 판정</h3>
+                      <h3 id="strategy-regime-bear-title">방어 상태</h3>
                     </div>
-                    <div class="muted">직전 완료 주 RSI가 45 이하이면 Defense 손절일 / 매수 % / 매도 %를 사용합니다.</div>
+                    <div class="muted">모멘텀이 약하거나 하방 바이어스가 강하다고 해석하는 구간입니다.</div>
                   </div>
-                  <div class="regime-help-rule-grid three-col">
-                    <article class="regime-help-rule-card">
-                      <div class="regime-help-rule-title">65 위 꺾임</div>
-                      <div class="regime-help-rule-pairs">
-                        <div class="regime-help-rule-cell">
-                          <span>2주전 RSI</span>
-                          <strong class="mono">&gt; 65</strong>
-                        </div>
-                        <div class="regime-help-rule-cell">
-                          <span>방향</span>
-                          <strong>하락</strong>
-                        </div>
-                      </div>
-                    </article>
-                    <article class="regime-help-rule-card">
-                      <div class="regime-help-rule-title">40 ~ 50 구간 하락</div>
-                      <div class="regime-help-rule-pairs">
-                        <div class="regime-help-rule-cell">
-                          <span>1주전 RSI</span>
-                          <strong class="mono">40 ~ 50</strong>
-                        </div>
-                        <div class="regime-help-rule-cell">
-                          <span>방향</span>
-                          <strong>하락</strong>
-                        </div>
-                      </div>
-                    </article>
-                    <article class="regime-help-rule-card">
-                      <div class="regime-help-rule-title">50 하향 이탈</div>
-                      <div class="regime-help-rule-pairs">
-                        <div class="regime-help-rule-cell">
-                          <span>2주전 RSI</span>
-                          <strong class="mono">&gt;= 50</strong>
-                        </div>
-                        <div class="regime-help-rule-cell">
-                          <span>1주전 RSI</span>
-                          <strong class="mono">&lt; 50</strong>
-                        </div>
-                      </div>
-                    </article>
+                  <div class="regime-help-definition">
+                    <div class="regime-help-group-title">판정식</div>
+                    <pre class="regime-help-formula-block">defense if RSI_{w-1} &lt;= 45</pre>
                   </div>
-                  <div class="regime-help-input-group">
-                    <div class="regime-help-group-title">Defense 기준값 (호환 입력은 모두 45로 정규화)</div>
-                    <div class="regime-help-threshold-grid three-col">
-                      <div class="field">
-                        <label for="strategy-regime-bear-high-threshold">Defense 기준</label>
-                        <input class="input mono" id="strategy-regime-bear-high-threshold" type="number" value="45" step="0.1">
-                      </div>
-                      <div class="field">
-                        <label for="strategy-regime-bear-mid-low-threshold">Defense 기준</label>
-                        <input class="input mono" id="strategy-regime-bear-mid-low-threshold" type="number" value="45" step="0.1">
-                      </div>
-                      <div class="field">
-                        <label for="strategy-regime-bear-mid-high-threshold">Defense 기준</label>
-                        <input class="input mono" id="strategy-regime-bear-mid-high-threshold" type="number" value="45" step="0.1">
-                      </div>
-                    </div>
+                  <div class="regime-help-definition">
+                    <div class="regime-help-group-title">적용 파라미터</div>
+                    <pre class="regime-help-formula-block">stop_sessions = 40
+buy_pct = 0%
+sell_pct = 0%</pre>
                   </div>
-                  <div class="regime-help-input-group">
-                    <div class="regime-help-group-title">Defense 적용 파라미터</div>
-                    <div class="regime-help-threshold-grid three-col">
-                      <div class="field">
-                        <label for="strategy-regime-bear-stop">Defense 손절일</label>
-                        <input class="input mono" id="strategy-regime-bear-stop" type="number" value="40" min="1" step="1">
-                      </div>
-                      <div class="field">
-                        <label for="strategy-regime-bear-buy">Defense 매수 %</label>
-                        <input class="input mono" id="strategy-regime-bear-buy" type="number" value="0" step="1">
-                      </div>
-                      <div class="field">
-                        <label for="strategy-regime-bear-sell">Defense 매도 %</label>
-                        <input class="input mono" id="strategy-regime-bear-sell" type="number" value="0" step="1">
-                      </div>
-                    </div>
+                  <div class="regime-help-definition">
+                    <div class="regime-help-group-title">세션 레벨 적용</div>
+                    <pre class="regime-help-formula-block">if regime_d = defense:
+  params_d = defense_params</pre>
                   </div>
                 </section>
               </div>
 
-              <section class="regime-help-section base" aria-labelledby="strategy-regime-base-title">
+              <section class="regime-help-section">
                 <div class="regime-help-section-head">
                   <div>
-                    <div class="regime-help-kicker">Neutral</div>
-                    <h3 id="strategy-regime-base-title">중립 baseline 파라미터</h3>
+                    <div class="regime-help-kicker">운용 메모</div>
+                    <h3>포지션과 상태 전환</h3>
                   </div>
-                  <div class="muted">RSI가 45 초과 55 미만인 주간과 최초 RSI warmup 전 구간에서 사용합니다.</div>
+                  <div class="muted">상태는 매주 다시 판정되지만, 이미 열린 포지션은 진입 시점 파라미터를 유지합니다.</div>
                 </div>
-                <div class="regime-help-threshold-grid three-col">
-                  <div class="field">
-                    <label for="strategy-regime-base-stop">Neutral 손절일</label>
-                    <input class="input mono" id="strategy-regime-base-stop" type="number" value="40" min="1" step="1">
-                  </div>
-                  <div class="field">
-                    <label for="strategy-regime-base-buy">Neutral 매수 %</label>
-                    <input class="input mono" id="strategy-regime-base-buy" type="number" value="0" step="1">
-                  </div>
-                  <div class="field">
-                    <label for="strategy-regime-base-sell">Neutral 매도 %</label>
-                    <input class="input mono" id="strategy-regime-base-sell" type="number" value="0" step="1">
-                  </div>
+                <div class="regime-help-formula-grid">
+                  <article class="regime-help-formula-card">
+                    <div class="regime-help-group-title">포지션 유지 규칙</div>
+                    <pre class="regime-help-formula-block">open_thread keeps entry_regime
+open_thread keeps entry-time stop/buy/sell params
+later regime flips do not rewrite existing trades</pre>
+                  </article>
+                  <article class="regime-help-formula-card">
+                    <div class="regime-help-group-title">현재 대시보드 SSOT</div>
+                    <pre class="regime-help-formula-block">Signal source: QQQ weekly Wilder RSI(14)
+Thresholds: Attack 55 / Defense 45
+Baseline: 5x40 / buy 0% / sell 0%
+Regime toggle: ON => regime-aware ranking and charts</pre>
+                  </article>
                 </div>
               </section>
-            </fieldset>
+            </div>
           </div>
         </section>
       </div>
@@ -708,141 +656,114 @@
       </div>
     </section>
 
-    <section class="tab-panel" data-tab-panel="parameter">
+    <section class="tab-panel" data-tab-panel="regime-research">
       <div class="card">
         <div class="card-head">
           <div>
-            <div class="card-title">Parameter Sweep Explorer</div>
+            <div class="card-title">Regime Walk-Forward Validation</div>
+            <div class="card-sub">SOXL 전용 audit + out-of-sample fold 보고서입니다. 이 탭은 official research config로만 계산합니다.</div>
           </div>
           <div class="sc-tags">
-            <span class="badge info mono">core4_v4</span>
-            <span class="badge neutral mono" id="sweep-artifact-id">-</span>
-          </div>
-        </div>
-        <div class="field-grid research-grid">
-          <div class="field">
-            <label for="sweep-model">아티팩트 실행 모델</label>
-            <select class="select" id="sweep-model">
-              <option value="next_open" selected>next_open</option>
-              <option value="ideal_same_close">ideal_same_close</option>
-              <option value="next_close">next_close</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="sweep-price-basis">아티팩트 가격 기준</label>
-            <select class="select" id="sweep-price-basis">
-              <option value="adjusted_close" selected>adjusted_close</option>
-              <option value="raw_close_with_actions">raw_close_with_actions</option>
-            </select>
-          </div>
-          <div class="field full">
-            <label>스윕 정의</label>
-            <div class="notice">`thread_count[5,6,7] × stop_sessions[30,40] × buy_pct[-10..0] × sell_pct[0..10] = 726 combos`</div>
+            <span class="badge info mono">3Y / 1Y OOS</span>
+            <span class="badge neutral mono" id="regime-walk-forward-artifact-id">-</span>
           </div>
         </div>
         <div class="action-row">
-          <button class="btn" type="button" id="sweep-refresh-button">최신 산출물 다시 읽기</button>
+          <button class="btn" type="button" id="regime-walk-forward-refresh-button">보고서 다시 계산</button>
         </div>
-        <div class="notice" style="margin-top:14px" id="sweep-meta-note">Codex가 생성한 최신 스윕 산출물을 읽어오는 중입니다.</div>
+        <div class="notice" style="margin-top:14px" id="regime-walk-forward-note">
+          SOXL 공식 기준선 artifact를 읽어오는 중입니다.
+        </div>
       </div>
 
       <div class="row row-4">
-        <div class="kpi"><span class="kpi-label">콤보 수</span><span class="kpi-value" id="sweep-kpi-count">-</span><div class="kpi-meta">core4_v4</div></div>
-        <div class="kpi"><span class="kpi-label">최고 전체 수익</span><span class="kpi-value mono" id="sweep-kpi-best-full">-</span><div class="kpi-meta">combo key</div></div>
-        <div class="kpi"><span class="kpi-label">최고 CAGR 조합</span><span class="kpi-value mono" id="sweep-kpi-best-robust">-</span><div class="kpi-meta">cagr desc, mdd desc</div></div>
-        <div class="kpi"><span class="kpi-label">Pareto</span><span class="kpi-value" id="sweep-kpi-pareto">-</span><div class="kpi-meta">return / MDD frontier</div></div>
+        <div class="kpi"><span class="kpi-label">최종 권고</span><span class="kpi-value" id="regime-walk-forward-kpi-recommendation">-</span><div class="kpi-meta" id="regime-walk-forward-kpi-recommendation-meta">strict gate</div></div>
+        <div class="kpi"><span class="kpi-label">Audit</span><span class="kpi-value" id="regime-walk-forward-kpi-audit">-</span><div class="kpi-meta" id="regime-walk-forward-kpi-audit-meta">semantic status</div></div>
+        <div class="kpi"><span class="kpi-label">최근 OOS WIN</span><span class="kpi-value" id="regime-walk-forward-kpi-wins">-</span><div class="kpi-meta" id="regime-walk-forward-kpi-wins-meta">2022+ completed tests</div></div>
+        <div class="kpi"><span class="kpi-label">평균 Δ CAGR</span><span class="kpi-value" id="regime-walk-forward-kpi-cagr-delta">-</span><div class="kpi-meta" id="regime-walk-forward-kpi-cagr-delta-meta">on - off</div></div>
       </div>
 
       <div class="row row-2">
         <div class="card">
           <div class="card-head">
             <div>
-              <div class="card-title">Pareto Scatter</div>
-              <div class="card-sub">전체 수익률 vs MDD, 색상은 CAGR입니다.</div>
+              <div class="card-title">Decision Gate</div>
+              <div class="card-sub">최근 OOS 우위와 장기 훼손 제한을 같이 봅니다.</div>
             </div>
           </div>
-          <div class="chart-wrap" id="sweep-scatter-chart"><div class="empty-state">스윕 결과가 준비되면 Pareto scatter가 표시됩니다.</div></div>
+          <div class="stack-list" id="regime-walk-forward-gate-list">
+            <div class="stack-row"><span class="title">보고서를 기다리는 중</span><span class="badge neutral">pending</span></div>
+          </div>
         </div>
         <div class="card">
           <div class="card-head">
             <div>
-              <div class="card-title">Parameter Box Plot</div>
-              <div class="card-sub">선택 파라미터 값별 CAGR 분포입니다.</div>
+              <div class="card-title">Audit Checklist</div>
+              <div class="card-sub">구현 오류인지, 문서 충돌인지 먼저 분리합니다.</div>
             </div>
-            <select class="select" id="sweep-box-axis" style="width:180px">
-              <option value="thread_count">thread_count</option>
-              <option value="stop_sessions">stop_sessions</option>
-              <option value="buy_pct">buy_pct</option>
-              <option value="sell_pct">sell_pct</option>
-            </select>
           </div>
-          <div class="chart-wrap" id="sweep-box-chart"><div class="empty-state">스윕 결과가 준비되면 box plot이 표시됩니다.</div></div>
+          <div class="stack-list" id="regime-walk-forward-audit-list">
+            <div class="stack-row"><span class="title">audit 결과를 기다리는 중</span><span class="badge neutral">pending</span></div>
+          </div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Parallel Coordinates</div>
-            <div class="card-sub">4개 파라미터와 핵심 성과 지표를 한 번에 비교합니다.</div>
+      <div class="row row-2">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Full-Period Comparison</div>
+              <div class="card-sub">best off / best on / canonical off baseline을 함께 비교합니다.</div>
+            </div>
+          </div>
+          <div class="stack-list" id="regime-walk-forward-full-period-list">
+            <div class="stack-row"><span class="title">full-period 비교를 기다리는 중</span><span class="badge neutral">pending</span></div>
           </div>
         </div>
-        <div class="chart-wrap" id="sweep-parcoords-chart"><div class="empty-state">스윕 결과가 준비되면 parallel coordinates가 표시됩니다.</div></div>
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Report Notes</div>
+              <div class="card-sub">판정 게이트와 실행 컨텍스트를 같이 남깁니다.</div>
+            </div>
+          </div>
+          <div class="stack-list" id="regime-walk-forward-notes">
+            <div class="stack-row"><span class="title">추가 메모 없음</span><span class="badge neutral">idle</span></div>
+          </div>
+        </div>
       </div>
 
       <div class="card wide-table">
         <div class="card-head">
           <div>
-            <div class="card-title">상위 10 콤보</div>
-            <div class="card-sub">기본 정렬: cagr desc, max_drawdown desc, full return desc</div>
+            <div class="card-title">Walk-Forward Folds</div>
+            <div class="card-sub">positive `Δ MDD`는 regime on이 덜 음수여서 drawdown이 개선됐다는 뜻입니다.</div>
           </div>
-        </div>
-        <div class="sweep-filter-grid">
-          <div class="field">
-            <label for="sweep-filter-min-return">최소 전체 수익률</label>
-            <input class="input mono" id="sweep-filter-min-return" type="number" step="10" value="0">
-          </div>
-          <div class="field">
-            <label for="sweep-filter-max-mdd">최대 MDD</label>
-            <input class="input mono" id="sweep-filter-max-mdd" type="number" step="5" value="-100">
-          </div>
-          <div class="field">
-            <label for="sweep-filter-min-cagr">최소 CAGR</label>
-            <input class="input mono" id="sweep-filter-min-cagr" type="number" step="5" value="-100">
-          </div>
-          <div class="field">
-            <label for="sweep-filter-pareto">Pareto 필터</label>
-            <select class="select" id="sweep-filter-pareto">
-              <option value="all" selected>all</option>
-              <option value="return_mdd">return / MDD</option>
-            </select>
-          </div>
-        </div>
-        <div class="action-row" style="margin-top:14px">
-          <button class="btn" type="button" id="sweep-filter-apply">필터 적용</button>
-          <button class="btn" type="button" id="sweep-filter-reset">필터 초기화</button>
-        </div>
-        <div class="stack-list" id="sweep-warning-list" style="margin-top:14px">
-          <div class="stack-row"><span class="title">스윕 결과를 기다리는 중</span><span class="badge neutral">pending</span></div>
         </div>
         <div class="tbl-wrap" style="margin-top:14px">
-          <table class="tbl" id="sweep-table">
+          <table class="tbl">
             <thead>
               <tr>
-                <th>Combo</th>
-                <th class="num">Params</th>
-                <th class="num">Full Return</th>
-                <th class="num">CAGR</th>
-                <th class="num">MDD</th>
-                <th class="num">Pareto</th>
+                <th>Test</th>
+                <th>Train</th>
+                <th>Off Winner</th>
+                <th>On Winner</th>
+                <th class="num">Δ Return</th>
+                <th class="num">Δ CAGR</th>
+                <th class="num">Δ MDD</th>
+                <th class="num">Verdict</th>
               </tr>
             </thead>
-            <tbody id="sweep-table-body">
-              <tr><td colspan="6" class="muted" style="text-align:center">스윕 결과를 불러오지 않았습니다.</td></tr>
+            <tbody id="regime-walk-forward-fold-table-body">
+              <tr><td colspan="8" class="muted" style="text-align:center">walk-forward 결과를 불러오지 않았습니다.</td></tr>
             </tbody>
           </table>
         </div>
       </div>
+    </section>
+
+    <section class="tab-panel" data-tab-panel="parameter">
+      <div id="sweep-reference-root"></div>
     </section>
 
     <section class="tab-panel" data-tab-panel="mentor">
@@ -891,6 +812,7 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
 <script src="/js/common.js?v=20260621-01"></script>
-<script src="/js/backtests-dashboard.js?v=20260622-01"></script>
+<script src="/js/sweep-reference-panel.js?v=20260623-07"></script>
+<script src="/js/backtests-dashboard.js?v=20260623-06"></script>
 </body>
 </html>

@@ -42,7 +42,16 @@ class MentorMatrixTest(unittest.TestCase):
             make_bar(2024, 1, 4, "9"),
             make_bar(2024, 1, 5, "11"),
         ]
-        config = StrategyConfig.from_mapping({"thread_count": 1, "stop_sessions": 1, "initial_capital": 1000})
+        config = StrategyConfig.from_mapping(
+            {
+                "thread_count": 1,
+                "stop_sessions": 1,
+                "initial_capital": 1000,
+                "commission_bps": "0",
+                "transaction_tax_bps": "0",
+                "slippage_bps": "0",
+            }
+        )
         reference = {
             "meta": {"source_image_sha256": "test"},
             "benchmark": {
@@ -99,7 +108,16 @@ class MentorMatrixTest(unittest.TestCase):
             make_bar(2024, 1, 4, "9"),
             make_bar(2024, 1, 5, "11"),
         ]
-        config = StrategyConfig.from_mapping({"thread_count": 1, "stop_sessions": 1, "initial_capital": 1000})
+        config = StrategyConfig.from_mapping(
+            {
+                "thread_count": 1,
+                "stop_sessions": 1,
+                "initial_capital": 1000,
+                "commission_bps": "0",
+                "transaction_tax_bps": "0",
+                "slippage_bps": "0",
+            }
+        )
         reference = {
             "meta": {"source_image_sha256": "test"},
             "benchmark": {"yearly": [{"year": 2024, "price_change": "10.00->12.00"}]},
@@ -130,7 +148,16 @@ class MentorMatrixTest(unittest.TestCase):
             make_bar(2024, 1, 4, "9"),
             make_bar(2024, 1, 5, "11"),
         ]
-        config = StrategyConfig.from_mapping({"thread_count": 1, "stop_sessions": 1, "initial_capital": 1000})
+        config = StrategyConfig.from_mapping(
+            {
+                "thread_count": 1,
+                "stop_sessions": 1,
+                "initial_capital": 1000,
+                "commission_bps": "0",
+                "transaction_tax_bps": "0",
+                "slippage_bps": "0",
+            }
+        )
         reference = {
             "meta": {"source_image_sha256": "test"},
             "benchmark": {

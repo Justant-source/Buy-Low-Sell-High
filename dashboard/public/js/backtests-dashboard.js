@@ -3,6 +3,7 @@
   const MAX_STRATEGY_SELECTION = 6;
   const BUY_HOLD_STRATEGY_ID = "buy_hold";
   const SWEEP_DEFINITION_ID = "core4_v4";
+  const REGIME_WALK_FORWARD_MAX_WORKERS = 8;
   const STRATEGY_DETAIL_RETURN_TOLERANCE_PCT = 0.5;
   const STRATEGY_COLORS = ["#d78a4b", "#2f7ed8", "#2fb344", "#d63939", "#7b5cff", "#1f9d8b"];
   const DEFAULT_STRATEGY_FILTER_CONFIG = {
@@ -20,6 +21,21 @@
     bearBuyPct: { rowKey: "bear_buy_pct", label: "Defense 매수 %" },
     bearSellPct: { rowKey: "bear_sell_pct", label: "Defense 매도 %" },
   };
+  const STRATEGY_REGIME_SSOT = Object.freeze({
+    symbol: "QQQ",
+    rsiPeriodWeeks: 14,
+    bearThreshold: 45,
+    bullThreshold: 55,
+    baseStopSessions: 40,
+    baseBuyPct: 0,
+    baseSellPct: 0,
+    bullStopSessions: 30,
+    bullBuyPct: 0,
+    bullSellPct: 0,
+    bearStopSessions: 40,
+    bearBuyPct: 0,
+    bearSellPct: 0,
+  });
   const THREAD_SESSION_PX_BASE = 14;
   const THREAD_TRACK_MIN_WIDTH = 0;
   const THREAD_TIMELINE_ZOOM_MIN = 20;
@@ -29,6 +45,26 @@
     all: "all",
     return_mdd: "return / MDD",
   };
+  const REGIME_CHART_STYLE = Object.freeze({
+    attack: {
+      label: "Attack",
+      description: "연한 초록 배경",
+      fillColor: "rgba(88, 184, 116, 0.16)",
+      swatchClass: "attack",
+    },
+    neutral: {
+      label: "Neutral",
+      description: "투명",
+      fillColor: "transparent",
+      swatchClass: "neutral",
+    },
+    defense: {
+      label: "Defense",
+      description: "연한 붉은 배경",
+      fillColor: "rgba(220, 108, 108, 0.15)",
+      swatchClass: "defense",
+    },
+  });
   const state = {
     activeTab: "strategy",
     workspaceId: "soxl",
@@ -61,6 +97,9 @@
     threadHistoryPage: 1,
     threadHistoryPageSize: 20,
     sweepArtifact: null,
+    regimeWalkForwardArtifact: null,
+    regimeWalkForwardLoading: false,
+    regimeWalkForwardError: "",
     selectedStrategyIds: [],
     selectedStrategyPresetId: "all",
     strategyRankingPage: 1,
@@ -97,6 +136,18 @@
       return;
     }
     target.innerHTML = `<div class="empty-state">${ui.escapeHtml(message)}</div>`;
+  }
+
+  function prepareChartTarget(id) {
+    const target = document.getElementById(id);
+    if (!(target instanceof HTMLElement)) {
+      return null;
+    }
+    if (window.Plotly?.purge) {
+      window.Plotly.purge(target);
+    }
+    target.innerHTML = "";
+    return target;
   }
 
   function hasElement(id) {
@@ -146,6 +197,78 @@
 
   function parseDateValue(value) {
     return new Date(`${value}T00:00:00Z`).getTime();
+  }
+
+  function parseIsoDateParts(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || "").trim());
+    if (!match) {
+      return null;
+    }
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+      return null;
+    }
+    if (month < 1 || month > 12) {
+      return null;
+    }
+    const maxDay = daysInMonth(year, month);
+    if (day < 1 || day > maxDay) {
+      return null;
+    }
+    return { year, month, day };
+  }
+
+  function daysInMonth(year, month) {
+    return new Date(Date.UTC(year, month, 0)).getUTCDate();
+  }
+
+  function buildIsoDate(year, month, day) {
+    return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
+  function clampIsoDateToBounds(value, minDate, maxDate) {
+    if (!value) {
+      return value;
+    }
+    let nextValue = value;
+    if (minDate && nextValue < minDate) {
+      nextValue = minDate;
+    }
+    if (maxDate && nextValue > maxDate) {
+      nextValue = maxDate;
+    }
+    return nextValue;
+  }
+
+  function strategySliceBounds() {
+    const meta = state.strategyExplorer?.meta;
+    if (!meta) {
+      return null;
+    }
+    return {
+      minDate: meta.period_start,
+      maxDate: meta.period_end,
+    };
+  }
+
+  function strategySliceInput(kind) {
+    return document.getElementById(kind === "end" ? "strategy-slice-end" : "strategy-slice-start");
+  }
+
+  function syncStrategySliceBoundInputs() {
+    const bounds = strategySliceBounds();
+    if (!bounds) {
+      return;
+    }
+    ["start", "end"].forEach((kind) => {
+      const dateInput = strategySliceInput(kind);
+      if (dateInput instanceof HTMLInputElement) {
+        dateInput.min = bounds.minDate;
+        dateInput.max = bounds.maxDate;
+      }
+    });
   }
 
   function setNotice(id, message) {
@@ -223,6 +346,190 @@
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     })}%`;
+  }
+
+  function formatStrategyComboCell(value) {
+    return String(value || "")
+      .split("\n")
+      .map((line) => ui.escapeHtml(line))
+      .join("<br>");
+  }
+
+  function formatPercentValue(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? ui.formatPercent(number) : "-";
+  }
+
+  function formatSignedPercentValue(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return "-";
+    }
+    return `${number > 0 ? "+" : ""}${ui.formatPercent(number)}`;
+  }
+
+  function formatCountValue(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? ui.formatNumber(number) : "-";
+  }
+
+  function recommendationMeta(recommendation) {
+    switch (recommendation) {
+      case "continue_as_secondary_hypothesis":
+        return { label: "계속 연구", badgeClass: "success" };
+      case "time_boxed_follow_up_only":
+        return { label: "1회 추가연구", badgeClass: "warning" };
+      case "stop_regime_research":
+        return { label: "연구 중단", badgeClass: "danger" };
+      case "defer_verdict_until_semantic_fix":
+      default:
+        return { label: "판정 보류", badgeClass: "neutral" };
+    }
+  }
+
+  function auditClassificationMeta(classification) {
+    switch (classification) {
+      case "implementation_bug":
+        return { label: "구현 오류", badgeClass: "danger" };
+      case "documentation_conflict":
+        return { label: "문서 충돌", badgeClass: "warning" };
+      case "no_semantic_issue_found":
+      default:
+        return { label: "의미론 통과", badgeClass: "success" };
+    }
+  }
+
+  function statusBadgeMeta(status) {
+    if (status === "PASS" || status === "WIN") {
+      return { label: status, badgeClass: "success" };
+    }
+    if (status === "AMBIGUOUS" || status === "RISK_WIN") {
+      return { label: status, badgeClass: "warning" };
+    }
+    return { label: status || "-", badgeClass: "danger" };
+  }
+
+  function booleanGateMeta(passed) {
+    return passed
+      ? { label: "PASS", badgeClass: "success" }
+      : { label: "FAIL", badgeClass: "danger" };
+  }
+
+  function buildBadge(label, badgeClass = "neutral") {
+    return `<span class="badge ${badgeClass}">${ui.escapeHtml(label)}</span>`;
+  }
+
+  function normalizeRegimeLabel(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized === "attack" || normalized === "defense") {
+      return normalized;
+    }
+    return "neutral";
+  }
+
+  function buildRegimeBands(daily) {
+    if (!Array.isArray(daily) || !daily.length) {
+      return [];
+    }
+    const bands = [];
+    let startIndex = 0;
+    let currentRegime = normalizeRegimeLabel(daily[0]?.applied_regime);
+    for (let index = 1; index < daily.length; index += 1) {
+      const nextRegime = normalizeRegimeLabel(daily[index]?.applied_regime);
+      if (nextRegime === currentRegime) {
+        continue;
+      }
+      bands.push({
+        regime: currentRegime,
+        start: daily[startIndex]?.session_date || "",
+        end: daily[index]?.session_date || daily[index - 1]?.session_date || "",
+      });
+      startIndex = index;
+      currentRegime = nextRegime;
+    }
+    bands.push({
+      regime: currentRegime,
+      start: daily[startIndex]?.session_date || "",
+      end: daily[daily.length - 1]?.session_date || "",
+    });
+    return bands;
+  }
+
+  function buildRegimeBackgroundShapes(daily) {
+    return buildRegimeBands(daily)
+      .filter((band) => band.regime !== "neutral" && band.start && band.end)
+      .map((band) => ({
+        type: "rect",
+        xref: "x",
+        yref: "paper",
+        x0: band.start,
+        x1: band.end,
+        y0: 0,
+        y1: 1,
+        line: { width: 0 },
+        fillcolor: REGIME_CHART_STYLE[band.regime].fillColor,
+        opacity: 1,
+        layer: "below",
+      }));
+  }
+
+  function hasVisibleRegimeState(daily) {
+    return Array.isArray(daily) && daily.some((point) => {
+      const regime = normalizeRegimeLabel(point?.applied_regime);
+      return regime === "attack" || regime === "defense";
+    });
+  }
+
+  function pickRegimeDailySeries(strategies, slice) {
+    if (!slice) {
+      return null;
+    }
+    const candidateDaily = (strategies || [])
+      .filter((strategy) => strategy && !strategy.isBenchmark)
+      .map((strategy) => strategyDailySlice(strategy, slice.start, slice.end));
+    const matchingDaily = candidateDaily.find((daily) => hasVisibleRegimeState(daily));
+    if (matchingDaily) {
+      return matchingDaily;
+    }
+    const timelineDaily = (state.threadTimeline?.sessions || []).filter(
+      (session) => session.session_date >= slice.start && session.session_date <= slice.end,
+    );
+    return hasVisibleRegimeState(timelineDaily) ? timelineDaily : null;
+  }
+
+  function renderStrategyChartRegimeLegend(targetId, visible) {
+    const target = document.getElementById(targetId);
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    if (!visible) {
+      target.hidden = true;
+      target.innerHTML = "";
+      return;
+    }
+    target.hidden = false;
+    target.innerHTML = `
+      <span class="chart-regime-legend-label">배경</span>
+      ${["attack", "neutral", "defense"].map((regime) => `
+        <span class="chart-regime-legend-item">
+          <span class="chart-regime-swatch ${REGIME_CHART_STYLE[regime].swatchClass}" aria-hidden="true"></span>
+          <span>${ui.escapeHtml(REGIME_CHART_STYLE[regime].label)} · ${ui.escapeHtml(REGIME_CHART_STYLE[regime].description)}</span>
+        </span>
+      `).join("")}
+    `;
+  }
+
+  function renderPlotlyChart(targetId, traces, layout) {
+    const target = prepareChartTarget(targetId);
+    if (!target) {
+      return;
+    }
+    window.Plotly.newPlot(
+      target,
+      traces,
+      layout,
+      { displayModeBar: false, responsive: true },
+    );
   }
 
   function strategySortIndicator(sortKey) {
@@ -380,33 +687,36 @@
     return !!workspace && workspace.workspaceId === "soxl";
   }
 
-  function makeDefaultStrategyRegime(profile) {
-    const defaultStop = Number(profile?.stopSessions || 40) || 40;
+  function workspaceSupportsRegimeWalkForward(workspace) {
+    return workspaceSupportsStrategyRegime(workspace);
+  }
+
+  function makeDefaultStrategyRegime() {
     return {
       enabled: false,
-      symbol: "QQQ",
-      rsiPeriodWeeks: 14,
-      bearHighThreshold: 45,
-      bearMidLowThreshold: 45,
-      bearMidHighThreshold: 45,
-      bullLowThreshold: 55,
-      bullMidLowThreshold: 55,
-      bullMidHighThreshold: 55,
-      baseStopSessions: defaultStop,
-      baseBuyPct: 0,
-      baseSellPct: 0,
-      bullStopSessions: defaultStop,
-      bullBuyPct: 0,
-      bullSellPct: 0,
-      bearStopSessions: defaultStop,
-      bearBuyPct: 0,
-      bearSellPct: 0,
+      symbol: STRATEGY_REGIME_SSOT.symbol,
+      rsiPeriodWeeks: STRATEGY_REGIME_SSOT.rsiPeriodWeeks,
+      bearHighThreshold: STRATEGY_REGIME_SSOT.bearThreshold,
+      bearMidLowThreshold: STRATEGY_REGIME_SSOT.bearThreshold,
+      bearMidHighThreshold: STRATEGY_REGIME_SSOT.bearThreshold,
+      bullLowThreshold: STRATEGY_REGIME_SSOT.bullThreshold,
+      bullMidLowThreshold: STRATEGY_REGIME_SSOT.bullThreshold,
+      bullMidHighThreshold: STRATEGY_REGIME_SSOT.bullThreshold,
+      baseStopSessions: STRATEGY_REGIME_SSOT.baseStopSessions,
+      baseBuyPct: STRATEGY_REGIME_SSOT.baseBuyPct,
+      baseSellPct: STRATEGY_REGIME_SSOT.baseSellPct,
+      bullStopSessions: STRATEGY_REGIME_SSOT.bullStopSessions,
+      bullBuyPct: STRATEGY_REGIME_SSOT.bullBuyPct,
+      bullSellPct: STRATEGY_REGIME_SSOT.bullSellPct,
+      bearStopSessions: STRATEGY_REGIME_SSOT.bearStopSessions,
+      bearBuyPct: STRATEGY_REGIME_SSOT.bearBuyPct,
+      bearSellPct: STRATEGY_REGIME_SSOT.bearSellPct,
     };
   }
 
   function currentStrategyRegimeState() {
     if (!state.strategyRegime) {
-      state.strategyRegime = makeDefaultStrategyRegime(currentProfile());
+      state.strategyRegime = makeDefaultStrategyRegime();
     }
     return state.strategyRegime;
   }
@@ -566,17 +876,26 @@
     }
     const mentorButton = document.getElementById("mentor-tab-button");
     const mentorPanel = document.querySelector('[data-tab-panel="mentor"]');
+    const regimeResearchButton = document.getElementById("regime-research-tab-button");
+    const regimeResearchPanel = document.querySelector('[data-tab-panel="regime-research"]');
     const mentorLegacyCard = document.getElementById("mentor-legacy-card");
     const officialSubtitle = document.getElementById("official-reference-subtitle");
     const officialNote = document.getElementById("official-reference-note");
     const officialEnabled = workspaceSupportsOfficialReference(workspace);
     const mentorEnabled = workspaceSupportsMentorReference(workspace);
+    const regimeResearchEnabled = workspaceSupportsRegimeWalkForward(workspace);
     if (mentorButton) {
       mentorButton.style.display = officialEnabled ? "" : "none";
       mentorButton.textContent = mentorEnabled ? "멘토 래퍼런스" : "공식 기준선";
     }
     if (mentorPanel instanceof HTMLElement) {
       mentorPanel.style.display = officialEnabled ? "" : "none";
+    }
+    if (regimeResearchButton instanceof HTMLElement) {
+      regimeResearchButton.style.display = regimeResearchEnabled ? "" : "none";
+    }
+    if (regimeResearchPanel instanceof HTMLElement) {
+      regimeResearchPanel.style.display = regimeResearchEnabled ? "" : "none";
     }
     if (mentorLegacyCard instanceof HTMLElement) {
       mentorLegacyCard.style.display = mentorEnabled ? "" : "none";
@@ -592,19 +911,19 @@
     if (!officialEnabled && state.activeTab === "mentor") {
       activateTab("strategy");
     }
+    if (!regimeResearchEnabled && state.activeTab === "regime-research") {
+      activateTab("strategy");
+    }
+    if (!regimeResearchEnabled) {
+      state.regimeWalkForwardArtifact = null;
+      state.regimeWalkForwardLoading = false;
+      state.regimeWalkForwardError = "";
+    }
   }
 
   function applyWorkspaceDefaults(workspace) {
     if (!workspace) {
       return;
-    }
-    const sweepModel = document.getElementById("sweep-model");
-    if (sweepModel) {
-      sweepModel.value = workspace.defaultSweepExecutionModel || "next_open";
-    }
-    const sweepPriceBasis = document.getElementById("sweep-price-basis");
-    if (sweepPriceBasis) {
-      sweepPriceBasis.value = workspace.defaultSweepPriceBasis || "adjusted_close";
     }
   }
 
@@ -619,15 +938,14 @@
     }
     state.profileId = profile.profileId;
     if (!state.strategyRegime || !workspaceSupportsStrategyRegime(currentWorkspace())) {
-      state.strategyRegime = makeDefaultStrategyRegime(profile);
+      state.strategyRegime = makeDefaultStrategyRegime();
     }
     ui.setText("sb-model", profile.executionModel || "ideal_same_close");
   }
 
   function renderStrategyRegimeCard() {
     const card = document.getElementById("strategy-regime-card");
-    const fieldset = document.getElementById("strategy-regime-fieldset");
-    if (!(card instanceof HTMLElement) || !(fieldset instanceof HTMLFieldSetElement)) {
+    if (!(card instanceof HTMLElement)) {
       return;
     }
     const workspace = currentWorkspace();
@@ -638,76 +956,23 @@
     }
     card.style.display = "";
     const regime = currentStrategyRegimeState();
-    const profile = currentProfile();
     if (!state.strategyRegime) {
-      state.strategyRegime = makeDefaultStrategyRegime(profile);
+      state.strategyRegime = makeDefaultStrategyRegime();
     }
-    const setValue = (id, value) => {
-      const input = document.getElementById(id);
-      if (input) {
-        input.value = String(value);
-      }
-    };
     const enabledInput = document.getElementById("strategy-regime-enabled");
     if (enabledInput instanceof HTMLInputElement) {
       enabledInput.checked = Boolean(regime.enabled);
     }
-    setValue("strategy-regime-symbol", regime.symbol || "QQQ");
-    setValue("strategy-regime-rsi-period", regime.rsiPeriodWeeks);
-    setValue("strategy-regime-bear-high-threshold", regime.bearHighThreshold);
-    setValue("strategy-regime-bear-mid-low-threshold", regime.bearMidLowThreshold);
-    setValue("strategy-regime-bear-mid-high-threshold", regime.bearMidHighThreshold);
-    setValue("strategy-regime-bull-low-threshold", regime.bullLowThreshold);
-    setValue("strategy-regime-bull-mid-low-threshold", regime.bullMidLowThreshold);
-    setValue("strategy-regime-bull-mid-high-threshold", regime.bullMidHighThreshold);
-    setValue("strategy-regime-base-stop", regime.baseStopSessions);
-    setValue("strategy-regime-base-buy", regime.baseBuyPct);
-    setValue("strategy-regime-base-sell", regime.baseSellPct);
-    setValue("strategy-regime-bull-stop", regime.bullStopSessions);
-    setValue("strategy-regime-bull-buy", regime.bullBuyPct);
-    setValue("strategy-regime-bull-sell", regime.bullSellPct);
-    setValue("strategy-regime-bear-stop", regime.bearStopSessions);
-    setValue("strategy-regime-bear-buy", regime.bearBuyPct);
-    setValue("strategy-regime-bear-sell", regime.bearSellPct);
-    fieldset.disabled = false;
+    renderStrategyRegimeToggleState();
     renderStrategyComboSubtitle();
   }
 
   function syncStrategyRegimeStateFromInputs() {
-    const regime = currentStrategyRegimeState();
-    const getNumber = (id, fallback) => {
-      const input = document.getElementById(id);
-      const value = Number(input?.value ?? fallback);
-      return Number.isFinite(value) ? value : fallback;
-    };
     const enabledInput = document.getElementById("strategy-regime-enabled");
-    regime.enabled = enabledInput instanceof HTMLInputElement ? enabledInput.checked : Boolean(regime.enabled);
-    regime.symbol = document.getElementById("strategy-regime-symbol")?.value || "QQQ";
-    regime.rsiPeriodWeeks = getNumber("strategy-regime-rsi-period", 14);
-    const defenseThreshold = getNumber(
-      "strategy-regime-bear-mid-high-threshold",
-      getNumber("strategy-regime-bear-mid-low-threshold", getNumber("strategy-regime-bear-high-threshold", 45)),
-    );
-    const attackThreshold = getNumber(
-      "strategy-regime-bull-mid-low-threshold",
-      getNumber("strategy-regime-bull-low-threshold", getNumber("strategy-regime-bull-mid-high-threshold", 55)),
-    );
-    regime.bearHighThreshold = defenseThreshold;
-    regime.bearMidLowThreshold = defenseThreshold;
-    regime.bearMidHighThreshold = defenseThreshold;
-    regime.bullLowThreshold = attackThreshold;
-    regime.bullMidLowThreshold = attackThreshold;
-    regime.bullMidHighThreshold = attackThreshold;
-    regime.baseStopSessions = getNumber("strategy-regime-base-stop", regime.baseStopSessions || 40);
-    regime.baseBuyPct = getNumber("strategy-regime-base-buy", 0);
-    regime.baseSellPct = getNumber("strategy-regime-base-sell", 0);
-    regime.bullStopSessions = getNumber("strategy-regime-bull-stop", regime.baseStopSessions || 40);
-    regime.bullBuyPct = getNumber("strategy-regime-bull-buy", 0);
-    regime.bullSellPct = getNumber("strategy-regime-bull-sell", 0);
-    regime.bearStopSessions = getNumber("strategy-regime-bear-stop", regime.baseStopSessions || 40);
-    regime.bearBuyPct = getNumber("strategy-regime-bear-buy", 0);
-    regime.bearSellPct = getNumber("strategy-regime-bear-sell", 0);
-    state.strategyRegime = regime;
+    state.strategyRegime = {
+      ...makeDefaultStrategyRegime(),
+      enabled: enabledInput instanceof HTMLInputElement ? enabledInput.checked : Boolean(currentStrategyRegimeState().enabled),
+    };
   }
 
   function activateTab(tabId) {
@@ -895,17 +1160,53 @@
   }
 
   function setStrategyDateInputs(start, end) {
-    document.getElementById("strategy-slice-start").value = start;
-    document.getElementById("strategy-slice-end").value = end;
+    const bounds = strategySliceBounds();
+    const startInput = document.getElementById("strategy-slice-start");
+    const endInput = document.getElementById("strategy-slice-end");
+    if (startInput instanceof HTMLInputElement) {
+      startInput.value = clampIsoDateToBounds(start, bounds?.minDate || "", bounds?.maxDate || "");
+    }
+    if (endInput instanceof HTMLInputElement) {
+      endInput.value = clampIsoDateToBounds(end, bounds?.minDate || "", bounds?.maxDate || "");
+    }
+    syncStrategySliceBoundInputs();
   }
 
   function setStrategyApplyPending(isPending) {
     const button = document.getElementById("strategy-apply-button");
-    if (!(button instanceof HTMLButtonElement)) {
+    if (button instanceof HTMLButtonElement) {
+      button.disabled = isPending;
+      button.textContent = isPending ? "적용 중..." : "구간 적용";
+    }
+    const regimeToggle = document.getElementById("strategy-regime-enabled");
+    if (regimeToggle instanceof HTMLInputElement) {
+      regimeToggle.disabled = isPending;
+    }
+  }
+
+  function renderStrategyRegimeToggleState() {
+    const enabledInput = document.getElementById("strategy-regime-enabled");
+    const stateLabel = document.getElementById("strategy-regime-toggle-state");
+    if (!(enabledInput instanceof HTMLInputElement) || !(stateLabel instanceof HTMLElement)) {
       return;
     }
-    button.disabled = isPending;
-    button.textContent = isPending ? "적용 중..." : "구간 적용";
+    stateLabel.textContent = enabledInput.checked ? "ON" : "OFF";
+  }
+
+  async function applyStrategySliceChanges() {
+    syncStrategyRegimeStateFromInputs();
+    renderStrategyRegimeCard();
+    state.selectedStrategyPresetId = "custom";
+    resetThreadHistoryPage();
+    setStrategyApplyPending(true);
+    try {
+      await reloadStrategySlice();
+    } catch (error) {
+      renderStrategyRankingMessage(error instanceof Error ? error.message : "콤보 랭킹을 불러오지 못했습니다.");
+    } finally {
+      setStrategyApplyPending(false);
+      renderStrategyRegimeToggleState();
+    }
   }
 
   function abortStrategyDetailRequests() {
@@ -951,15 +1252,11 @@
     if (!state.strategyExplorer) {
       return null;
     }
-    const meta = state.strategyExplorer.meta;
-    let start = document.getElementById("strategy-slice-start").value || meta.period_start;
-    let end = document.getElementById("strategy-slice-end").value || meta.period_end;
-    if (start < meta.period_start) {
-      start = meta.period_start;
-    }
-    if (end > meta.period_end) {
-      end = meta.period_end;
-    }
+    const bounds = strategySliceBounds();
+    let start = document.getElementById("strategy-slice-start").value || bounds?.minDate || "";
+    let end = document.getElementById("strategy-slice-end").value || bounds?.maxDate || "";
+    start = clampIsoDateToBounds(start, bounds?.minDate || "", bounds?.maxDate || "");
+    end = clampIsoDateToBounds(end, bounds?.minDate || "", bounds?.maxDate || "");
     if (start > end) {
       start = end;
     }
@@ -1522,7 +1819,7 @@
           <td><button type="button" class="focus-toggle${focused ? " active" : ""}" data-focus-strategy-id="${ui.escapeHtml(row.strategy_id)}"${focusDisabled ? " disabled" : ""}>${focusDisabled ? "불가" : (focused ? "Focus" : "Set")}</button></td>
           <td>${active ? '<span class="badge info">선택</span>' : '<span class="badge neutral">대기</span>'}</td>
           <td class="num">${ui.escapeHtml(row.is_benchmark ? "-" : String(row.rank_display ?? row.rank ?? displayRank))}</td>
-          <td>${ui.escapeHtml(row.display_params || row.combo_key)}</td>
+          <td class="strategy-combo-cell">${formatStrategyComboCell(row.display_params || row.combo_key)}</td>
           <td class="num">${ui.escapeHtml(ui.formatPercent(row.full_return_pct))}</td>
           <td class="num">${ui.escapeHtml(ui.formatPercent(row.cagr_pct))}</td>
           <td class="num">${ui.escapeHtml(ui.formatPercent(row.max_drawdown_pct))}</td>
@@ -1613,16 +1910,20 @@
   function renderStrategyEquityChart() {
     const slice = currentStrategySlice();
     if (!slice || !window.Plotly || !state.selectedStrategyIds.length) {
+      renderStrategyChartRegimeLegend("strategy-equity-regime-legend", false);
       setEmptyChart("strategy-equity-chart", "선택 전략이 없습니다.");
       return;
     }
+    const resolvedStrategies = [];
     const traces = state.selectedStrategyIds
       .map((strategyId, index) => {
         const strategy = getStrategyById(strategyId);
         if (!strategy) {
           return null;
         }
-        const series = rebaseDaily(strategyDailySlice(strategy, slice.start, slice.end));
+        resolvedStrategies.push(strategy);
+        const dailySlice = strategyDailySlice(strategy, slice.start, slice.end);
+        const series = rebaseDaily(dailySlice);
         if (!series.length) {
           return null;
         }
@@ -1637,31 +1938,42 @@
       })
       .filter(Boolean);
     if (!traces.length) {
+      renderStrategyChartRegimeLegend("strategy-equity-regime-legend", false);
       setEmptyChart("strategy-equity-chart", "선택 콤보 상세를 불러오는 중입니다.");
       return;
     }
     const layout = chartLayoutBase();
-    window.Plotly.newPlot(
+    const regimeDaily = pickRegimeDailySeries(resolvedStrategies, slice);
+    const regimeEnabled = Boolean(regimeDaily && state.strategyRanking?.meta?.regime_enabled);
+    renderStrategyChartRegimeLegend("strategy-equity-regime-legend", regimeEnabled);
+    renderPlotlyChart(
       "strategy-equity-chart",
       traces,
-      { ...layout, yaxis: { ...layout.yaxis, tickprefix: "$" } },
-      { displayModeBar: false, responsive: true },
+      {
+        ...layout,
+        yaxis: { ...layout.yaxis, tickprefix: "$" },
+        shapes: regimeEnabled ? buildRegimeBackgroundShapes(regimeDaily) : [],
+      },
     );
   }
 
   function renderStrategyDrawdownChart() {
     const slice = currentStrategySlice();
     if (!slice || !window.Plotly || !state.selectedStrategyIds.length) {
+      renderStrategyChartRegimeLegend("strategy-drawdown-regime-legend", false);
       setEmptyChart("strategy-drawdown-chart", "선택 전략이 없습니다.");
       return;
     }
+    const resolvedStrategies = [];
     const traces = state.selectedStrategyIds
       .map((strategyId, index) => {
         const strategy = getStrategyById(strategyId);
         if (!strategy) {
           return null;
         }
-        const series = rebaseDaily(strategyDailySlice(strategy, slice.start, slice.end));
+        resolvedStrategies.push(strategy);
+        const dailySlice = strategyDailySlice(strategy, slice.start, slice.end);
+        const series = rebaseDaily(dailySlice);
         if (!series.length) {
           return null;
         }
@@ -1676,15 +1988,22 @@
       })
       .filter(Boolean);
     if (!traces.length) {
+      renderStrategyChartRegimeLegend("strategy-drawdown-regime-legend", false);
       setEmptyChart("strategy-drawdown-chart", "선택 콤보 상세를 불러오는 중입니다.");
       return;
     }
     const layout = chartLayoutBase();
-    window.Plotly.newPlot(
+    const regimeDaily = pickRegimeDailySeries(resolvedStrategies, slice);
+    const regimeEnabled = Boolean(regimeDaily && state.strategyRanking?.meta?.regime_enabled);
+    renderStrategyChartRegimeLegend("strategy-drawdown-regime-legend", regimeEnabled);
+    renderPlotlyChart(
       "strategy-drawdown-chart",
       traces,
-      { ...layout, yaxis: { ...layout.yaxis, ticksuffix: "%" } },
-      { displayModeBar: false, responsive: true },
+      {
+        ...layout,
+        yaxis: { ...layout.yaxis, ticksuffix: "%" },
+        shapes: regimeEnabled ? buildRegimeBackgroundShapes(regimeDaily) : [],
+      },
     );
   }
 
@@ -2779,208 +3098,352 @@
     resetStrategyMetaNotice();
   }
 
-  function currentSweepRows() {
-    const payload = state.sweepArtifact?.payload;
-    if (!payload) {
-      return [];
-    }
-    const minReturn = Number(document.getElementById("sweep-filter-min-return").value || 0);
-    const maxMdd = Number(document.getElementById("sweep-filter-max-mdd").value || -100);
-    const minCagr = Number(document.getElementById("sweep-filter-min-cagr").value || -100);
-    const paretoMode = document.getElementById("sweep-filter-pareto").value || "all";
-    return payload.rows.filter((row) => {
-      if (row.metrics.full_return_pct < minReturn) {
-        return false;
-      }
-      if (row.metrics.max_drawdown_pct < maxMdd) {
-        return false;
-      }
-      if (row.metrics.cagr_pct < minCagr) {
-        return false;
-      }
-      if (paretoMode === "return_mdd" && !row.flags.pareto_return_mdd) {
-        return false;
-      }
-      return true;
-    });
-  }
-
-  function renderSweepSummary(payload, filteredRows) {
-    ui.setText("sweep-kpi-count", ui.formatNumber(payload.meta.combo_count));
-    ui.setText("sweep-kpi-best-full", payload.summary.best_full_return_combo);
-    ui.setText("sweep-kpi-best-robust", payload.summary.best_robust_combo);
-    ui.setText("sweep-kpi-pareto", ui.formatNumber(payload.summary.pareto_return_mdd_count));
-    document.getElementById("sweep-meta-note").textContent = "";
-  }
-
-  function renderSweepWarnings(payload, filteredRows) {
-    const rows = payload.warnings.slice();
-    if (filteredRows.length) {
-      const leader = filteredRows[0];
-      if (leader.metrics.max_drawdown_pct < -60) {
-        rows.push(`필터 기준 1위 ${leader.combo_key} 의 MDD가 ${leader.metrics.max_drawdown_pct.toFixed(2)}% 입니다.`);
-      }
-      if (leader.metrics.cagr_pct < 0) {
-        rows.push(`필터 기준 1위 ${leader.combo_key} 의 CAGR이 ${leader.metrics.cagr_pct.toFixed(2)}% 입니다.`);
-      }
-    }
-    const target = document.getElementById("sweep-warning-list");
-    if (!rows.length) {
-      target.innerHTML = '<div class="stack-row"><span class="title">현재 필터에서 추가 메모 없음</span><span class="badge success">ok</span></div>';
-      return;
-    }
-    target.innerHTML = rows.map((warning) => `<div class="warning-row"><span class="title">${ui.escapeHtml(warning)}</span></div>`).join("");
-  }
-
-  function renderSweepScatter(filteredRows) {
-    if (!window.Plotly || !filteredRows.length) {
-      setEmptyChart("sweep-scatter-chart", "표시할 스윕 결과가 없습니다.");
-      return;
-    }
-    window.Plotly.newPlot(
-      "sweep-scatter-chart",
-      [
-        {
-          x: filteredRows.map((row) => row.metrics.max_drawdown_pct),
-          y: filteredRows.map((row) => row.metrics.full_return_pct),
-          text: filteredRows.map((row) => row.combo_key),
-          mode: "markers",
-          type: "scatter",
-          marker: {
-            size: 10,
-            color: filteredRows.map((row) => row.metrics.cagr_pct),
-            colorscale: "RdYlGn",
-            line: {
-              color: filteredRows.map((row) => (row.flags.pareto_return_mdd ? "#241d15" : "transparent")),
-              width: 1.4,
-            },
-            colorbar: { title: "CAGR %" },
-          },
-          hovertemplate: "%{text}<br>MDD %{x:.2f}%<br>Return %{y:.2f}%<br>CAGR %{marker.color:.2f}%<extra></extra>",
-        },
-      ],
-      {
-        ...chartLayoutBase(),
-        xaxis: { ...chartLayoutBase().xaxis, title: "Max Drawdown %" },
-        yaxis: { ...chartLayoutBase().yaxis, title: "Full Return %" },
-      },
-      { displayModeBar: false, responsive: true },
-    );
-  }
-
-  function renderSweepBox(filteredRows) {
-    const axis = document.getElementById("sweep-box-axis").value;
-    if (!window.Plotly || !filteredRows.length) {
-      setEmptyChart("sweep-box-chart", "표시할 스윕 결과가 없습니다.");
-      return;
-    }
-    window.Plotly.newPlot(
-      "sweep-box-chart",
-      [
-        {
-          x: filteredRows.map((row) => String(row.params[axis])),
-          y: filteredRows.map((row) => row.metrics.cagr_pct),
-          type: "box",
-          boxpoints: "outliers",
-          marker: { color: "#d78a4b" },
-          line: { color: "#91502d" },
-          hovertemplate: `${axis}=%{x}<br>CAGR %{y:.2f}%<extra></extra>`,
-        },
-      ],
-      {
-        ...chartLayoutBase(),
-        xaxis: { ...chartLayoutBase().xaxis, title: axis },
-        yaxis: { ...chartLayoutBase().yaxis, title: "CAGR %" },
-      },
-      { displayModeBar: false, responsive: true },
-    );
-  }
-
-  function renderSweepParcoords(filteredRows) {
-    if (!window.Plotly || !filteredRows.length) {
-      setEmptyChart("sweep-parcoords-chart", "표시할 스윕 결과가 없습니다.");
-      return;
-    }
-    window.Plotly.newPlot(
-      "sweep-parcoords-chart",
-      [
-        {
-          type: "parcoords",
-          line: {
-            color: filteredRows.map((row) => row.metrics.cagr_pct),
-            colorscale: "RdYlGn",
-            showscale: true,
-            colorbar: { title: "CAGR %" },
-          },
-          dimensions: [
-            { label: "thread", values: filteredRows.map((row) => row.params.thread_count) },
-            { label: "stop", values: filteredRows.map((row) => row.params.stop_sessions) },
-            { label: "buy %", values: filteredRows.map((row) => row.params.buy_pct) },
-            { label: "sell %", values: filteredRows.map((row) => row.params.sell_pct) },
-            { label: "full return", values: filteredRows.map((row) => row.metrics.full_return_pct) },
-            { label: "CAGR", values: filteredRows.map((row) => row.metrics.cagr_pct) },
-            { label: "MDD", values: filteredRows.map((row) => row.metrics.max_drawdown_pct) },
-          ],
-        },
-      ],
-      {
-        paper_bgcolor: "transparent",
-        plot_bgcolor: "transparent",
-        margin: { t: 12, r: 16, b: 24, l: 16 },
-      },
-      { displayModeBar: false, responsive: true },
-    );
-  }
-
-  function renderSweepTable(filteredRows) {
-    const tbody = document.getElementById("sweep-table-body");
-    if (!filteredRows.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center">필터 결과가 없습니다.</td></tr>';
-      return;
-    }
-    tbody.innerHTML = filteredRows.slice(0, 10).map((row) => {
-      const pareto = [];
-      if (row.flags.pareto_return_mdd) {
-        pareto.push("R/MDD");
-      }
-      return `<tr>
-        <td class="mono">${ui.escapeHtml(row.combo_key)}</td>
-        <td class="num">${ui.escapeHtml(`T${row.params.thread_count} S${row.params.stop_sessions} BUY${formatSignedSweepPercent(row.params.buy_pct)} SELL${formatSignedSweepPercent(row.params.sell_pct)}`)}</td>
-        <td class="num">${ui.escapeHtml(ui.formatPercent(row.metrics.full_return_pct))}</td>
-        <td class="num">${ui.escapeHtml(ui.formatPercent(row.metrics.cagr_pct))}</td>
-        <td class="num">${ui.escapeHtml(ui.formatPercent(row.metrics.max_drawdown_pct))}</td>
-        <td class="num">${pareto.length ? pareto.map((label) => `<span class="badge info">${ui.escapeHtml(label)}</span>`).join(" ") : '<span class="badge neutral">-</span>'}</td>
-      </tr>`;
-    }).join("");
-  }
-
   function renderSweepArtifact(artifactRecord) {
     state.sweepArtifact = artifactRecord;
     if (!artifactRecord || !artifactRecord.payload) {
-      ui.setText("sweep-kpi-count", "-");
-      ui.setText("sweep-kpi-best-full", "-");
-      ui.setText("sweep-kpi-best-robust", "-");
-      ui.setText("sweep-kpi-pareto", "-");
-      ui.setText("sweep-artifact-id", "-");
-      document.getElementById("sweep-meta-note").textContent = "최신 스윕 산출물이 없습니다. Codex에서 생성한 뒤 다시 읽어오세요.";
-      setEmptyChart("sweep-scatter-chart", "최신 스윕 산출물이 없습니다.");
-      setEmptyChart("sweep-box-chart", "최신 스윕 산출물이 없습니다.");
-      setEmptyChart("sweep-parcoords-chart", "최신 스윕 산출물이 없습니다.");
-      document.getElementById("sweep-table-body").innerHTML =
-        '<tr><td colspan="6" class="muted" style="text-align:center">스윕 결과를 불러오지 않았습니다.</td></tr>';
-      document.getElementById("sweep-warning-list").innerHTML =
-        '<div class="stack-row"><span class="title">최신 스윕 산출물이 없습니다.</span><span class="badge neutral">empty</span></div>';
+      window.BLSHSweepReferencePanel?.render(null);
       return;
     }
     const payload = artifactRecord.payload;
-    ui.setText("sweep-artifact-id", artifactRecord.artifactId || "-");
-    const filteredRows = currentSweepRows();
-    renderSweepSummary(payload, filteredRows);
-    renderSweepWarnings(payload, filteredRows);
-    renderSweepScatter(filteredRows);
-    renderSweepBox(filteredRows);
-    renderSweepParcoords(filteredRows);
-    renderSweepTable(filteredRows);
+    window.BLSHSweepReferencePanel?.render({
+      ...artifactRecord,
+      payload,
+    });
+  }
+
+  function renderRegimeWalkForwardArtifact(artifactRecord) {
+    state.regimeWalkForwardArtifact = artifactRecord;
+    const payload = artifactRecord?.payload;
+    const workspace = currentWorkspace();
+    const note = document.getElementById("regime-walk-forward-note");
+    const gateList = document.getElementById("regime-walk-forward-gate-list");
+    const auditList = document.getElementById("regime-walk-forward-audit-list");
+    const fullPeriodList = document.getElementById("regime-walk-forward-full-period-list");
+    const notesList = document.getElementById("regime-walk-forward-notes");
+    const foldTableBody = document.getElementById("regime-walk-forward-fold-table-body");
+
+    if (!workspaceSupportsRegimeWalkForward(workspace)) {
+      ui.setText("regime-walk-forward-artifact-id", "-");
+      ui.setText("regime-walk-forward-kpi-recommendation", "-");
+      ui.setText("regime-walk-forward-kpi-recommendation-meta", "strict gate");
+      ui.setText("regime-walk-forward-kpi-audit", "-");
+      ui.setText("regime-walk-forward-kpi-audit-meta", "semantic status");
+      ui.setText("regime-walk-forward-kpi-wins", "-");
+      ui.setText("regime-walk-forward-kpi-wins-meta", "2022+ completed tests");
+      ui.setText("regime-walk-forward-kpi-cagr-delta", "-");
+      ui.setText("regime-walk-forward-kpi-cagr-delta-meta", "on - off");
+      if (note) {
+        note.textContent = "SOXL 워크스페이스에서만 regime 검증 탭을 사용합니다.";
+      }
+      if (gateList) {
+        gateList.innerHTML = '<div class="stack-row"><span class="title">지원하지 않는 워크스페이스</span><span class="badge neutral">n/a</span></div>';
+      }
+      if (auditList) {
+        auditList.innerHTML = '<div class="stack-row"><span class="title">지원하지 않는 워크스페이스</span><span class="badge neutral">n/a</span></div>';
+      }
+      if (fullPeriodList) {
+        fullPeriodList.innerHTML = '<div class="stack-row"><span class="title">지원하지 않는 워크스페이스</span><span class="badge neutral">n/a</span></div>';
+      }
+      if (notesList) {
+        notesList.innerHTML = '<div class="stack-row"><span class="title">추가 메모 없음</span><span class="badge neutral">idle</span></div>';
+      }
+      if (foldTableBody) {
+        foldTableBody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center">SOXL 전용 탭입니다.</td></tr>';
+      }
+      return;
+    }
+
+    if (!payload) {
+      ui.setText("regime-walk-forward-artifact-id", "-");
+      ui.setText("regime-walk-forward-kpi-recommendation", "-");
+      ui.setText("regime-walk-forward-kpi-recommendation-meta", "strict gate");
+      ui.setText("regime-walk-forward-kpi-audit", "-");
+      ui.setText("regime-walk-forward-kpi-audit-meta", "semantic status");
+      ui.setText("regime-walk-forward-kpi-wins", "-");
+      ui.setText("regime-walk-forward-kpi-wins-meta", "2022+ completed tests");
+      ui.setText("regime-walk-forward-kpi-cagr-delta", "-");
+      ui.setText("regime-walk-forward-kpi-cagr-delta-meta", "on - off");
+      if (note) {
+        if (state.regimeWalkForwardError) {
+          note.textContent = state.regimeWalkForwardError;
+        } else if (state.regimeWalkForwardLoading) {
+          note.textContent = "regime audit와 walk-forward fold를 계산하는 중입니다.";
+        } else {
+          note.textContent = "SOXL 공식 기준선 artifact를 아직 불러오지 않았습니다.";
+        }
+      }
+      if (gateList) {
+        gateList.innerHTML = `<div class="stack-row"><span class="title">${
+          state.regimeWalkForwardLoading ? "gate 계산 중" : "gate 결과 대기"
+        }</span><span class="badge neutral">${state.regimeWalkForwardLoading ? "running" : "idle"}</span></div>`;
+      }
+      if (auditList) {
+        auditList.innerHTML = `<div class="stack-row"><span class="title">${
+          state.regimeWalkForwardLoading ? "audit 계산 중" : "audit 결과 대기"
+        }</span><span class="badge neutral">${state.regimeWalkForwardLoading ? "running" : "idle"}</span></div>`;
+      }
+      if (fullPeriodList) {
+        fullPeriodList.innerHTML = '<div class="stack-row"><span class="title">full-period 비교 대기</span><span class="badge neutral">idle</span></div>';
+      }
+      if (notesList) {
+        notesList.innerHTML = '<div class="stack-row"><span class="title">추가 메모 없음</span><span class="badge neutral">idle</span></div>';
+      }
+      if (foldTableBody) {
+        foldTableBody.innerHTML = `<tr><td colspan="8" class="muted" style="text-align:center">${
+          state.regimeWalkForwardLoading ? "walk-forward 결과를 계산하는 중입니다." : "walk-forward 결과를 불러오지 않았습니다."
+        }</td></tr>`;
+      }
+      return;
+    }
+
+    const recommendation = recommendationMeta(payload.decision?.recommendation);
+    const auditMeta = auditClassificationMeta(payload.audit?.classification);
+    const gateResults = payload.decision?.gate_results || {};
+    const recentFolds = (payload.walk_forward?.folds || []).filter((fold) => fold.decision_focus_oos);
+
+    ui.setText("regime-walk-forward-artifact-id", artifactRecord.artifactId || "-");
+    ui.setText("regime-walk-forward-kpi-recommendation", recommendation.label);
+    ui.setText(
+      "regime-walk-forward-kpi-recommendation-meta",
+      gateResults.strict_gate ? "strict gate pass" : "strict gate fail",
+    );
+    ui.setText("regime-walk-forward-kpi-audit", auditMeta.label);
+    ui.setText(
+      "regime-walk-forward-kpi-audit-meta",
+      `PASS ${formatCountValue(payload.audit?.status_counts?.PASS)} / FAIL ${formatCountValue(payload.audit?.status_counts?.FAIL)} / AMBIG ${formatCountValue(payload.audit?.status_counts?.AMBIGUOUS)}`,
+    );
+    ui.setText("regime-walk-forward-kpi-wins", `${formatCountValue(gateResults.recent_win_count)} / ${formatCountValue(recentFolds.length)}`);
+    ui.setText(
+      "regime-walk-forward-kpi-wins-meta",
+      `RISK_WIN ${formatCountValue(gateResults.recent_risk_win_count)}`,
+    );
+    ui.setText("regime-walk-forward-kpi-cagr-delta", formatSignedPercentValue(gateResults.avg_delta_cagr_pct));
+    ui.setText(
+      "regime-walk-forward-kpi-cagr-delta-meta",
+      `Δ Return ${formatSignedPercentValue(gateResults.avg_delta_total_return_pct)} / Δ MDD ${formatSignedPercentValue(gateResults.avg_delta_mdd_pct)}`,
+    );
+
+    if (note) {
+      if (state.regimeWalkForwardError) {
+        note.textContent = `${state.regimeWalkForwardError} 이전 cached artifact를 표시합니다.`;
+      } else {
+        note.textContent = [
+          `${payload.meta.period_start} → ${payload.meta.period_end}`,
+          `${payload.meta.execution_model} / ${payload.meta.price_basis} / ${payload.meta.sizing_mode}`,
+          `complete years ${formatCountValue(payload.meta.complete_calendar_years?.length)}`,
+        ].join(" | ");
+      }
+    }
+
+    if (gateList) {
+      const auditBlockingMeta = gateResults.audit_blocking
+        ? { label: "BLOCKING", badgeClass: "danger" }
+        : { label: "CLEAR", badgeClass: "success" };
+      const gateRows = [
+        {
+          title: "Audit gate",
+          detail: "blocking audit가 있으면 최종 성과 판정은 보류합니다.",
+          badge: buildBadge(auditBlockingMeta.label, auditBlockingMeta.badgeClass),
+        },
+        {
+          title: "최근 OOS coverage",
+          detail: `WIN ${formatCountValue(gateResults.recent_win_count)} / RISK_WIN ${formatCountValue(gateResults.recent_risk_win_count)} / folds ${formatCountValue(recentFolds.length)}`,
+          badge: buildBadge(
+            booleanGateMeta(gateResults.sufficient_recent_folds).label,
+            booleanGateMeta(gateResults.sufficient_recent_folds).badgeClass,
+          ),
+        },
+        {
+          title: "최근 profit gate",
+          detail: `avg Δ CAGR ${formatSignedPercentValue(gateResults.avg_delta_cagr_pct)} / avg Δ Return ${formatSignedPercentValue(gateResults.avg_delta_total_return_pct)}`,
+          badge: buildBadge(
+            booleanGateMeta(gateResults.recent_profit_gate).label,
+            booleanGateMeta(gateResults.recent_profit_gate).badgeClass,
+          ),
+        },
+        {
+          title: "장기 훼손 gate",
+          detail: `CAGR drag ${formatSignedPercentValue(gateResults.full_period_cagr_drag_pct)} / Return drag ${formatSignedPercentValue(gateResults.full_period_total_return_drag_pct)}`,
+          badge: buildBadge(
+            booleanGateMeta(gateResults.long_term_gate).label,
+            booleanGateMeta(gateResults.long_term_gate).badgeClass,
+          ),
+        },
+        {
+          title: "Strict gate",
+          detail: `MDD improvement ${formatSignedPercentValue(gateResults.full_period_mdd_improvement_pct)} / avg Δ MDD ${formatSignedPercentValue(gateResults.avg_delta_mdd_pct)}`,
+          badge: buildBadge(
+            booleanGateMeta(gateResults.strict_gate).label,
+            booleanGateMeta(gateResults.strict_gate).badgeClass,
+          ),
+        },
+      ];
+      gateList.innerHTML = gateRows
+        .map(
+          (row) => `<div class="stack-row">
+            <div>
+              <div class="title">${ui.escapeHtml(row.title)}</div>
+              <div class="table-note">${ui.escapeHtml(row.detail)}</div>
+            </div>
+            ${row.badge}
+          </div>`,
+        )
+        .join("");
+    }
+
+    if (auditList) {
+      const items = payload.audit?.items || [];
+      if (!items.length) {
+        auditList.innerHTML = '<div class="stack-row"><span class="title">audit 항목이 없습니다.</span><span class="badge neutral">empty</span></div>';
+      } else {
+        auditList.innerHTML = items
+          .map((item) => {
+            const itemStatus = statusBadgeMeta(item.status);
+            const sources = [
+              ...(item.evidence || []),
+              ...(item.supporting_sources || []),
+              ...(item.conflicting_sources || []),
+            ];
+            const uniqueSources = [...new Set(sources)].slice(0, 4);
+            const sourceLine = uniqueSources.length ? `Sources: ${uniqueSources.join(" | ")}` : "";
+            const ssotLine = item.recommended_source_of_truth ? `SSOT: ${item.recommended_source_of_truth}` : "";
+            return `<div class="stack-row">
+              <div>
+                <div class="title">${ui.escapeHtml(item.item_id)}</div>
+                <div class="table-note">${ui.escapeHtml(item.detail)}</div>
+                ${sourceLine ? `<div class="table-note mono">${ui.escapeHtml(sourceLine)}</div>` : ""}
+                ${ssotLine ? `<div class="table-note mono">${ui.escapeHtml(ssotLine)}</div>` : ""}
+              </div>
+              ${buildBadge(itemStatus.label, itemStatus.badgeClass)}
+            </div>`;
+          })
+          .join("");
+      }
+    }
+
+    if (fullPeriodList) {
+      const rows = [
+        {
+          label: "Best Off",
+          badgeClass: "neutral",
+          badgeLabel: "off",
+          candidate: payload.full_period?.off_best,
+        },
+        {
+          label: "Best On",
+          badgeClass: recommendation.badgeClass,
+          badgeLabel: "on",
+          candidate: payload.full_period?.on_best,
+        },
+        {
+          label: "Canonical Baseline",
+          badgeClass: "info",
+          badgeLabel: "baseline",
+          candidate: payload.full_period?.canonical_off_baseline,
+        },
+      ];
+      fullPeriodList.innerHTML = rows
+        .map(({ label, badgeClass, badgeLabel, candidate }) => {
+          const metrics = candidate?.metrics || {};
+          return `<div class="stack-row">
+            <div>
+              <div class="title">${ui.escapeHtml(label)}</div>
+              <div class="strategy-combo-cell">${formatStrategyComboCell(candidate?.display_params || candidate?.strategy_id || "-")}</div>
+              <div class="table-note">Return ${ui.escapeHtml(formatPercentValue(metrics.total_return_pct))} / CAGR ${ui.escapeHtml(formatPercentValue(metrics.cagr_pct))} / MDD ${ui.escapeHtml(formatPercentValue(metrics.max_drawdown_pct))}</div>
+            </div>
+            ${buildBadge(badgeLabel, badgeClass)}
+          </div>`;
+        })
+        .join("");
+    }
+
+    if (notesList) {
+      const staticNotes = [
+        "이 탭은 전략 탭의 임시 regime 입력값을 반영하지 않고 official research config만 사용합니다.",
+        `Window: ${payload.meta.window_scheme.training_years}년 학습 / ${payload.meta.window_scheme.test_years}년 검증 / decision start ${payload.meta.window_scheme.decision_start_year}`,
+        `Combo universe: off ${formatCountValue(payload.meta.off_combo_count)} / on ${formatCountValue(payload.meta.on_combo_count)}`,
+      ];
+      const allNotes = [...(payload.decision?.notes || []), ...staticNotes];
+      notesList.innerHTML = allNotes
+        .map(
+          (entry, index) => `<div class="stack-row">
+            <div class="title">${ui.escapeHtml(entry)}</div>
+            ${buildBadge(index < (payload.decision?.notes || []).length ? "report" : "context", "neutral")}
+          </div>`,
+        )
+        .join("");
+    }
+
+    if (foldTableBody) {
+      const folds = payload.walk_forward?.folds || [];
+      if (!folds.length) {
+        foldTableBody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center">완전한 calendar year가 부족해 walk-forward fold가 없습니다.</td></tr>';
+      } else {
+        foldTableBody.innerHTML = folds
+          .map((fold) => {
+            const verdict = statusBadgeMeta(fold.verdict);
+            const focusBadge = fold.decision_focus_oos ? ` ${buildBadge("decision", "info")}` : "";
+            return `<tr>
+              <td>
+                <div class="title">${ui.escapeHtml(String(fold.test_year))}${focusBadge}</div>
+                <div class="table-note">${ui.escapeHtml(`${fold.test_start} → ${fold.test_end}`)}</div>
+              </td>
+              <td>
+                <div class="title">${ui.escapeHtml(`${fold.train_start} → ${fold.train_end}`)}</div>
+                <div class="table-note mono">${ui.escapeHtml(fold.train_data_hash.slice(0, 12))}</div>
+              </td>
+              <td class="strategy-combo-cell">
+                ${formatStrategyComboCell(fold.off_winner?.display_params || fold.off_winner?.strategy_id || "-")}
+                <div class="table-note">IS CAGR ${ui.escapeHtml(formatPercentValue(fold.off_winner?.train_metrics?.cagr_pct))} / OOS CAGR ${ui.escapeHtml(formatPercentValue(fold.off_winner?.test_metrics?.cagr_pct))}</div>
+              </td>
+              <td class="strategy-combo-cell">
+                ${formatStrategyComboCell(fold.on_winner?.display_params || fold.on_winner?.strategy_id || "-")}
+                <div class="table-note">IS CAGR ${ui.escapeHtml(formatPercentValue(fold.on_winner?.train_metrics?.cagr_pct))} / OOS CAGR ${ui.escapeHtml(formatPercentValue(fold.on_winner?.test_metrics?.cagr_pct))}</div>
+              </td>
+              <td class="num">${ui.escapeHtml(formatSignedPercentValue(fold.delta_oos?.total_return_pct))}</td>
+              <td class="num">${ui.escapeHtml(formatSignedPercentValue(fold.delta_oos?.cagr_pct))}</td>
+              <td class="num">${ui.escapeHtml(formatSignedPercentValue(fold.delta_oos?.max_drawdown_pct))}</td>
+              <td class="num">${buildBadge(verdict.label, verdict.badgeClass)}</td>
+            </tr>`;
+          })
+          .join("");
+      }
+    }
+  }
+
+  async function loadRegimeWalkForward(force = false) {
+    const workspace = currentWorkspace();
+    if (!workspaceSupportsRegimeWalkForward(workspace) || !state.dataStatus) {
+      state.regimeWalkForwardArtifact = null;
+      state.regimeWalkForwardLoading = false;
+      state.regimeWalkForwardError = "";
+      renderRegimeWalkForwardArtifact(null);
+      return;
+    }
+    if (state.regimeWalkForwardArtifact && !force) {
+      renderRegimeWalkForwardArtifact(state.regimeWalkForwardArtifact);
+      return;
+    }
+    state.regimeWalkForwardLoading = true;
+    state.regimeWalkForwardError = "";
+    renderRegimeWalkForwardArtifact(state.regimeWalkForwardArtifact);
+    const csvPath = state.dataStatus.snapshot_path || "";
+    const params = new URLSearchParams({
+      profileId: state.profileId,
+      csvPath,
+      maxWorkers: String(REGIME_WALK_FORWARD_MAX_WORKERS),
+    });
+    try {
+      const artifact = await ui.fetchJson(`/api/backtests/regime-walk-forward?${params.toString()}`);
+      state.regimeWalkForwardArtifact = artifact;
+      state.regimeWalkForwardLoading = false;
+      state.regimeWalkForwardError = "";
+      renderRegimeWalkForwardArtifact(artifact);
+    } catch (error) {
+      state.regimeWalkForwardLoading = false;
+      state.regimeWalkForwardError = error instanceof Error ? error.message : "regime 보고서를 불러오지 못했습니다.";
+      renderRegimeWalkForwardArtifact(state.regimeWalkForwardArtifact);
+    }
   }
 
   async function loadThreadTimeline(requestId = state.strategySliceRequestId) {
@@ -3206,8 +3669,8 @@
       profileId: state.profileId,
       csvPath,
       sweepId: SWEEP_DEFINITION_ID,
-      executionModel: document.getElementById("sweep-model").value || workspace?.defaultSweepExecutionModel || "next_open",
-      priceBasis: document.getElementById("sweep-price-basis").value || workspace?.defaultSweepPriceBasis || "adjusted_close",
+      executionModel: workspace?.defaultSweepExecutionModel || "next_open",
+      priceBasis: workspace?.defaultSweepPriceBasis || "adjusted_close",
     });
     const artifact = await ui.fetchJson(`/api/backtests/sweeps/latest?${params.toString()}`);
     renderSweepArtifact(artifact);
@@ -3244,6 +3707,10 @@
   }
 
   window.__strategyDashboardTestHooks = {
+    parseIsoDateParts,
+    daysInMonth,
+    buildIsoDate,
+    clampIsoDateToBounds,
     makeStrategyDetailStateKey,
     makeThreadTimelineStateKey,
     normalizeStrategyDetailPayload,
@@ -3253,9 +3720,16 @@
     strategyDetailMatchesRanking,
     shouldAcceptStrategyDetailPayload,
     shouldAcceptThreadTimelinePayload,
+    formatStrategyComboCell,
+    recommendationMeta,
+    auditClassificationMeta,
+    buildRegimeBands,
+    buildRegimeBackgroundShapes,
+    hasVisibleRegimeState,
   };
 
   document.addEventListener("DOMContentLoaded", () => {
+    window.BLSHSweepReferencePanel?.mount({ rootId: "sweep-reference-root" });
     document.querySelectorAll("[data-tab]").forEach((button) => {
       button.addEventListener("click", () => {
         const tabId = button.getAttribute("data-tab");
@@ -3264,29 +3738,21 @@
           if (tabId === "mentor") {
             void loadOfficialMatrix();
           }
+          if (tabId === "regime-research") {
+            void loadRegimeWalkForward();
+          }
         }
       });
     });
 
     bootstrap().catch((error) => {
       renderStrategyRankingMessage(error.message);
-      document.getElementById("sweep-meta-note").textContent = error.message;
+      window.BLSHSweepReferencePanel?.render(null);
     });
 
     document.getElementById("strategy-apply-button").addEventListener("click", async (event) => {
       event.preventDefault();
-      syncStrategyRegimeStateFromInputs();
-      renderStrategyRegimeCard();
-      state.selectedStrategyPresetId = "custom";
-      resetThreadHistoryPage();
-      setStrategyApplyPending(true);
-      try {
-        await reloadStrategySlice();
-      } catch (error) {
-        renderStrategyRankingMessage(error instanceof Error ? error.message : "콤보 랭킹을 불러오지 못했습니다.");
-      } finally {
-        setStrategyApplyPending(false);
-      }
+      await applyStrategySliceChanges();
     });
 
     document.querySelectorAll("[data-strategy-sort-key]").forEach((header) => {
@@ -3308,9 +3774,8 @@
 
     const regimeEnabled = document.getElementById("strategy-regime-enabled");
     if (regimeEnabled instanceof HTMLInputElement) {
-      regimeEnabled.addEventListener("change", () => {
-        syncStrategyRegimeStateFromInputs();
-        renderStrategyRegimeCard();
+      regimeEnabled.addEventListener("change", async () => {
+        await applyStrategySliceChanges();
       });
     }
 
@@ -3334,33 +3799,6 @@
         closeStrategyRegimeHelp();
       });
     }
-
-    [
-      "strategy-regime-rsi-period",
-      "strategy-regime-bear-high-threshold",
-      "strategy-regime-bear-mid-low-threshold",
-      "strategy-regime-bear-mid-high-threshold",
-      "strategy-regime-bull-low-threshold",
-      "strategy-regime-bull-mid-low-threshold",
-      "strategy-regime-bull-mid-high-threshold",
-      "strategy-regime-base-stop",
-      "strategy-regime-base-buy",
-      "strategy-regime-base-sell",
-      "strategy-regime-bull-stop",
-      "strategy-regime-bull-buy",
-      "strategy-regime-bull-sell",
-      "strategy-regime-bear-stop",
-      "strategy-regime-bear-buy",
-      "strategy-regime-bear-sell",
-    ].forEach((id) => {
-      const input = document.getElementById(id);
-      if (!(input instanceof HTMLInputElement)) {
-        return;
-      }
-      input.addEventListener("change", () => {
-        syncStrategyRegimeStateFromInputs();
-      });
-    });
 
     const strategyRankingPrev = document.getElementById("strategy-ranking-prev");
     if (strategyRankingPrev) {
@@ -3426,38 +3864,8 @@
       closeThreadDrawer();
     });
 
-    document.getElementById("sweep-refresh-button").addEventListener("click", async () => {
-      await loadLatestSweep();
-    });
-
-    document.getElementById("sweep-model").addEventListener("change", async () => {
-      await loadLatestSweep();
-    });
-
-    document.getElementById("sweep-price-basis").addEventListener("change", async () => {
-      await loadLatestSweep();
-    });
-
-    document.getElementById("sweep-box-axis").addEventListener("change", () => {
-      if (state.sweepArtifact) {
-        renderSweepArtifact(state.sweepArtifact);
-      }
-    });
-
-    document.getElementById("sweep-filter-apply").addEventListener("click", () => {
-      if (state.sweepArtifact) {
-        renderSweepArtifact(state.sweepArtifact);
-      }
-    });
-
-    document.getElementById("sweep-filter-reset").addEventListener("click", () => {
-      document.getElementById("sweep-filter-min-return").value = "0";
-      document.getElementById("sweep-filter-max-mdd").value = "-100";
-      document.getElementById("sweep-filter-min-cagr").value = "-100";
-      document.getElementById("sweep-filter-pareto").value = "all";
-      if (state.sweepArtifact) {
-        renderSweepArtifact(state.sweepArtifact);
-      }
+    document.getElementById("regime-walk-forward-refresh-button").addEventListener("click", async () => {
+      await loadRegimeWalkForward(true);
     });
 
     window.addEventListener("keydown", (event) => {

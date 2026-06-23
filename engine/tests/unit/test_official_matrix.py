@@ -122,6 +122,43 @@ class OfficialMatrixTest(unittest.TestCase):
         self.assertEqual(payload["meta"]["official_profile_id"], "tqqq_official_ddeolsao_pal_v1")
         self.assertEqual(payload["official_profile"]["profile_id"], "tqqq_official_ddeolsao_pal_v1")
 
+    def test_build_official_explorer_accepts_koru_official_profile(self) -> None:
+        bars = [
+            bar(2024, 1, 2, "10", "10.1", symbol="KORU"),
+            bar(2024, 1, 3, "9", "9.2", symbol="KORU"),
+            bar(2024, 1, 4, "11", "11.3", symbol="KORU"),
+        ]
+        config = StrategyConfig.from_mapping(
+            {
+                "profile_id": "koru_official_ddeolsao_pal_v1",
+                "symbol": "KORU",
+                "thread_count": 5,
+                "stop_sessions": 40,
+                "initial_capital": 1000,
+                "price_basis": "adjusted_close",
+                "execution_model": "ideal_same_close",
+                "sizing_mode": "fixed_principal",
+            }
+        )
+        payload = build_official_explorer(
+            bars,
+            config,
+            data_hash="fixture-hash",
+            catalog=(
+                {
+                    "strategy_id": "5x40",
+                    "label": "5T / 40S",
+                    "thread_count": 5,
+                    "stop_sessions": 40,
+                    "mentor_profiles": [],
+                },
+            ),
+            catalog_id="official-fixture",
+        )
+        self.assertEqual(payload["meta"]["symbol"], "KORU")
+        self.assertEqual(payload["meta"]["official_profile_id"], "koru_official_ddeolsao_pal_v1")
+        self.assertEqual(payload["official_profile"]["profile_id"], "koru_official_ddeolsao_pal_v1")
+
     def test_build_official_matrix_uses_dynamic_windows_and_selected_combo(self) -> None:
         bars = [
             bar(2024, 1, 2, "10", "10.1"),

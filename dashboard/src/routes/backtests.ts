@@ -263,6 +263,24 @@ export function createBacktestsRouter(backtestService: BacktestService): Router 
   );
 
   router.get(
+    "/regime-walk-forward",
+    asyncHandler(async (req, res) => {
+      const profileId = typeof req.query.profileId === "string" ? req.query.profileId : defaultProfileId;
+      const csvPath = typeof req.query.csvPath === "string" && req.query.csvPath.trim() !== "" ? req.query.csvPath : undefined;
+      const initialCapital = parseNumber(req.query.initialCapital, 10000);
+      const maxWorkers = parseOptionalNumberField(req.query.maxWorkers, "maxWorkers", { integer: true, min: 1 }) ?? 1;
+      res.json(
+        await backtestService.regimeWalkForward({
+          profileId,
+          csvPath,
+          initialCapital,
+          maxWorkers,
+        }),
+      );
+    }),
+  );
+
+  router.get(
     "/official-explorer",
     asyncHandler(async (req, res) => {
       const profileId = typeof req.query.profileId === "string" ? req.query.profileId : defaultProfileId;

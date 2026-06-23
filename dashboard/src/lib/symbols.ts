@@ -13,6 +13,10 @@ const SYMBOLS: SymbolMetadata[] = [
     csvFilename: "tqqq_daily_2011_present.csv",
   },
   {
+    symbol: "KORU",
+    csvFilename: "koru_daily_2013_present.csv",
+  },
+  {
     symbol: "000660",
     csvFilename: "000660_daily_2015_present.csv",
   },

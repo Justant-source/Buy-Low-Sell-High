@@ -2,9 +2,9 @@
 
 ## 제품 경계
 - 백테스트 전용 제품이다.
-- 현재 기본 워크스페이스는 SOXL이며, `TQQQ`, `0193T0`, `233740`, `462330`가 같은 구조로 추가되어 있다.
+- 현재 기본 워크스페이스는 SOXL이며, `TQQQ`, `KORU`, `0193T0`, `233740`, `462330`가 같은 구조로 추가되어 있다.
 - 이후 다른 종목도 동일한 workspace/프로필 공통 구조로 추가할 수 있어야 한다.
-- 현재 reference 계층은 `soxl=mentor_reference`, `tqqq=official_reference`, `0193t0/233740/462330=backtest_only`다.
+- 현재 reference 계층은 `soxl=mentor_reference`, `tqqq/koru=official_reference`, `0193t0/233740/462330=backtest_only`다.
 - 리서치, 파리티, 대시보드까지만 포함한다.
 - 브로커 연동 금지
 - 자동 주문 제출 금지
@@ -14,7 +14,7 @@
 - 보유 기간은 달력일이 아니라 거래소 세션 기준으로 계산한다.
 - 레퍼런스 무결성을 지킨다. 불일치를 숨기기 위해 fixture를 수정하지 않는다.
 - 공식 연구 기준선은 Yahoo `adjusted_close` 스냅샷과 `ideal_same_close` 실행 모델을 사용한다.
-- checked-in 공식 제품 게이트는 현재 SOXL에 있고, TQQQ는 같은 의미론을 runtime canonical baseline으로만 사용한다.
+- checked-in 공식 제품 게이트는 현재 SOXL에 있고, TQQQ와 KORU는 같은 의미론을 runtime canonical baseline으로만 사용한다.
 - checked-in SOXL 공식 baseline은 현재 `5x40 / buy 0 / sell 0`으로 고정한다.
 - 공식 코어 비교 조합은 `5x30`, `5x40`, `6x30`, `6x40`, `7x30`, `7x40` 6개만 사용한다.
 - 멘토 데이터와 parity는 계속 `legacy comparison` 참고자료로만 유지하며, 제품 baseline이나 백테스트 정답에 영향을 주지 않는다.

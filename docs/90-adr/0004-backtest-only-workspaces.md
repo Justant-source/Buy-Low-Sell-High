@@ -14,6 +14,7 @@
 - workspace는 `referenceMode`를 가진다.
   - `SOXL = mentor_reference`
   - `TQQQ = official_reference`
+  - `KORU = official_reference`
   - `0193T0`, `233740`, `462330 = backtest_only`
 - `mentor_reference`는 official baseline과 legacy mentor comparison을 함께 보여준다.
 - `official_reference`는 official baseline만 보여주고 mentor legacy card는 숨긴다.
@@ -24,4 +25,4 @@
 - 코드 경계가 백테스트 전용으로 단순해진다.
 - 새 종목 추가는 workspace 정의, 전략 프로필, 심볼 레지스트리, 데이터 소스 결정, reference mode 선택으로 제한된다.
 - SOXL reference parity 자산은 유지되지만 다른 종목으로 강제 확장하지 않는다.
-- TQQQ처럼 official baseline만 필요한 종목은 mentor parity 자산 없이도 같은 제품 셸에 합류할 수 있다.
+- TQQQ, KORU처럼 official baseline만 필요한 종목은 mentor parity 자산 없이도 같은 제품 셸에 합류할 수 있다.

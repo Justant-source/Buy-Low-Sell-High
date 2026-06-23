@@ -19,7 +19,8 @@ from .persistence.worker import run_once
 from .reporting.mentor_matrix import build_mentor_matrix, load_reference_fixture as load_mentor_matrix_reference
 from .reporting.official_explorer import build_official_explorer
 from .reporting.official_matrix import build_official_matrix
-from .reporting.parameter_sweep import build_parameter_sweep
+from .reporting.parameter_sweep import build_parameter_sweep, describe_parameter_sweep_execution
+from .reporting.regime_walk_forward import build_regime_walk_forward_report
 from .reporting.risk_report import build_risk_report
 from .reporting.strategy_ranking_daemon import run_strategy_ranking_pool_daemon
 from .reporting.strategy_explorer import build_slice_strategy_rankings, build_strategy_detail, build_strategy_explorer, filter_bars_to_slice
@@ -432,6 +433,19 @@ def _backtest_strategy_detail(args: argparse.Namespace) -> int:
 def _backtest_parameter_sweep(args: argparse.Namespace) -> int:
     config = _load_strategy_config_with_overrides(args)
     bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
+    if getattr(args, "dry_run", False):
+        return _print_json(
+            describe_parameter_sweep_execution(
+                bars,
+                config,
+                data_hash=data_hash,
+                sweep_id=args.sweep_id,
+                execution_model=args.execution_model,
+                price_basis=args.price_basis,
+                max_workers=args.max_workers,
+                chunk_size=args.chunk_size,
+            )
+        )
     return _print_json(
         build_parameter_sweep(
             bars,
@@ -440,6 +454,21 @@ def _backtest_parameter_sweep(args: argparse.Namespace) -> int:
             sweep_id=args.sweep_id,
             execution_model=args.execution_model,
             price_basis=args.price_basis,
+            max_workers=args.max_workers,
+            chunk_size=args.chunk_size,
+        )
+    )
+
+
+def _backtest_regime_walk_forward(args: argparse.Namespace) -> int:
+    config = _load_strategy_config_with_overrides(args)
+    bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
+    return _print_json(
+        build_regime_walk_forward_report(
+            bars,
+            config,
+            data_hash=data_hash,
+            max_workers=args.max_workers,
         )
     )
 
@@ -684,6 +713,9 @@ def main() -> int:
     backtest_parameter_sweep_parser.add_argument("--symbol")
     backtest_parameter_sweep_parser.add_argument("--initial-capital", type=float, default=10000.0)
     backtest_parameter_sweep_parser.add_argument("--sweep-id", default="core4_v4")
+    backtest_parameter_sweep_parser.add_argument("--max-workers", type=int, default=0)
+    backtest_parameter_sweep_parser.add_argument("--chunk-size", type=int, default=0)
+    backtest_parameter_sweep_parser.add_argument("--dry-run", action="store_true")
     backtest_parameter_sweep_parser.add_argument(
         "--execution-model",
         default="next_open",
@@ -701,6 +733,15 @@ def main() -> int:
         include_price_basis=False,
     )
     backtest_parameter_sweep_parser.set_defaults(handler=_backtest_parameter_sweep)
+    backtest_regime_walk_forward_parser = backtest_subparsers.add_parser("regime-walk-forward")
+    backtest_regime_walk_forward_parser.add_argument("--profile", required=True)
+    _add_csv_argument(backtest_regime_walk_forward_parser)
+    backtest_regime_walk_forward_parser.add_argument("--symbol")
+    backtest_regime_walk_forward_parser.add_argument("--initial-capital", type=float, default=10000.0)
+    backtest_regime_walk_forward_parser.add_argument("--max-workers", type=int, default=1)
+    backtest_regime_walk_forward_parser.add_argument("--regime-symbol")
+    backtest_regime_walk_forward_parser.add_argument("--regime-csv-path")
+    backtest_regime_walk_forward_parser.set_defaults(handler=_backtest_regime_walk_forward)
     backtest_official_explorer_parser = backtest_subparsers.add_parser("official-explorer")
     backtest_official_explorer_parser.add_argument("--profile", required=True)
     _add_csv_argument(backtest_official_explorer_parser)

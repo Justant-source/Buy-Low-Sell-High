@@ -373,6 +373,135 @@ export interface BacktestRiskPayload {
   warnings: string[];
 }
 
+export interface RegimeWalkForwardAuditItemPayload {
+  item_id: string;
+  status: "PASS" | "FAIL" | "AMBIGUOUS";
+  detail: string;
+  observed_runtime_behavior?: Record<string, unknown>;
+  evidence?: string[];
+  supporting_sources?: string[];
+  conflicting_sources?: string[];
+  recommended_source_of_truth?: string;
+}
+
+export interface RegimeWalkForwardFoldMetricsPayload {
+  cagr_pct: string;
+  total_return_pct: string;
+  max_drawdown_pct: string;
+  [key: string]: string;
+}
+
+export interface RegimeWalkForwardFoldWinnerPayload {
+  strategy_id: string;
+  display_params: string;
+  train_metrics: RegimeWalkForwardFoldMetricsPayload;
+  test_metrics: RegimeWalkForwardFoldMetricsPayload;
+  config_hash: string;
+  regime_config_hash?: string;
+  regime_data_hash?: string | null;
+}
+
+export interface RegimeWalkForwardFoldPayload {
+  train_start: string;
+  train_end: string;
+  train_data_hash: string;
+  test_year: number;
+  test_start: string;
+  test_end: string;
+  test_data_hash: string;
+  decision_focus_oos: boolean;
+  off_winner: RegimeWalkForwardFoldWinnerPayload;
+  on_winner: RegimeWalkForwardFoldWinnerPayload;
+  delta_oos: {
+    cagr_pct: number;
+    total_return_pct: number;
+    max_drawdown_pct: number;
+  };
+  verdict: "WIN" | "RISK_WIN" | "LOSS";
+}
+
+export interface RegimeWalkForwardPayload {
+  meta: {
+    symbol: string;
+    profile_id: string;
+    period_start: string;
+    period_end: string;
+    data_hash: string;
+    code_commit: string;
+    execution_model: string;
+    price_basis: string;
+    sizing_mode: string;
+    window_scheme: {
+      training_years: number;
+      test_years: number;
+      decision_start_year: number;
+    };
+    complete_calendar_years: number[];
+    off_combo_count: number;
+    on_combo_count: number;
+    regime_config_hash: string;
+    regime_grid_hash: string;
+  };
+  audit: {
+    classification: "implementation_bug" | "documentation_conflict" | "no_semantic_issue_found";
+    blocking: boolean;
+    status_counts: {
+      PASS: number;
+      FAIL: number;
+      AMBIGUOUS: number;
+    };
+    items: RegimeWalkForwardAuditItemPayload[];
+  };
+  walk_forward: {
+    folds: RegimeWalkForwardFoldPayload[];
+  };
+  full_period: {
+    off_best: {
+      strategy_id: string;
+      display_params: string;
+      metrics: RegimeWalkForwardFoldMetricsPayload;
+      config_hash: string;
+    };
+    on_best: {
+      strategy_id: string;
+      display_params: string;
+      metrics: RegimeWalkForwardFoldMetricsPayload;
+      config_hash: string;
+      regime_config_hash: string;
+    };
+    canonical_off_baseline: {
+      strategy_id: string;
+      display_params: string;
+      metrics: RegimeWalkForwardFoldMetricsPayload;
+      config_hash: string;
+    };
+  };
+  decision: {
+    recommendation:
+      | "continue_as_secondary_hypothesis"
+      | "time_boxed_follow_up_only"
+      | "stop_regime_research"
+      | "defer_verdict_until_semantic_fix";
+    gate_results: {
+      audit_blocking: boolean;
+      sufficient_recent_folds: boolean;
+      recent_win_count: number;
+      recent_risk_win_count: number;
+      avg_delta_cagr_pct: number;
+      avg_delta_total_return_pct: number;
+      avg_delta_mdd_pct: number;
+      full_period_cagr_drag_pct: number;
+      full_period_total_return_drag_pct: number;
+      full_period_mdd_improvement_pct: number;
+      recent_profit_gate: boolean;
+      long_term_gate: boolean;
+      strict_gate: boolean;
+    };
+    notes: string[];
+  };
+  payload_hash: string;
+}
+
 export interface StrategySlicePresetPayload {
   preset_id: string;
   label: string;
@@ -658,9 +787,57 @@ export interface ParameterSweepRowPayload {
     worst_segment_return_pct: number;
     positive_segment_ratio_pct: number;
     recent_segment_return_pct: number;
+    mean_cagr_pct?: number;
+    std_cagr_pct?: number;
+    worst_window_cagr_pct?: number;
+    recent_cagr_pct?: number;
+    recent_mdd_pct?: number;
+    compound_ratio?: number;
+    compound_ratio_log10?: number;
   };
   yearly_returns_pct: Record<string, number>;
   segment_returns_pct: Record<string, number>;
+  windows?: Array<{
+    window_id: string;
+    label: string;
+    year: number;
+    start: string;
+    end: string;
+    session_count: number;
+    start_equity: string;
+    end_equity: string;
+    return_pct: number;
+    cagr_pct: number;
+    max_drawdown_pct: number;
+    growth_ratio: number;
+  }>;
+  recent_window?: {
+    window_ids: string[];
+    start: string;
+    end: string;
+    return_pct: number;
+    cagr_pct: number;
+    max_drawdown_pct: number;
+    start_equity: string;
+    end_equity: string;
+  } | null;
+  plateau_class?: "P" | "M" | "I" | "E";
+  plateau_details?: {
+    neighbor_count: number;
+    neighbor_pass_ratio_pct: number;
+    neighbor_mean_cagr_pct: number;
+  };
+  tier_pass?: boolean;
+  tier_details?: {
+    tier_1_no_trade_collapse: boolean;
+    tier_2_all_windows_positive: boolean;
+    tier_3_mean_cagr_above_baseline: boolean;
+    tier_4_std_cagr_below_limit: boolean;
+    baseline_mean_cagr_pct: number;
+    baseline_std_cagr_pct: number;
+    std_cagr_limit_pct: number;
+    min_trade_return_pct: number;
+  };
   flags: {
     pareto_return_mdd: boolean;
     pareto_return_stability: boolean;
@@ -671,6 +848,8 @@ export interface ParameterSweepPayload {
   meta: {
     sweep_id: string;
     sweep_hash: string;
+    strategy_family?: string;
+    sweep_spec_version?: string;
     symbol: string;
     initial_capital: string;
     execution_model: string;
@@ -680,14 +859,49 @@ export interface ParameterSweepPayload {
     data_hash: string;
     code_commit: string;
     combo_count: number;
+    worker_count?: number;
+    chunk_count?: number;
+    chunk_size?: number;
     segment_presets: StrategySlicePresetPayload[];
     parameter_values: Record<string, number[]>;
+    evaluation_windows?: Array<{
+      window_id: string;
+      label: string;
+      year: number;
+      start: string;
+      end: string;
+    }>;
+    recent_window_span?: number;
+    baseline_thresholds?: {
+      combo_key: string | null;
+      mean_cagr_pct: number;
+      std_cagr_pct: number;
+      std_cagr_limit_pct: number;
+    };
+    plateau_rule?: {
+      edge_neighbor_min: number;
+      plateau_neighbor_pass_ratio_min_pct: number;
+      plateau_neighbor_mean_cagr_ratio_min_pct: number;
+      island_neighbor_mean_cagr_ratio_max_pct: number;
+    };
+    tier_rule?: {
+      tier_1_min_trade_return_pct_gt: number;
+      tier_2_all_windows_positive: boolean;
+      tier_3_mean_cagr_gt_baseline: boolean;
+      tier_4_std_cagr_lt_baseline_x: number;
+    };
+    compound_ratio_definition?: string;
   };
   summary: {
     best_full_return_combo: string;
     best_robust_combo: string;
+    best_compound_ratio_combo?: string;
     pareto_return_mdd_count: number;
     pareto_return_stability_count: number;
+    plateau_counts?: Record<string, number>;
+    tier_pass_count?: number;
+    recent_safe_count?: number;
+    recent_extreme_safe_count?: number;
     ranking_basis: string;
   };
   warnings: string[];
@@ -733,7 +947,13 @@ export interface PersistedRunArtifact {
   payload: BacktestDetailPayload;
 }
 
-export type ResearchArtifactKind = "STRATEGY_EXPLORER" | "STRATEGY_RANKING" | "PARAMETER_SWEEP";
+export type ResearchArtifactKind =
+  | "STRATEGY_EXPLORER"
+  | "STRATEGY_RANKING"
+  | "STRATEGY_DETAIL"
+  | "THREAD_TIMELINE"
+  | "PARAMETER_SWEEP"
+  | "REGIME_WALK_FORWARD";
 
 export interface ResearchArtifactRecord<TPayload> {
   artifactId: string;

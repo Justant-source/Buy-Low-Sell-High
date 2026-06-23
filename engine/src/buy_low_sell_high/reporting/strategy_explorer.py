@@ -158,13 +158,13 @@ def build_strategy_detail(
     price_basis: str = "adjusted_close",
 ) -> dict[str, Any]:
     strategy_spec = resolve_strategy_spec(strategy_id)
-    regime_context = load_regime_context(bars, base_config)
     config = build_strategy_config(
         base_config,
         strategy_spec,
         execution_model=execution_model,
         price_basis=price_basis,
     )
+    regime_context = load_regime_context(bars, config)
     run = run_backtest(bars, config, data_hash=data_hash, regime_context=regime_context)
     payload = _strategy_payload_from_run(
         strategy_spec,
@@ -174,7 +174,7 @@ def build_strategy_detail(
         price_basis=price_basis,
     )
     payload["segments"] = segment_rows_from_daily(run.daily, build_macro_segment_presets(bars[0].session_date, bars[-1].session_date))
-    payload["display_params"] = format_strategy_label(strategy_spec)
+    payload["display_params"] = format_strategy_label(strategy_spec, base_config=base_config, multiline=True)
     return payload
 
 
@@ -195,13 +195,13 @@ def _slice_ranking_row(
         execution_model=execution_model,
         price_basis=price_basis,
     )
-    run = run_backtest(bars, config, data_hash=data_hash, regime_context=regime_context)
+    run = run_backtest(bars, config, data_hash=data_hash, regime_context=regime_context.rebind(config))
     full_return = D(str(run.metrics["total_return_pct"]))
     row = {
         "combo_key": strategy_spec["strategy_id"],
         "strategy_id": strategy_spec["strategy_id"],
         "label": strategy_spec["label"],
-        "display_params": format_strategy_label(strategy_spec),
+        "display_params": format_strategy_label(strategy_spec, base_config=base_config, multiline=True),
         "thread_count": int(strategy_spec["thread_count"]),
         "stop_sessions": int(strategy_spec.get("stop_sessions", run.config.stop_sessions)),
         "buy_pct": as_number(D(strategy_spec.get("buy_pct", 0))),
@@ -395,7 +395,7 @@ def build_strategy_explorer(
             execution_model=execution_model,
             price_basis=price_basis,
         )
-        run = run_backtest(bars, config, data_hash=data_hash, regime_context=regime_context)
+        run = run_backtest(bars, config, data_hash=data_hash, regime_context=regime_context.rebind(config))
         payload = _strategy_payload_from_run(
             {
                 **strategy_row,

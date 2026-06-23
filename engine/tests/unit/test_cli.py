@@ -7,10 +7,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import json
 import unittest
+from unittest.mock import patch
 
 from buy_low_sell_high.backtest.parity import ParityResult
 from buy_low_sell_high.cli import (
+    _backtest_parameter_sweep,
     _backtest_strategy_detail,
+    _backtest_regime_walk_forward,
     _backtest_thread_timeline,
     _data_status,
     _load_strategy_config_with_overrides,
@@ -87,6 +90,61 @@ class CliDefaultsTest(unittest.TestCase):
         self.assertEqual(payload["meta"]["transaction_tax_bps"], "0")
         self.assertTrue(all("2024-01-03" <= row["session_date"] <= "2024-01-04" for row in payload["sessions"]))
 
+    def test_regime_walk_forward_cli_emits_report_payload(self) -> None:
+        profile = Path(__file__).resolve().parents[3] / "configs" / "strategies" / "soxl_official_ddeolsao_pal_v1.yaml"
+        csv_path = Path(__file__).resolve().parents[1] / "fixtures" / "sample_soxl.csv"
+        stdout = StringIO()
+        with (
+            patch(
+                "buy_low_sell_high.cli.build_regime_walk_forward_report",
+                return_value={"meta": {"symbol": "SOXL"}, "decision": {"recommendation": "defer_verdict_until_semantic_fix"}},
+            ),
+            redirect_stdout(stdout),
+        ):
+            exit_code = _backtest_regime_walk_forward(
+                Namespace(
+                    profile=str(profile),
+                    csv=str(csv_path),
+                    symbol="SOXL",
+                    initial_capital=10000.0,
+                    max_workers=2,
+                    regime_symbol=None,
+                    regime_csv_path=None,
+                )
+            )
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["meta"]["symbol"], "SOXL")
+        self.assertEqual(payload["decision"]["recommendation"], "defer_verdict_until_semantic_fix")
+
+    def test_parameter_sweep_cli_dry_run_reports_execution_plan(self) -> None:
+        profile = Path(__file__).resolve().parents[3] / "configs" / "strategies" / "soxl_official_ddeolsao_pal_v1.yaml"
+        csv_path = Path(__file__).resolve().parents[1] / "fixtures" / "sample_soxl.csv"
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            exit_code = _backtest_parameter_sweep(
+                Namespace(
+                    profile=str(profile),
+                    csv=str(csv_path),
+                    symbol="SOXL",
+                    initial_capital=10000.0,
+                    sweep_id="core4_v4",
+                    execution_model="next_open",
+                    price_basis="adjusted_close",
+                    max_workers=4,
+                    chunk_size=9,
+                    dry_run=True,
+                )
+            )
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["meta"]["symbol"], "SOXL")
+        self.assertEqual(payload["meta"]["worker_count"], 4)
+        self.assertEqual(payload["meta"]["chunk_size"], 9)
+        self.assertEqual(payload["plan"]["requested_max_workers"], 4)
+        self.assertEqual(payload["plan"]["chunk_size"], 9)
+        self.assertEqual(payload["plan"]["parameter_keys"], ["thread_count", "stop_sessions", "buy_pct", "sell_pct"])
+
     def test_default_market_data_csv_points_to_repo_snapshot(self) -> None:
         path = Path(default_market_data_csv())
         self.assertEqual(path.name, "soxl_daily_2011_present.csv")
@@ -99,6 +157,7 @@ class CliDefaultsTest(unittest.TestCase):
 
     def test_default_market_data_csv_uses_symbol_registry_filename(self) -> None:
         self.assertEqual(Path(default_market_data_csv("QQQ")).name, "qqq_daily_2011_present.csv")
+        self.assertEqual(Path(default_market_data_csv("KORU")).name, "koru_daily_2013_present.csv")
         self.assertEqual(Path(default_market_data_csv("0193T0")).name, "0193t0_daily_2015_present.csv")
         self.assertEqual(Path(default_market_data_csv("000660")).name, "000660_daily_2015_present.csv")
         self.assertEqual(Path(default_market_data_csv("233740")).name, "233740_daily_2015_present.csv")

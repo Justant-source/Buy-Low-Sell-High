@@ -1,9 +1,9 @@
 # 문서 인덱스
 
 ## 현재 구현 스냅샷
-- 현재 워크스페이스는 `SOXL`, `TQQQ`, `0193T0`, `233740`, `462330`다.
-- `referenceMode`는 `soxl=mentor_reference`, `tqqq=official_reference`, `0193t0/233740/462330=backtest_only`다.
-- 공식 연구 기준선 계열은 `Yahoo adjusted_close + ideal_same_close + fixed_principal`을 사용하며, 현재 `SOXL`과 `TQQQ`에 적용된다.
+- 현재 워크스페이스는 `SOXL`, `TQQQ`, `KORU`, `0193T0`, `233740`, `462330`다.
+- `referenceMode`는 `soxl=mentor_reference`, `tqqq/koru=official_reference`, `0193t0/233740/462330=backtest_only`다.
+- 공식 연구 기준선 계열은 `Yahoo adjusted_close + ideal_same_close + fixed_principal`을 사용하며, 현재 `SOXL`, `TQQQ`, `KORU`에 적용된다.
 - 저장된 `Strategy Explorer`, `Strategy Ranking`, `Sweep` 산출물은 `code_commit`이 현재 코드 fingerprint와 일치할 때만 재사용한다.
 - slice 전략 랭킹은 `cagr desc, max_drawdown desc, full_return desc`를 사용한다.
 - 종료 자산이 `0` 이하인 slice에서는 CAGR을 정의하지 않고 총수익률을 대체 표시한다.

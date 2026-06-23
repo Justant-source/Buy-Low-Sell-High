@@ -14,7 +14,7 @@
 - **오** → 매수가보다 상승 시 익절 신호 발생
 - **팔** → 해당 세션에 매도
 
-현재 워크스페이스는 `SOXL`, `TQQQ`, `0193T0`, `233740`, `462330`다. `SOXL`은 `mentor_reference`, `TQQQ`는 `official_reference`, 나머지는 `backtest_only`로 같은 화면 구조를 재사용한다.
+현재 워크스페이스는 `SOXL`, `TQQQ`, `KORU`, `0193T0`, `233740`, `462330`다. `SOXL`은 `mentor_reference`, `TQQQ`와 `KORU`는 `official_reference`, 나머지는 `backtest_only`로 같은 화면 구조를 재사용한다.
 
 ---
 
@@ -23,10 +23,11 @@
 - 공식 연구 기준선 계열은 Yahoo 스냅샷, `price_basis=adjusted_close`, `execution_model=ideal_same_close`, `sizing_mode=fixed_principal`을 사용한다.
 - SOXL checked-in 제품 baseline은 `data/raw/soxl_daily_2011_present.csv`와 `configs/strategies/soxl_official_ddeolsao_pal_v1.yaml`이다.
 - TQQQ runtime official baseline은 `data/raw/tqqq_daily_2011_present.csv`와 `configs/strategies/tqqq_official_ddeolsao_pal_v1.yaml`이다.
-- 현재 두 official profile YAML은 모두 `thread_count=5`, `stop_sessions=40`, `buy_pct=0`, `sell_pct=0` baseline을 사용한다.
+- KORU runtime official baseline은 `data/raw/koru_daily_2013_present.csv`와 `configs/strategies/koru_official_ddeolsao_pal_v1.yaml`이다.
+- 현재 세 official profile YAML은 모두 `thread_count=5`, `stop_sessions=40`, `buy_pct=0`, `sell_pct=0` baseline을 사용한다.
 - 공식 baseline은 현재 `5x40 / buy 0 / sell 0`으로 고정한다. 이후 변경이 필요하면 새 ADR과 새 golden fixture를 함께 갱신한다.
 - 공식 CI 게이트는 현재 SOXL `official-explorer`와 `official-matrix` golden fixture다.
-- TQQQ official reference는 canonical runtime report지만 checked-in parity fixture를 강제하지 않는다.
+- TQQQ, KORU official reference는 canonical runtime report지만 checked-in parity fixture를 강제하지 않는다.
 - 멘토 매트릭스와 parity는 계속 SOXL `legacy comparison` 진단으로만 유지한다. 멘토 데이터는 참고용이며, 공식 baseline이나 백테스트 정답을 결정하지 않는다.
 
 ---
@@ -58,7 +59,7 @@ thread_principal = initial_capital / thread_count
 
 현재 전략 탐색기 런타임 기본 조합은 위 6개다.
 SOXL 멘토 매트릭스 legacy 비교도 이 6조합을 중심으로 해석한다.
-SOXL checked-in official baseline과 현재 TQQQ official profile은 모두 `5x40`을 사용한다.
+SOXL checked-in official baseline과 현재 TQQQ, KORU official profile은 모두 `5x40`을 사용한다.
 
 ### 현재 파라미터 스윕 정의
 
@@ -212,7 +213,7 @@ session_price <= entry_price × (1 - stop_loss_pct / 100)
 | `adjusted_close` | `adj_close` | 기업행위(주식분할·배당) 반영 조정 종가 |
 | `raw_close_with_actions` | `close` | 미조정 종가 기반. 필요하면 기업행위 metadata를 별도 함께 본다 |
 
-`SOXL`, `TQQQ` official_reference는 Yahoo `adjusted_close`를 기본으로 사용한다.
+`SOXL`, `TQQQ`, `KORU` official_reference는 Yahoo `adjusted_close`를 기본으로 사용한다.
 `0193T0`, `233740`, `462330` backtest_only workspace는 `raw_close_with_actions`를 기본으로 사용한다.
 현재 표준 로컬 CSV 스냅샷은 `close`, `adj_close`, source metadata를 함께 유지한다.
 

@@ -5,7 +5,7 @@
 
 이 문서는 parity 선언이 아니라 갭 리포트다.
 공식 제품 게이트가 아니라 `legacy comparison` 조사 문서로만 유지한다.
-적용 범위는 현재 `SOXL` `mentor_reference` 워크스페이스다. `TQQQ` official reference와 `0193T0/233740/462330` backtest-only workspace는 이 문서의 직접 대상이 아니다.
+적용 범위는 현재 `SOXL` `mentor_reference` 워크스페이스다. `TQQQ`/`KORU` official reference와 `0193T0/233740/462330` backtest-only workspace는 이 문서의 직접 대상이 아니다.
 
 ## 상태
 - 멘토 전략: 멘토 이미지와 고정된 전사 fixture를 기반으로 추론

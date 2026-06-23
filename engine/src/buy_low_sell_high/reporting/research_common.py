@@ -5,7 +5,7 @@ from datetime import date
 from decimal import Decimal
 from hashlib import sha256
 import json
-from math import sqrt
+from math import isfinite, sqrt
 from typing import Any
 
 from ..domain.enums import PriceBasis
@@ -79,6 +79,17 @@ PARAMETER_SWEEP_DEFINITION: dict[str, Any] = {
     },
 }
 
+REGIME_PARAMETER_SWEEP_ID = "soxl_regime_v1"
+REGIME_PARAMETER_SWEEP_DEFINITION: dict[str, Any] = {
+    "sweep_id": REGIME_PARAMETER_SWEEP_ID,
+    "parameter_values": {
+        "thread_count": [5, 6, 7],
+        "stop_sessions": [30, 40],
+        "buy_pct": [-10, -7, -5, -3, 0],
+        "sell_pct": [0, 3, 6, 9, 10],
+    },
+}
+
 _MACRO_SEGMENT_SPECS: tuple[tuple[str, str, int, int | None], ...] = (
     ("2011-2014", "2011-2014", 2011, 2014),
     ("2015-2018", "2015-2018", 2015, 2018),
@@ -86,6 +97,9 @@ _MACRO_SEGMENT_SPECS: tuple[tuple[str, str, int, int | None], ...] = (
     ("2022-2024", "2022-2024", 2022, 2024),
     ("2025-latest", "2025-latest", 2025, None),
 )
+
+EVALUATION_WINDOW_MAX_COUNT = 8
+RECENT_WINDOW_SPAN = 2
 
 
 def _json_default(value: object) -> object:
@@ -209,6 +223,26 @@ def filter_daily(daily: list[DailySnapshot], start: date, end: date) -> list[Dai
     return [snapshot for snapshot in daily if start <= snapshot.session_date <= end]
 
 
+def annualized_return_pct_from_daily(daily: list[DailySnapshot]) -> Decimal:
+    if len(daily) < 2:
+        return ZERO
+    start = daily[0].total_equity
+    end = daily[-1].total_equity
+    if start == ZERO:
+        return ZERO
+    elapsed_days = (daily[-1].session_date - daily[0].session_date).days
+    total_return_pct = ((end - start) / start) * D("100")
+    if elapsed_days <= 0:
+        return quantize_money(total_return_pct)
+    growth_ratio = end / start
+    if growth_ratio <= ZERO:
+        return quantize_money(total_return_pct)
+    annualized_return = (float(growth_ratio) ** (365 / elapsed_days) - 1) * 100
+    if not isfinite(annualized_return):
+        return quantize_money(total_return_pct)
+    return quantize_money(D(str(annualized_return)))
+
+
 def summarize_daily_slice(daily: list[DailySnapshot]) -> dict[str, Any] | None:
     if not daily:
         return None
@@ -216,6 +250,7 @@ def summarize_daily_slice(daily: list[DailySnapshot]) -> dict[str, Any] | None:
     end_equity = daily[-1].total_equity
     pnl = quantize_money(end_equity - start_equity)
     return_pct = ZERO if start_equity == ZERO else quantize_money(((end_equity - start_equity) / start_equity) * D("100"))
+    cagr_pct = annualized_return_pct_from_daily(daily)
     peak_equity = daily[0].total_equity
     max_drawdown = ZERO
     for snapshot in daily:
@@ -233,6 +268,7 @@ def summarize_daily_slice(daily: list[DailySnapshot]) -> dict[str, Any] | None:
         "end_equity": str(quantize_money(end_equity)),
         "pnl": str(pnl),
         "return_pct": str(return_pct),
+        "cagr_pct": str(cagr_pct),
         "max_drawdown_pct": str(quantize_money(max_drawdown * D("100"))),
         "session_count": len(daily),
     }
@@ -279,6 +315,39 @@ def segment_rows_from_daily(
             }
         )
     return rows
+
+
+def build_yearly_evaluation_windows(
+    period_start: date,
+    period_end: date,
+    *,
+    max_windows: int = EVALUATION_WINDOW_MAX_COUNT,
+) -> list[dict[str, Any]]:
+    windows: list[dict[str, Any]] = []
+    for year in range(period_start.year, period_end.year + 1):
+        start = max(period_start, date(year, 1, 1))
+        end = min(period_end, date(year, 12, 31))
+        if start > end:
+            continue
+        windows.append(
+            {
+                "year": year,
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+            }
+        )
+    if len(windows) > max_windows:
+        windows = windows[-max_windows:]
+    return [
+        {
+            "window_id": f"W{index + 1}",
+            "label": f"W{index + 1} · {window['year']}",
+            "year": window["year"],
+            "start": window["start"],
+            "end": window["end"],
+        }
+        for index, window in enumerate(windows)
+    ]
 
 
 def serialize_daily(daily: list[DailySnapshot]) -> list[dict[str, Any]]:

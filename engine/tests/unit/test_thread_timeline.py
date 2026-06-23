@@ -260,6 +260,51 @@ class ThreadTimelineTest(unittest.TestCase):
         self.assertEqual(payload["sessions"][1]["entry_batch"][0]["entry_regime"], "defense")
         self.assertEqual(payload["sessions"][2]["exit_batch"][0]["entry_regime"], "defense")
 
+    def test_regime_thread_timeline_uses_selected_strategy_time_stop(self) -> None:
+        regime_bars = [qqq_weekly_bar(date(2024, 1, 5), index, str(100 - index)) for index in range(15)] + [
+            qqq_weekly_bar(date(2024, 1, 5), 15, "84")
+        ]
+        payload = build_thread_timeline(
+            [
+                bar(2024, 4, 22, "10"),
+                bar(2024, 4, 23, "9"),
+                bar(2024, 4, 24, "8"),
+                bar(2024, 4, 25, "8"),
+            ],
+            StrategyConfig.from_mapping(
+                {
+                    "symbol": "SOXL",
+                    "thread_count": 1,
+                    "stop_sessions": 30,
+                    "initial_capital": 1000,
+                    "commission_bps": "0",
+                    "transaction_tax_bps": "0",
+                    "slippage_bps": "0",
+                    "regime_enabled": True,
+                    "regime_symbol": "QQQ",
+                    "regime_csv_path": self._write_regime_csv(regime_bars),
+                    "regime_base_stop_sessions": 30,
+                    "regime_base_buy_pct": "0",
+                    "regime_base_sell_pct": "99",
+                    "regime_bull_stop_sessions": 30,
+                    "regime_bull_buy_pct": "0",
+                    "regime_bull_sell_pct": "99",
+                    "regime_bear_stop_sessions": 5,
+                    "regime_bear_buy_pct": "0",
+                    "regime_bear_sell_pct": "99",
+                }
+            ),
+            data_hash="fixture-hash",
+            strategy_id="rt1-bst30-bbuy+0-bsell+99-rst1-rbuy+0-rsell+99",
+            execution_model="ideal_same_close",
+            price_basis="adjusted_close",
+        )
+
+        exit_session = next(session for session in payload["sessions"] if session["session_date"] == "2024-04-24")
+        self.assertEqual(exit_session["exit_count"], 1)
+        self.assertEqual(exit_session["exit_batch"][0]["close_reason"], "TIME_STOP")
+        self.assertEqual(exit_session["exit_batch"][0]["entry_regime"], "defense")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,10 +7,11 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from buy_low_sell_high.data.providers.yahoo_provider import write_bars_to_csv
+from buy_low_sell_high.backtest.engine import run_backtest
 from buy_low_sell_high.domain.models import MarketBar, StrategyConfig
 from buy_low_sell_high.domain.money import D
 from buy_low_sell_high.reporting.strategy_explorer import build_slice_strategy_rankings, build_strategy_detail, build_strategy_explorer, filter_bars_to_slice
-from buy_low_sell_high.reporting.strategy_specs import parse_dynamic_strategy_id
+from buy_low_sell_high.reporting.strategy_specs import build_strategy_config, parse_dynamic_strategy_id
 
 
 def dated_bar(session_date: date, close: str) -> MarketBar:
@@ -302,14 +303,146 @@ class StrategyExplorerTest(unittest.TestCase):
 
         self.assertEqual(payload["meta"]["regime_enabled"], True)
         self.assertEqual(payload["meta"]["regime_symbol"], "QQQ")
-        self.assertEqual(payload["meta"]["combo_count"], 192)
+        self.assertEqual(payload["meta"]["combo_count"], 7500)
         self.assertTrue(payload["meta"]["regime_config_hash"])
         self.assertTrue(payload["meta"]["regime_data_hash"])
         self.assertTrue(payload["rows"][0]["strategy_id"].startswith("rt"))
         self.assertIn("Attack", payload["rows"][0]["display_params"])
+        self.assertIn("Neutral", payload["rows"][0]["display_params"])
         self.assertIn("Defense", payload["rows"][0]["display_params"])
+        self.assertEqual(payload["rows"][0]["display_params"].splitlines()[0], f"T{payload['rows'][0]['thread_count']}")
         self.assertIn("bull_stop_sessions", payload["rows"][0])
         self.assertIn("bear_sell_pct", payload["rows"][0])
+
+    def test_regime_strategy_detail_uses_selected_strategy_parameters(self) -> None:
+        regime_bars = [weekly_bar(date(2024, 1, 5), index, str(100 - index)) for index in range(15)] + [
+            weekly_bar(date(2024, 1, 5), 15, "84")
+        ]
+        bars = [
+            bar(2024, 4, 22, "10"),
+            bar(2024, 4, 23, "9"),
+            bar(2024, 4, 24, "8"),
+            bar(2024, 4, 25, "8"),
+        ]
+        base_config = StrategyConfig.from_mapping(
+            {
+                "symbol": "SOXL",
+                "thread_count": 5,
+                "stop_sessions": 30,
+                "initial_capital": 1000,
+                "execution_model": "ideal_same_close",
+                "price_basis": "adjusted_close",
+                "commission_bps": "0",
+                "transaction_tax_bps": "0",
+                "slippage_bps": "0",
+                "regime_enabled": True,
+                "regime_symbol": "QQQ",
+                "regime_csv_path": self._write_regime_csv(regime_bars),
+                "regime_base_stop_sessions": 40,
+                "regime_base_buy_pct": "0",
+                "regime_base_sell_pct": "99",
+                "regime_bull_stop_sessions": 30,
+                "regime_bull_buy_pct": "0",
+                "regime_bull_sell_pct": "99",
+                "regime_bear_stop_sessions": 5,
+                "regime_bear_buy_pct": "0",
+                "regime_bear_sell_pct": "99",
+            }
+        )
+
+        payload = build_strategy_detail(
+            bars,
+            base_config,
+            strategy_id="rt5-bst30-bbuy+0-bsell+99-rst1-rbuy+0-rsell+99",
+            data_hash="fixture-hash",
+            execution_model="ideal_same_close",
+            price_basis="adjusted_close",
+        )
+
+        direct_config = build_strategy_config(
+            base_config,
+            {
+                "strategy_id": "rt5-bst30-bbuy+0-bsell+99-rst1-rbuy+0-rsell+99",
+                "thread_count": 5,
+                "bull_stop_sessions": 30,
+                "bull_buy_pct": D("0"),
+                "bull_sell_pct": D("99"),
+                "bear_stop_sessions": 1,
+                "bear_buy_pct": D("0"),
+                "bear_sell_pct": D("99"),
+                "regime_enabled": True,
+            },
+            execution_model="ideal_same_close",
+            price_basis="adjusted_close",
+        )
+        direct_run = run_backtest(bars, direct_config, data_hash="fixture-hash")
+
+        self.assertEqual(payload["metrics"]["total_return_pct"], str(direct_run.metrics["total_return_pct"]))
+        self.assertEqual(payload["metrics"]["cagr_pct"], str(direct_run.metrics["cagr_pct"]))
+        self.assertEqual(payload["metrics"]["trade_count"], direct_run.metrics["trade_count"])
+
+    def test_regime_ranking_row_metrics_match_direct_run(self) -> None:
+        regime_bars = [weekly_bar(date(2024, 1, 5), index, str(100 - index)) for index in range(15)] + [
+            weekly_bar(date(2024, 1, 5), 15, "84")
+        ]
+        bars = [
+            bar(2024, 4, 22, "10"),
+            bar(2024, 4, 23, "9"),
+            bar(2024, 4, 24, "8"),
+            bar(2024, 4, 25, "8"),
+        ]
+        base_config = StrategyConfig.from_mapping(
+            {
+                "symbol": "SOXL",
+                "thread_count": 5,
+                "stop_sessions": 30,
+                "initial_capital": 1000,
+                "execution_model": "ideal_same_close",
+                "price_basis": "adjusted_close",
+                "commission_bps": "0",
+                "transaction_tax_bps": "0",
+                "slippage_bps": "0",
+                "regime_enabled": True,
+                "regime_symbol": "QQQ",
+                "regime_csv_path": self._write_regime_csv(regime_bars),
+                "regime_base_stop_sessions": 40,
+                "regime_base_buy_pct": "0",
+                "regime_base_sell_pct": "0",
+                "regime_bull_stop_sessions": 30,
+                "regime_bull_buy_pct": "0",
+                "regime_bull_sell_pct": "0",
+                "regime_bear_stop_sessions": 40,
+                "regime_bear_buy_pct": "0",
+                "regime_bear_sell_pct": "0",
+            }
+        )
+
+        payload = build_slice_strategy_rankings(
+            bars,
+            base_config,
+            data_hash="fixture-hash",
+            execution_model="ideal_same_close",
+            price_basis="adjusted_close",
+            limit=0,
+            max_workers=1,
+        )
+        target_row = next(
+            row
+            for row in payload["rows"]
+            if row["bear_stop_sessions"] == 30 and row["bear_buy_pct"] == -10.0 and row["bear_sell_pct"] == 9.0
+        )
+        direct_config = build_strategy_config(
+            base_config,
+            target_row,
+            execution_model="ideal_same_close",
+            price_basis="adjusted_close",
+        )
+        direct_run = run_backtest(bars, direct_config, data_hash="fixture-hash")
+
+        self.assertEqual(target_row["full_return_pct"], float(direct_run.metrics["total_return_pct"]))
+        self.assertEqual(target_row["cagr_pct"], float(direct_run.metrics["cagr_pct"]))
+        self.assertEqual(target_row["max_drawdown_pct"], float(direct_run.metrics["max_drawdown_pct"]))
+        self.assertEqual(target_row["trade_count"], direct_run.metrics["trade_count"])
 
 
 if __name__ == "__main__":

@@ -506,6 +506,47 @@ class DataPipelineTest(unittest.TestCase):
             self.assertIn("2011-01-03", written)
             self.assertIn("yahoo_chart", written)
 
+    def test_sync_history_prefers_yahoo_for_koru_market_fallback(self) -> None:
+        yahoo_bars = [
+            MarketBar(
+                symbol="KORU",
+                session_date=date(2013, 4, 10),
+                open=D("25"),
+                high=D("26"),
+                low=D("24"),
+                close=D("25"),
+                adj_close=D("25"),
+                volume=100000,
+                source="yahoo_chart",
+            ),
+            MarketBar(
+                symbol="KORU",
+                session_date=date(2013, 4, 11),
+                open=D("25"),
+                high=D("27"),
+                low=D("24"),
+                close=D("26"),
+                adj_close=D("26"),
+                volume=120000,
+                source="yahoo_chart",
+            ),
+        ]
+
+        with TemporaryDirectory() as temp_dir:
+            output_csv = Path(temp_dir) / "koru.csv"
+            with patch("buy_low_sell_high.data.sync.YahooMarketDataProvider.load_bars", return_value=yahoo_bars) as yahoo_loader:
+                with patch("buy_low_sell_high.data.sync.InvestingMarketDataProvider.load_bars") as investing_loader:
+                    with patch("buy_low_sell_high.data.sync.StooqMarketDataProvider.load_bars") as stooq_loader:
+                        result = sync_history(output_csv, symbol="KORU")
+            yahoo_loader.assert_called_once_with("KORU", start_date="2013-04-10")
+            investing_loader.assert_not_called()
+            stooq_loader.assert_not_called()
+            self.assertEqual(result["source"], "yahoo_chart")
+            self.assertEqual(result["rows"], 2)
+            written = output_csv.read_text(encoding="utf-8")
+            self.assertIn("2013-04-10", written)
+            self.assertIn("yahoo_chart", written)
+
     def test_yahoo_provider_falls_back_to_query2(self) -> None:
         payload = yahoo_payload(date(2024, 1, 1), "10")
 

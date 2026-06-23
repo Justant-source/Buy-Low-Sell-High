@@ -1,0 +1,7 @@
+profile_id: koru_default_7x30
+symbol: KORU
+thread_count: 7
+stop_sessions: 30
+price_basis: adjusted_close
+execution_model: ideal_same_close
+sizing_mode: fixed_principal

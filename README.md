@@ -57,6 +57,7 @@ PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile co
 PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile configs/strategies/0193t0_default_5x30.yaml --symbol 0193T0
 PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile configs/strategies/233740_default_5x30.yaml --symbol 233740
 PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile configs/strategies/462330_default_5x30.yaml --symbol 462330
+PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest regime-walk-forward --profile configs/strategies/soxl_official_ddeolsao_pal_v1.yaml --symbol SOXL
 ```
 
 ## Dashboard Toolchain

@@ -6,6 +6,7 @@
 - 표준 스냅샷 경로는 심볼 레지스트리가 결정하는 `data/raw/{symbol_specific_filename}.csv`다.
   - `SOXL`: `data/raw/soxl_daily_2011_present.csv`
   - `TQQQ`: `data/raw/tqqq_daily_2011_present.csv`
+  - `KORU`: `data/raw/koru_daily_2013_present.csv`
   - `QQQ`: `data/raw/qqq_daily_2011_present.csv`
   - `000660`: `data/raw/000660_daily_2015_present.csv`
   - `0193T0`: `data/raw/0193t0_daily_2015_present.csv`
@@ -14,10 +15,11 @@
 - 표준 매니페스트 경로는 대응하는 `data/manifests/{csv_stem}.json`이다.
 - 현재 공식 SOXL 기준선은 `data/raw/soxl_daily_2011_present.csv`와 `data/manifests/soxl_daily_2011_present.json`이다.
 - 현재 공식 TQQQ 기준선은 `data/raw/tqqq_daily_2011_present.csv`와 `data/manifests/tqqq_daily_2011_present.json`이다.
+- 현재 공식 KORU 기준선은 `data/raw/koru_daily_2013_present.csv`와 `data/manifests/koru_daily_2013_present.json`이다.
 - `QQQ` canonical snapshot은 `SOXL` regime 보조 데이터셋으로 사용하며, 경로는 `data/raw/qqq_daily_2011_present.csv`와 `data/manifests/qqq_daily_2011_present.json`이다.
 - SOXL 공식 기준선은 checked-in golden fixture와 결합된 제품 gate다.
-- TQQQ 공식 기준선은 runtime canonical profile이며, golden fixture/parity 기준은 계속 SOXL 전용 `official_reference_matrix.json`과 `official_explorer_summary.json`에 둔다.
-- `SOXL`, `TQQQ`는 Yahoo chart를 우선 소스로 사용하며 실패 시 Investing, Stooq fallback을 사용한다.
+- TQQQ와 KORU 공식 기준선은 runtime canonical profile이며, golden fixture/parity 기준은 계속 SOXL 전용 `official_reference_matrix.json`과 `official_explorer_summary.json`에 둔다.
+- `SOXL`, `TQQQ`, `KORU`는 Yahoo chart를 우선 소스로 사용하며 실패 시 Investing, Stooq fallback을 사용한다.
 - `000660`, `0193T0`, `233740`, `462330`는 네이버 일별시세를 소스로 사용한다.
 - `0193T0`는 2026-05-27 상장 이전 구간을 synthetic row로 채운다.
   - synthetic close 앵커는 실제 `0193T0` 2026-05-27 종가다.
@@ -25,6 +27,7 @@
   - `2015-01-01`이 거래소 휴장일이므로 실제 첫 row는 `2015-01-02`다.
 - `233740` canonical 스냅샷의 실제 첫 row는 `2015-12-17`이다.
 - `462330` canonical 스냅샷의 실제 첫 row는 `2023-07-04`이며 상장 전 synthetic row를 추가하지 않는다.
+- `KORU` canonical 스냅샷의 기준 시작일은 `2013-04-10`이다.
 - 네트워크 동기화는 Yahoo, Investing, Stooq 또는 Naver를 소스로 사용할 수 있으며, 동시에 백테스트용 버전 관리 CSV 스냅샷을 유지한다.
 - Investing provider 메타데이터가 없는 종목은 Yahoo/Stooq fallback만 사용한다.
 - Yahoo 동기화는 `range=max` 대신 기간 chunk 요청을 사용하고, 성공한 raw JSON chunk를 `data/snapshots/yahoo_chart/` 아래에 캐시한다.
@@ -35,7 +38,7 @@
 - `db/migrations/0001_initial.sql`에 PostgreSQL 마이그레이션 스켈레톤이 존재한다.
 - 백테스트 trade의 `shares`는 항상 양의 정수다. 진입 예산이 1주 미만이면 해당 진입은 `ENTRY_SKIPPED`로 기록한다.
 - 기본 백테스트 비용 모델은 거래마다 `commission_bps=25`와 심볼별 `transaction_tax_bps`를 적용한다.
-  - 현재 `SOXL`, `TQQQ`, `0193T0`, `233740`, `462330` 기본 기타거래세는 `0bps`다.
+  - 현재 `SOXL`, `TQQQ`, `KORU`, `0193T0`, `233740`, `462330` 기본 기타거래세는 `0bps`다.
   - 현재 `000660` 기본 기타거래세는 `15bps`다.
 - open thread equity는 미투자 현금과 mark-to-market 포지션 가치를 함께 보존해야 한다.
 - 모든 백테스트 실행과 연구 산출물은 `config_hash`, `data_hash`, `code_commit`를 함께 보관해야 한다.
@@ -54,6 +57,7 @@
 - `backtest_research_sweep_rows`는 현재 `core4_v4` sweep 결과를 row 단위로 펼쳐 저장한다.
   - UI sweep 파라미터는 `thread_count`, `stop_sessions`, `buy_pct`, `sell_pct` 4개이며 총 726조합이다.
   - DB 호환 컬럼은 기존 스키마를 유지한다.
+  - 산출 엔진은 공통 `cartesian` CPU runner를 사용하며, artifact `meta`에는 `strategy_family`, `sweep_spec_version`, `worker_count`, `chunk_count`, `chunk_size`를 함께 저장한다.
   - `take_profit_pct` 컬럼에는 UI의 `sell_pct` 값이 저장된다.
   - `entry_drop_pct` 컬럼에는 UI의 `buy_pct` 값이 저장된다.
   - `stop_loss_pct`는 현재 고정값 `0`이다.

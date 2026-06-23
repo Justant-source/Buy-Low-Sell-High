@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from ..backtest.execution import ScheduledAction, apply_costs, fill_fee_amount, fill_price, signal_price
-from ..backtest.regime import ResolvedRegimeContext, disabled_regime_parameters, load_regime_context
+from ..backtest.regime import ResolvedRegimeContext, disabled_regime_parameters, load_regime_context, regime_feature_enabled
 from ..backtest.sizing import entry_budget
 from ..domain.enums import CloseReason, EventOrder, ExecutionModel, ThreadSelector, ThreadState
 from ..domain.models import (
@@ -95,6 +95,10 @@ def run_strategy(
     if not bars:
         raise ValueError("No bars provided")
     resolved_regime_context = regime_context or load_regime_context(bars, config)
+    if resolved_regime_context.enabled != regime_feature_enabled(config):
+        raise ValueError("Provided regime context enabled state does not match strategy config")
+    if resolved_regime_context.enabled and resolved_regime_context.config_hash != config.regime_config_hash():
+        raise ValueError("Provided regime context config hash does not match strategy config")
     default_session_regime = disabled_regime_parameters(config)
     run_id = new_run_id()
     initial_thread_principal = config.initial_capital / D(config.thread_count)

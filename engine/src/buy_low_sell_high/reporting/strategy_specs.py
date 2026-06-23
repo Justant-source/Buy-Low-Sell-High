@@ -9,7 +9,7 @@ from ..backtest.regime import regime_feature_enabled
 from ..domain.enums import ExecutionModel, PriceBasis, SizingMode, ThreadSelector
 from ..domain.models import StrategyConfig
 from ..domain.money import D
-from .research_common import CORE_PROFILE_CATALOG, PARAMETER_SWEEP_DEFINITION
+from .research_common import CORE_PROFILE_CATALOG, PARAMETER_SWEEP_DEFINITION, REGIME_PARAMETER_SWEEP_DEFINITION
 
 _DYNAMIC_STRATEGY_ID_RE = re.compile(
     r"^t(?P<thread_count>\d+)-s(?P<stop_sessions>\d+)-buy(?P<buy_pct>[+-]?\d+(?:\.\d+)?)"
@@ -44,13 +44,42 @@ def regime_strategy_id(
     )
 
 
-def format_strategy_label(spec: dict[str, Any]) -> str:
+def format_strategy_label(
+    spec: dict[str, Any],
+    *,
+    base_config: StrategyConfig | None = None,
+    multiline: bool = False,
+) -> str:
     if spec.get("regime_enabled"):
-        return (
-            f"T{spec['thread_count']} | "
-            f"Attack {spec['bull_stop_sessions']}S / BUY {Decimal(str(spec['bull_buy_pct'])):+.0f}% / SELL {Decimal(str(spec['bull_sell_pct'])):+.0f}% | "
-            f"Defense {spec['bear_stop_sessions']}S / BUY {Decimal(str(spec['bear_buy_pct'])):+.0f}% / SELL {Decimal(str(spec['bear_sell_pct'])):+.0f}%"
+        neutral_stop_sessions = int(
+            spec.get(
+                "base_stop_sessions",
+                base_config.regime_base_stop_sessions if base_config is not None else 0,
+            )
         )
+        neutral_buy_pct = Decimal(
+            str(
+                spec.get(
+                    "base_buy_pct",
+                    base_config.regime_base_buy_pct if base_config is not None else 0,
+                )
+            )
+        )
+        neutral_sell_pct = Decimal(
+            str(
+                spec.get(
+                    "base_sell_pct",
+                    base_config.regime_base_sell_pct if base_config is not None else 0,
+                )
+            )
+        )
+        lines = [
+            f"T{spec['thread_count']}",
+            f"Attack {spec['bull_stop_sessions']}S / BUY {Decimal(str(spec['bull_buy_pct'])):+.0f}% / SELL {Decimal(str(spec['bull_sell_pct'])):+.0f}%",
+            f"Neutral {neutral_stop_sessions}S / BUY {neutral_buy_pct:+.0f}% / SELL {neutral_sell_pct:+.0f}%",
+            f"Defense {spec['bear_stop_sessions']}S / BUY {Decimal(str(spec['bear_buy_pct'])):+.0f}% / SELL {Decimal(str(spec['bear_sell_pct'])):+.0f}%",
+        ]
+        return "\n".join(lines) if multiline else " | ".join(lines)
     buy_pct = Decimal(str(spec.get("buy_pct", 0)))
     sell_pct = Decimal(str(spec.get("sell_pct", 0)))
     return f"T{spec['thread_count']} / {spec['stop_sessions']}S / BUY {buy_pct:+.0f}% / SELL {sell_pct:+.0f}%"
@@ -178,14 +207,18 @@ def iter_parameter_strategy_specs(
     return specs
 
 
-def iter_regime_strategy_specs(base_config: StrategyConfig) -> list[dict[str, Any]]:
-    thread_counts = [5, 6, 7]
-    bull_stop_sessions = sorted({base_config.regime_base_stop_sessions, base_config.regime_bull_stop_sessions})
-    bull_buy_pcts = sorted({base_config.regime_base_buy_pct, base_config.regime_bull_buy_pct})
-    bull_sell_pcts = sorted({base_config.regime_base_sell_pct, base_config.regime_bull_sell_pct})
-    bear_stop_sessions = sorted({base_config.regime_base_stop_sessions, base_config.regime_bear_stop_sessions})
-    bear_buy_pcts = sorted({base_config.regime_base_buy_pct, base_config.regime_bear_buy_pct})
-    bear_sell_pcts = sorted({base_config.regime_base_sell_pct, base_config.regime_bear_sell_pct})
+def iter_regime_strategy_specs(
+    base_config: StrategyConfig,
+    definition: dict[str, Any] = REGIME_PARAMETER_SWEEP_DEFINITION,
+) -> list[dict[str, Any]]:
+    values = definition["parameter_values"]
+    thread_counts = [int(value) for value in values["thread_count"]]
+    bull_stop_sessions = [int(value) for value in values["stop_sessions"]]
+    bull_buy_pcts = [D(value) for value in values["buy_pct"]]
+    bull_sell_pcts = [D(value) for value in values["sell_pct"]]
+    bear_stop_sessions = [int(value) for value in values["stop_sessions"]]
+    bear_buy_pcts = [D(value) for value in values["buy_pct"]]
+    bear_sell_pcts = [D(value) for value in values["sell_pct"]]
     specs: list[dict[str, Any]] = []
     for thread_count in thread_counts:
         for bull_stop in bull_stop_sessions:
@@ -212,6 +245,9 @@ def iter_regime_strategy_specs(base_config: StrategyConfig) -> list[dict[str, An
                                             f"Defense {bear_stop}S / BUY {Decimal(str(bear_buy)):+.0f}% / SELL {Decimal(str(bear_sell)):+.0f}%"
                                         ),
                                         "thread_count": thread_count,
+                                        "base_stop_sessions": int(base_config.regime_base_stop_sessions),
+                                        "base_buy_pct": D(base_config.regime_base_buy_pct),
+                                        "base_sell_pct": D(base_config.regime_base_sell_pct),
                                         "bull_stop_sessions": int(bull_stop),
                                         "bull_buy_pct": D(bull_buy),
                                         "bull_sell_pct": D(bull_sell),

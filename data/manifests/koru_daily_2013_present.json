@@ -1,0 +1,12 @@
+{
+  "data_hash": "f6de59fc54a213f56184f83d13c8b21caa6c3206ee1bbe668377b2caede13696",
+  "end": "2026-06-22",
+  "errors": [],
+  "generated_at": "2026-06-23T09:07:31.897163+00:00",
+  "output_csv": "/home/justant/Data/Buy-Low-Sell-High/data/raw/koru_daily_2013_present.csv",
+  "rows": 3320,
+  "source": "yahoo_chart",
+  "start": "2013-04-10",
+  "symbol": "KORU",
+  "warnings": []
+}

@@ -36,6 +36,7 @@ import type {
   ParameterSweepRowPayload,
   ProfilePayload,
   ProfileShowPayload,
+  RegimeWalkForwardPayload,
   ResearchArtifactRecord,
   StrategyExplorerPayload,
   StrategyExplorerStrategyPayload,
@@ -49,14 +50,72 @@ const STRATEGY_RANKING_VERSION = "strategy-ranking-v7";
 const STRATEGY_DETAIL_VERSION = "strategy-detail-v1";
 const THREAD_TIMELINE_VERSION = "thread-timeline-v1";
 const PARAMETER_SWEEP_VERSION = "parameter-sweep-v5";
+const REGIME_WALK_FORWARD_VERSION = "regime-walk-forward-v1";
+const PRESET_DETAIL_WARMUP_COUNT = 3;
 const DEFAULT_RESEARCH_EXECUTION_MODEL = "next_open";
 const DEFAULT_STRATEGY_CATALOG_ID = "core_profiles_v2";
 const DEFAULT_SWEEP_ID = "core4_v4";
 const STRATEGY_RANKING_BASIS = "cagr desc, max_drawdown desc, full_return desc, combo_key asc";
 const SWEEP_RANKING_BASIS = "cagr desc, max_drawdown desc, full_return desc";
+const DEFAULT_SOXL_REGIME_WARMUP_OVERRIDES: BacktestOverrides = Object.freeze({
+  regimeEnabled: true,
+  regimeSymbol: "QQQ",
+  regimeRsiPeriodWeeks: 14,
+  regimeBearHighThreshold: 45,
+  regimeBearMidLowThreshold: 45,
+  regimeBearMidHighThreshold: 45,
+  regimeBullLowThreshold: 55,
+  regimeBullMidLowThreshold: 55,
+  regimeBullMidHighThreshold: 55,
+  regimeBaseStopSessions: 40,
+  regimeBaseBuyPct: 0,
+  regimeBaseSellPct: 0,
+  regimeBullStopSessions: 30,
+  regimeBullBuyPct: 0,
+  regimeBullSellPct: 0,
+  regimeBearStopSessions: 40,
+  regimeBearBuyPct: 0,
+  regimeBearSellPct: 0,
+});
+
+export interface StrategyPresetWarmupVariant {
+  label: string;
+  overrides?: BacktestOverrides;
+}
+
+export interface StrategyPresetWarmupPlan {
+  detailStrategyIds: string[];
+  timelineStrategyId: string | null;
+}
 
 function resolveCsvPath(csvPath: string | undefined, symbol: string): string {
   return csvPath ?? defaultCsvPathForSymbol(symbol);
+}
+
+function workspaceSupportsStrategyRegime(workspaceId: string): boolean {
+  return workspaceId === "soxl";
+}
+
+export function defaultStrategyPresetWarmupVariants(workspaceId: string): StrategyPresetWarmupVariant[] {
+  const variants: StrategyPresetWarmupVariant[] = [{ label: "baseline" }];
+  if (workspaceSupportsStrategyRegime(workspaceId)) {
+    variants.push({
+      label: "regime-default",
+      overrides: { ...DEFAULT_SOXL_REGIME_WARMUP_OVERRIDES },
+    });
+  }
+  return variants;
+}
+
+export function strategyPresetWarmupPlan(
+  payload: Pick<StrategyRankingPayload, "rows">,
+  detailCount = PRESET_DETAIL_WARMUP_COUNT,
+): StrategyPresetWarmupPlan {
+  const detailStrategyIds = [...new Set((payload.rows || []).map((row) => row.strategy_id).filter(Boolean))].slice(0, detailCount);
+  return {
+    detailStrategyIds,
+    timelineStrategyId: detailStrategyIds[0] ?? null,
+  };
 }
 
 export interface BacktestJobInput {
@@ -145,6 +204,21 @@ export interface SweepJobInput {
   priceBasis?: string;
 }
 
+export interface SweepMaterializationInput extends SweepJobInput {
+  maxWorkers?: number;
+  chunkSize?: number;
+  force?: boolean;
+  dryRun?: boolean;
+}
+
+export interface SweepMaterializationResult {
+  action: "REUSED" | "CREATED" | "DRY_RUN";
+  artifactKey: string;
+  artifact?: ResearchArtifactRecord<ParameterSweepPayload>;
+  payload?: ParameterSweepPayload;
+  plan?: Record<string, unknown>;
+}
+
 export interface OfficialMatrixInput {
   profileId: string;
   csvPath?: string;
@@ -152,6 +226,13 @@ export interface OfficialMatrixInput {
   threads: number[];
   stops: number[];
   overrides?: BacktestOverrides;
+}
+
+export interface RegimeWalkForwardInput {
+  profileId: string;
+  csvPath?: string;
+  initialCapital?: number;
+  maxWorkers?: number;
 }
 
 function buildOverrideArgs(
@@ -267,6 +348,27 @@ function buildResearchArgs(input: {
   return args;
 }
 
+function buildSweepExecutionArgs(input: {
+  sweepId?: string;
+  executionModel?: string;
+  priceBasis?: string;
+  maxWorkers?: number;
+  chunkSize?: number;
+  dryRun?: boolean;
+}): string[] {
+  const args = buildResearchArgs(input);
+  if (input.maxWorkers != null && Number.isFinite(input.maxWorkers) && input.maxWorkers > 0) {
+    args.push("--max-workers", String(input.maxWorkers));
+  }
+  if (input.chunkSize != null && Number.isFinite(input.chunkSize) && input.chunkSize > 0) {
+    args.push("--chunk-size", String(input.chunkSize));
+  }
+  if (input.dryRun) {
+    args.push("--dry-run");
+  }
+  return args;
+}
+
 function defaultStrategyExecutionModel(profile: ProfilePayload | ReturnType<typeof getProfileDefinition>): string {
   return profile?.executionModel ?? "ideal_same_close";
 }
@@ -350,6 +452,14 @@ function normalizeSweepWarnings(
   return [...new Set(warnings)];
 }
 
+function normalizedCompoundRatio(value: number | undefined, fallbackReturnPct: number): number {
+  if (Number.isFinite(value)) {
+    return Number(value);
+  }
+  const fallback = 1 + (fallbackReturnPct / 100);
+  return fallback > 0 ? fallback : 0.0001;
+}
+
 function normalizeSweepPayload(payload: ParameterSweepPayload): ParameterSweepPayload {
   const rows = (payload.rows || [])
     .map((row) => ({
@@ -359,6 +469,44 @@ function normalizeSweepPayload(payload: ParameterSweepPayload): ParameterSweepPa
         cagr_pct: Number.isFinite(row.metrics?.cagr_pct)
           ? row.metrics.cagr_pct
           : annualizedReturnPct(row.metrics.full_return_pct, payload.meta.period_start, payload.meta.period_end),
+        mean_cagr_pct: Number.isFinite(row.metrics?.mean_cagr_pct)
+          ? row.metrics.mean_cagr_pct
+          : (Number.isFinite(row.metrics?.mean_segment_return_pct) ? row.metrics.mean_segment_return_pct : row.metrics.cagr_pct),
+        std_cagr_pct: Number.isFinite(row.metrics?.std_cagr_pct)
+          ? row.metrics.std_cagr_pct
+          : (Number.isFinite(row.metrics?.segment_stddev_pct) ? row.metrics.segment_stddev_pct : 0),
+        worst_window_cagr_pct: Number.isFinite(row.metrics?.worst_window_cagr_pct)
+          ? row.metrics.worst_window_cagr_pct
+          : (Number.isFinite(row.metrics?.worst_segment_return_pct) ? row.metrics.worst_segment_return_pct : row.metrics.cagr_pct),
+        recent_cagr_pct: Number.isFinite(row.metrics?.recent_cagr_pct)
+          ? row.metrics.recent_cagr_pct
+          : (Number.isFinite(row.metrics?.recent_segment_return_pct) ? row.metrics.recent_segment_return_pct : row.metrics.cagr_pct),
+        recent_mdd_pct: Number.isFinite(row.metrics?.recent_mdd_pct)
+          ? row.metrics.recent_mdd_pct
+          : row.metrics.max_drawdown_pct,
+        compound_ratio: normalizedCompoundRatio(row.metrics?.compound_ratio, row.metrics.full_return_pct),
+        compound_ratio_log10: Number.isFinite(row.metrics?.compound_ratio_log10)
+          ? row.metrics.compound_ratio_log10
+          : Math.log10(normalizedCompoundRatio(row.metrics?.compound_ratio, row.metrics.full_return_pct)),
+      },
+      windows: row.windows || [],
+      recent_window: row.recent_window || null,
+      plateau_class: row.plateau_class || "M",
+      plateau_details: row.plateau_details || {
+        neighbor_count: 0,
+        neighbor_pass_ratio_pct: 0,
+        neighbor_mean_cagr_pct: 0,
+      },
+      tier_pass: Boolean(row.tier_pass),
+      tier_details: row.tier_details || {
+        tier_1_no_trade_collapse: false,
+        tier_2_all_windows_positive: false,
+        tier_3_mean_cagr_above_baseline: false,
+        tier_4_std_cagr_below_limit: false,
+        baseline_mean_cagr_pct: 0,
+        baseline_std_cagr_pct: 0,
+        std_cagr_limit_pct: 0,
+        min_trade_return_pct: 0,
       },
     }))
     .sort(compareSweepRows);
@@ -372,14 +520,59 @@ function normalizeSweepPayload(payload: ParameterSweepPayload): ParameterSweepPa
     return compareSweepRows(row, best) < 0 ? row : best;
   }, null);
   const bestRobust = rows[0] ?? null;
+  const bestCompound = rows.reduce<ParameterSweepRowPayload | null>((best, row) => {
+    if (!best) {
+      return row;
+    }
+    if ((row.metrics.compound_ratio || 0) !== (best.metrics.compound_ratio || 0)) {
+      return (row.metrics.compound_ratio || 0) > (best.metrics.compound_ratio || 0) ? row : best;
+    }
+    return compareSweepRows(row, best) < 0 ? row : best;
+  }, null);
   return {
     ...payload,
+    meta: {
+      ...payload.meta,
+      evaluation_windows: payload.meta.evaluation_windows || [],
+      recent_window_span: payload.meta.recent_window_span || 2,
+      baseline_thresholds: payload.meta.baseline_thresholds || {
+        combo_key: null,
+        mean_cagr_pct: 0,
+        std_cagr_pct: 0,
+        std_cagr_limit_pct: 0,
+      },
+      plateau_rule: payload.meta.plateau_rule || {
+        edge_neighbor_min: 4,
+        plateau_neighbor_pass_ratio_min_pct: 80,
+        plateau_neighbor_mean_cagr_ratio_min_pct: 70,
+        island_neighbor_mean_cagr_ratio_max_pct: 50,
+      },
+      tier_rule: payload.meta.tier_rule || {
+        tier_1_min_trade_return_pct_gt: -100,
+        tier_2_all_windows_positive: true,
+        tier_3_mean_cagr_gt_baseline: true,
+        tier_4_std_cagr_lt_baseline_x: 1.2,
+      },
+      compound_ratio_definition: payload.meta.compound_ratio_definition
+        || "PRODUCT(ending_balance / starting_balance) across trailing yearly evaluation windows",
+    },
     summary: {
       ...payload.summary,
       best_full_return_combo: bestFull?.combo_key ?? payload.summary.best_full_return_combo,
       best_robust_combo: bestRobust?.combo_key ?? payload.summary.best_robust_combo,
+      best_compound_ratio_combo: bestCompound?.combo_key ?? payload.summary.best_compound_ratio_combo,
       pareto_return_mdd_count: rows.filter((row) => row.flags.pareto_return_mdd).length,
       pareto_return_stability_count: rows.filter((row) => row.flags.pareto_return_stability).length,
+      plateau_counts: payload.summary.plateau_counts || {
+        P: rows.filter((row) => row.plateau_class === "P").length,
+        M: rows.filter((row) => row.plateau_class === "M").length,
+        I: rows.filter((row) => row.plateau_class === "I").length,
+        E: rows.filter((row) => row.plateau_class === "E").length,
+      },
+      tier_pass_count: payload.summary.tier_pass_count ?? rows.filter((row) => row.tier_pass).length,
+      recent_safe_count: payload.summary.recent_safe_count ?? rows.filter((row) => (row.metrics.recent_mdd_pct || -100) >= -45).length,
+      recent_extreme_safe_count:
+        payload.summary.recent_extreme_safe_count ?? rows.filter((row) => (row.metrics.recent_mdd_pct || -100) >= -35).length,
       ranking_basis: SWEEP_RANKING_BASIS,
     },
     warnings: normalizeSweepWarnings(payload, bestFull, bestRobust),
@@ -595,6 +788,21 @@ function makeSweepArtifactKey(input: {
   ]);
 }
 
+function makeRegimeWalkForwardArtifactKey(input: {
+  profileId: string;
+  csvPath: string;
+  dataHash: string;
+  initialCapital: number;
+}): string {
+  return shortDigest([
+    REGIME_WALK_FORWARD_VERSION,
+    input.profileId,
+    input.csvPath,
+    input.dataHash,
+    input.initialCapital,
+  ]);
+}
+
 function makeStrategyRankingCacheKey(input: {
   profileId: string;
   csvPath: string;
@@ -698,6 +906,27 @@ function isReusableResearchArtifact<TPayload>(
   return codeCommitMatchesCurrent(artifact.codeCommit);
 }
 
+export function strategyRankingPayloadMatchesCurrentCode(payload: StrategyRankingPayload | null | undefined): boolean {
+  if (!payload?.meta?.code_commit) {
+    return false;
+  }
+  return codeCommitMatchesCurrent(payload.meta.code_commit);
+}
+
+export function strategyDetailPayloadMatchesCurrentCode(payload: StrategyExplorerStrategyPayload | null | undefined): boolean {
+  if (!payload?.meta?.code_commit) {
+    return false;
+  }
+  return codeCommitMatchesCurrent(payload.meta.code_commit);
+}
+
+export function threadTimelinePayloadMatchesCurrentCode(payload: ThreadTimelinePayload | null | undefined): boolean {
+  if (!payload?.meta?.code_commit) {
+    return false;
+  }
+  return codeCommitMatchesCurrent(payload.meta.code_commit);
+}
+
 async function saveStrategyArtifact(
   payload: StrategyExplorerPayload,
   input: {
@@ -764,6 +993,85 @@ async function saveStrategyRankingArtifact(
   });
 }
 
+async function saveStrategyDetailArtifact(
+  payload: StrategyExplorerStrategyPayload,
+  input: {
+    artifactKey: string;
+    profileId: string;
+    symbol: string;
+    csvPath: string;
+    strategyId: string;
+    sliceStart?: string;
+    sliceEnd?: string;
+  },
+): Promise<ResearchArtifactRecord<StrategyExplorerStrategyPayload>> {
+  const store = await getResearchStore();
+  return store.saveArtifact<StrategyExplorerStrategyPayload>({
+    artifactId: newResearchArtifactId(),
+    artifactKey: input.artifactKey,
+    kind: "STRATEGY_DETAIL",
+    profileId: input.profileId,
+    symbol: input.symbol,
+    csvPath: input.csvPath,
+    executionModel: payload.meta.execution_model,
+    priceBasis: payload.meta.price_basis,
+    dataHash: payload.meta.data_hash,
+    codeCommit: payload.meta.code_commit,
+    createdAt: new Date().toISOString(),
+    catalogId: input.strategyId,
+    catalogHash: input.sliceStart && input.sliceEnd ? `${input.sliceStart}:${input.sliceEnd}` : "all",
+    payloadHash: shortDigest([
+      payload.meta.strategy_id,
+      payload.meta.period_start,
+      payload.meta.period_end,
+      payload.meta.data_hash,
+      payload.meta.regime_config_hash,
+      payload.daily.length,
+    ]),
+    payload,
+  });
+}
+
+async function saveThreadTimelineArtifact(
+  payload: ThreadTimelinePayload,
+  input: {
+    artifactKey: string;
+    profileId: string;
+    symbol: string;
+    csvPath: string;
+    strategyId: string;
+    sliceStart?: string;
+    sliceEnd?: string;
+  },
+): Promise<ResearchArtifactRecord<ThreadTimelinePayload>> {
+  const store = await getResearchStore();
+  return store.saveArtifact<ThreadTimelinePayload>({
+    artifactId: newResearchArtifactId(),
+    artifactKey: input.artifactKey,
+    kind: "THREAD_TIMELINE",
+    profileId: input.profileId,
+    symbol: input.symbol,
+    csvPath: input.csvPath,
+    executionModel: payload.meta.execution_model,
+    priceBasis: payload.meta.price_basis,
+    dataHash: payload.meta.data_hash,
+    codeCommit: payload.meta.code_commit,
+    createdAt: new Date().toISOString(),
+    catalogId: input.strategyId,
+    catalogHash: input.sliceStart && input.sliceEnd ? `${input.sliceStart}:${input.sliceEnd}` : "all",
+    payloadHash: shortDigest([
+      payload.meta.strategy_id,
+      payload.meta.period_start,
+      payload.meta.period_end,
+      payload.meta.data_hash,
+      payload.meta.regime_config_hash,
+      payload.sessions.length,
+      payload.lanes.length,
+    ]),
+    payload,
+  });
+}
+
 async function saveSweepArtifact(
   payload: ParameterSweepPayload,
   input: {
@@ -796,6 +1104,35 @@ async function saveSweepArtifact(
   );
 }
 
+async function saveRegimeWalkForwardArtifact(
+  payload: RegimeWalkForwardPayload,
+  input: {
+    artifactKey: string;
+    profileId: string;
+    symbol: string;
+    csvPath: string;
+  },
+): Promise<ResearchArtifactRecord<RegimeWalkForwardPayload>> {
+  const store = await getResearchStore();
+  return store.saveArtifact<RegimeWalkForwardPayload>({
+    artifactId: newResearchArtifactId(),
+    artifactKey: input.artifactKey,
+    kind: "REGIME_WALK_FORWARD",
+    profileId: input.profileId,
+    symbol: input.symbol,
+    csvPath: input.csvPath,
+    executionModel: payload.meta.execution_model,
+    priceBasis: payload.meta.price_basis,
+    dataHash: payload.meta.data_hash,
+    codeCommit: payload.meta.code_commit,
+    createdAt: new Date().toISOString(),
+    catalogId: `${payload.meta.window_scheme.training_years}y:${payload.meta.window_scheme.test_years}y`,
+    catalogHash: payload.meta.regime_grid_hash,
+    payloadHash: payload.payload_hash,
+    payload,
+  });
+}
+
 export class BacktestService {
   private readonly queuedJobIds = new Set<string>();
   private readonly strategyRankingCache = new Map<string, StrategyRankingPayload>();
@@ -805,21 +1142,23 @@ export class BacktestService {
   private readonly strategyDetailPending = new Map<string, Promise<StrategyExplorerStrategyPayload>>();
   private readonly threadTimelineCache = new Map<string, ThreadTimelinePayload>();
   private readonly threadTimelinePending = new Map<string, Promise<ThreadTimelinePayload>>();
+  private readonly regimeWalkForwardPending = new Map<string, Promise<ResearchArtifactRecord<RegimeWalkForwardPayload>>>();
   private running = false;
 
-  private queueStrategyRankingPresetWarmup(
+  private queueStrategyPresetWarmup(
     input: {
       profileId: string;
       csvPath: string;
       initialCapital: number;
       executionModel: string;
       priceBasis: string;
+      overrides?: BacktestOverrides;
       overridesKey?: string;
     },
     slicePresets: Array<{ preset_id: string; start: string; end: string }>,
     dataHash: string,
   ): void {
-    void this.ensureStrategyRankingPresets(input, slicePresets, dataHash).catch((error) => {
+    void this.ensureStrategyPresetArtifacts(input, slicePresets, dataHash).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`Preset ranking warmup failed for ${input.profileId}: ${message}`);
     });
@@ -919,13 +1258,14 @@ export class BacktestService {
     });
     const cached = await store.findByKey<StrategyExplorerPayload>(artifactKey);
     if (isReusableResearchArtifact(cached)) {
-      this.queueStrategyRankingPresetWarmup(
+      this.queueStrategyPresetWarmup(
         {
           profileId: input.profileId,
           csvPath,
           initialCapital,
           executionModel,
           priceBasis,
+          overrides: input.overrides,
           overridesKey,
         },
         cached.payload.meta.slice_presets,
@@ -953,13 +1293,14 @@ export class BacktestService {
       symbol: profile.symbol,
       csvPath,
     });
-    this.queueStrategyRankingPresetWarmup(
+    this.queueStrategyPresetWarmup(
       {
         profileId: input.profileId,
         csvPath,
         initialCapital,
         executionModel,
         priceBasis,
+        overrides: input.overrides,
         overridesKey,
       },
       payload.meta.slice_presets,
@@ -987,8 +1328,14 @@ export class BacktestService {
       overridesKey,
     });
     const cached = this.strategyRankingCache.get(cacheKey);
-    if (cached && isCompleteStrategyRankingPayload(cached)) {
-      return applyStrategyRankingLimit(cached, limit);
+    if (cached) {
+      const currentCode = strategyRankingPayloadMatchesCurrentCode(cached);
+      if (currentCode && isCompleteStrategyRankingPayload(cached)) {
+        return applyStrategyRankingLimit(cached, limit);
+      }
+      if (!currentCode) {
+        this.strategyRankingCache.delete(cacheKey);
+      }
     }
     const [store, pending] = await Promise.all([getResearchStore(), Promise.resolve(this.strategyRankingPending.get(cacheKey))]);
     if (pending) {
@@ -1102,11 +1449,20 @@ export class BacktestService {
     });
     const cached = this.strategyDetailCache.get(cacheKey);
     if (cached) {
-      return cached;
+      const currentCode = strategyDetailPayloadMatchesCurrentCode(cached);
+      if (currentCode) {
+        return cached;
+      }
+      this.strategyDetailCache.delete(cacheKey);
     }
-    const pending = this.strategyDetailPending.get(cacheKey);
+    const [store, pending] = await Promise.all([getResearchStore(), Promise.resolve(this.strategyDetailPending.get(cacheKey))]);
     if (pending) {
       return pending;
+    }
+    const stored = await store.findByKey<StrategyExplorerStrategyPayload>(cacheKey);
+    if (isReusableResearchArtifact(stored)) {
+      this.strategyDetailCache.set(cacheKey, stored.payload);
+      return stored.payload;
     }
     const loader = runCliJson<StrategyExplorerStrategyPayload>([
       "backtest",
@@ -1133,6 +1489,15 @@ export class BacktestService {
     try {
       const payload = await loader;
       this.strategyDetailCache.set(cacheKey, payload);
+      await saveStrategyDetailArtifact(payload, {
+        artifactKey: cacheKey,
+        profileId: input.profileId,
+        symbol: profile.symbol,
+        csvPath,
+        strategyId: input.strategyId,
+        sliceStart: input.sliceStart,
+        sliceEnd: input.sliceEnd,
+      });
       return payload;
     } finally {
       this.strategyDetailPending.delete(cacheKey);
@@ -1175,11 +1540,20 @@ export class BacktestService {
     });
     const cached = this.threadTimelineCache.get(cacheKey);
     if (cached) {
-      return cached;
+      const currentCode = threadTimelinePayloadMatchesCurrentCode(cached);
+      if (currentCode) {
+        return cached;
+      }
+      this.threadTimelineCache.delete(cacheKey);
     }
-    const pending = this.threadTimelinePending.get(cacheKey);
+    const [store, pending] = await Promise.all([getResearchStore(), Promise.resolve(this.threadTimelinePending.get(cacheKey))]);
     if (pending) {
       return pending;
+    }
+    const stored = await store.findByKey<ThreadTimelinePayload>(cacheKey);
+    if (isReusableResearchArtifact(stored)) {
+      this.threadTimelineCache.set(cacheKey, stored.payload);
+      return stored.payload;
     }
     const loader = runCliJson<ThreadTimelinePayload>([
       "backtest",
@@ -1206,10 +1580,86 @@ export class BacktestService {
     try {
       const payload = await loader;
       this.threadTimelineCache.set(cacheKey, payload);
+      await saveThreadTimelineArtifact(payload, {
+        artifactKey: cacheKey,
+        profileId: input.profileId,
+        symbol: profile.symbol,
+        csvPath,
+        strategyId: input.strategyId,
+        sliceStart: input.sliceStart,
+        sliceEnd: input.sliceEnd,
+      });
       return payload;
     } finally {
       this.threadTimelinePending.delete(cacheKey);
     }
+  }
+
+  async materializeSweepArtifact(input: SweepMaterializationInput): Promise<SweepMaterializationResult> {
+    const { profile, csvPath, initialCapital } = await resolveProfileContext(input);
+    const executionModel = input.executionModel ?? defaultSweepExecutionModel();
+    const priceBasis = input.priceBasis ?? defaultSweepPriceBasis(profile);
+    const sweepId = input.sweepId ?? DEFAULT_SWEEP_ID;
+    const [dataStatus, store] = await Promise.all([getDataStatus(csvPath, profile.symbol), getResearchStore()]);
+    const artifactKey = makeSweepArtifactKey({
+      profileId: input.profileId,
+      csvPath,
+      dataHash: dataStatus.data_hash,
+      initialCapital,
+      executionModel,
+      priceBasis,
+      sweepId,
+    });
+    const cached = await store.findByKey<ParameterSweepPayload>(artifactKey);
+    if (!input.force && isReusableResearchArtifact(cached)) {
+      const payload = normalizeSweepPayload(cached.payload);
+      return {
+        action: "REUSED",
+        artifactKey,
+        artifact: { ...cached, payload },
+        payload,
+      };
+    }
+    const cliArgs = [
+      "backtest",
+      "parameter-sweep",
+      "--profile",
+      profile.profilePath,
+      "--csv",
+      csvPath,
+      "--symbol",
+      profile.symbol,
+      "--initial-capital",
+      String(initialCapital),
+      ...buildSweepExecutionArgs({
+        sweepId,
+        executionModel,
+        priceBasis,
+        maxWorkers: input.maxWorkers,
+        chunkSize: input.chunkSize,
+        dryRun: input.dryRun,
+      }),
+    ];
+    if (input.dryRun) {
+      return {
+        action: "DRY_RUN",
+        artifactKey,
+        plan: await runCliJson<Record<string, unknown>>(cliArgs),
+      };
+    }
+    const payload = normalizeSweepPayload(await runCliJson<ParameterSweepPayload>(cliArgs));
+    const artifact = await saveSweepArtifact(payload, {
+      artifactKey,
+      profileId: input.profileId,
+      symbol: profile.symbol,
+      csvPath,
+    });
+    return {
+      action: "CREATED",
+      artifactKey,
+      artifact: { ...artifact, payload },
+      payload,
+    };
   }
 
   async getLatestSweep(input: SweepJobInput): Promise<ResearchArtifactRecord<ParameterSweepPayload> | null> {
@@ -1229,12 +1679,70 @@ export class BacktestService {
     });
     const artifact = await store.findByKey<ParameterSweepPayload>(artifactKey);
     if (!isReusableResearchArtifact(artifact)) {
-      return null;
+      const materialized = await this.materializeSweepArtifact({
+        profileId: input.profileId,
+        csvPath,
+        initialCapital,
+        sweepId,
+        executionModel,
+        priceBasis,
+      });
+      return materialized.artifact ?? null;
     }
     return {
       ...artifact,
       payload: normalizeSweepPayload(artifact.payload),
     };
+  }
+
+  async regimeWalkForward(input: RegimeWalkForwardInput): Promise<ResearchArtifactRecord<RegimeWalkForwardPayload>> {
+    const { profile, csvPath, initialCapital } = await resolveProfileContext(input);
+    if (profile.symbol !== "SOXL") {
+      throw new HttpError(400, "Regime walk-forward research is only available for SOXL");
+    }
+    const [dataStatus, store] = await Promise.all([getDataStatus(csvPath, profile.symbol), getResearchStore()]);
+    const artifactKey = makeRegimeWalkForwardArtifactKey({
+      profileId: input.profileId,
+      csvPath,
+      dataHash: dataStatus.data_hash,
+      initialCapital,
+    });
+    const pending = this.regimeWalkForwardPending.get(artifactKey);
+    if (pending) {
+      return pending;
+    }
+    const cached = await store.findByKey<RegimeWalkForwardPayload>(artifactKey);
+    if (isReusableResearchArtifact(cached)) {
+      return cached;
+    }
+    const loader = (async () => {
+      const payload = await runCliJson<RegimeWalkForwardPayload>([
+        "backtest",
+        "regime-walk-forward",
+        "--profile",
+        profile.profilePath,
+        "--csv",
+        csvPath,
+        "--symbol",
+        profile.symbol,
+        "--initial-capital",
+        String(initialCapital),
+        "--max-workers",
+        String(input.maxWorkers ?? 1),
+      ]);
+      return saveRegimeWalkForwardArtifact(payload, {
+        artifactKey,
+        profileId: input.profileId,
+        symbol: profile.symbol,
+        csvPath,
+      });
+    })();
+    this.regimeWalkForwardPending.set(artifactKey, loader);
+    try {
+      return await loader;
+    } finally {
+      this.regimeWalkForwardPending.delete(artifactKey);
+    }
   }
 
   async warmStrategyPresetRankings(input: StrategyExplorerInput): Promise<void> {
@@ -1252,13 +1760,14 @@ export class BacktestService {
       overrides: input.overrides,
     });
     const dataStatus = await getDataStatus(csvPath, profile.symbol);
-    await this.ensureStrategyRankingPresets(
+    await this.ensureStrategyPresetArtifacts(
       {
         profileId: input.profileId,
         csvPath,
         initialCapital,
         executionModel,
         priceBasis,
+        overrides: input.overrides,
         overridesKey,
       },
       payload.meta.slice_presets,
@@ -1269,25 +1778,29 @@ export class BacktestService {
   async warmDefaultStrategyPresetRankings(): Promise<void> {
     const workspaces = listWorkspaceDefinitions();
     await runWithConcurrency(
-      workspaces.map((workspace) => async () => {
-        await this.warmStrategyPresetRankings({
-          profileId: workspace.defaultProfileId,
-          csvPath: workspace.csvPath,
-          executionModel: workspace.defaultStrategyExecutionModel,
-          priceBasis: workspace.defaultStrategyPriceBasis,
-        });
-      }),
+      workspaces.flatMap((workspace) =>
+        defaultStrategyPresetWarmupVariants(workspace.workspaceId).map((variant) => async () => {
+          await this.warmStrategyPresetRankings({
+            profileId: workspace.defaultProfileId,
+            csvPath: workspace.csvPath,
+            executionModel: workspace.defaultStrategyExecutionModel,
+            priceBasis: workspace.defaultStrategyPriceBasis,
+            overrides: variant.overrides,
+          });
+        }),
+      ),
       1,
     );
   }
 
-  private ensureStrategyRankingPresets(
+  private ensureStrategyPresetArtifacts(
     input: {
       profileId: string;
       csvPath: string;
       initialCapital: number;
       executionModel: string;
       priceBasis: string;
+      overrides?: BacktestOverrides;
       overridesKey?: string;
     },
     slicePresets: Array<{ preset_id: string; start: string; end: string }>,
@@ -1307,7 +1820,7 @@ export class BacktestService {
       return pending;
     }
     const tasks = slicePresets.map((preset) => async () => {
-      await this.strategyRanking({
+      const ranking = await this.strategyRanking({
         profileId: input.profileId,
         csvPath: input.csvPath,
         initialCapital: input.initialCapital,
@@ -1316,7 +1829,36 @@ export class BacktestService {
         sliceStart: preset.start,
         sliceEnd: preset.end,
         limit: 0,
+        overrides: input.overrides,
       });
+      const warmupPlan = strategyPresetWarmupPlan(ranking);
+      await Promise.all(
+        warmupPlan.detailStrategyIds.map((strategyId) =>
+          this.strategyDetail({
+            profileId: input.profileId,
+            csvPath: input.csvPath,
+            initialCapital: input.initialCapital,
+            strategyId,
+            sliceStart: preset.start,
+            sliceEnd: preset.end,
+            executionModel: input.executionModel,
+            priceBasis: input.priceBasis,
+            overrides: input.overrides,
+          })),
+      );
+      if (warmupPlan.timelineStrategyId) {
+        await this.threadTimeline({
+          profileId: input.profileId,
+          csvPath: input.csvPath,
+          initialCapital: input.initialCapital,
+          strategyId: warmupPlan.timelineStrategyId,
+          sliceStart: preset.start,
+          sliceEnd: preset.end,
+          executionModel: input.executionModel,
+          priceBasis: input.priceBasis,
+          overrides: input.overrides,
+        });
+      }
     });
     const runner = runWithConcurrency(tasks, 1).then(() => undefined).finally(() => {
       this.strategyPresetWarmupPending.delete(warmupKey);
@@ -1613,35 +2155,18 @@ export class BacktestService {
     await saveJob(job);
 
     try {
-      const dataStatus = await getDataStatus(job.csvPath, profile.symbol);
-      const artifactKey = makeSweepArtifactKey({
+      const result = await this.materializeSweepArtifact({
         profileId: job.profileId,
         csvPath: job.csvPath,
-        dataHash: dataStatus.data_hash,
         initialCapital: job.initialCapital,
+        sweepId,
         executionModel,
         priceBasis,
-        sweepId,
       });
-      const payload = await runCliJson<ParameterSweepPayload>([
-        "backtest",
-        "parameter-sweep",
-        "--profile",
-        profile.profilePath,
-        "--csv",
-        job.csvPath,
-        "--symbol",
-        job.symbol,
-        "--initial-capital",
-        String(job.initialCapital),
-        ...buildResearchArgs({ sweepId, executionModel, priceBasis }),
-      ]);
-      const artifact = await saveSweepArtifact(payload, {
-        artifactKey,
-        profileId: job.profileId,
-        symbol: job.symbol,
-        csvPath: job.csvPath,
-      });
+      const artifact = result.artifact;
+      if (!artifact) {
+        throw new Error("Sweep materialization did not produce an artifact");
+      }
       job.status = "COMPLETED";
       job.progress = 100;
       job.finishedAt = new Date().toISOString();

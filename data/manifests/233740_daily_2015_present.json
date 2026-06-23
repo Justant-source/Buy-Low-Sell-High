@@ -1,0 +1,14 @@
+{
+  "data_hash": "488772485267981e05aa95e0d153f0aa462c8147cc2e3c0c9d4cf82e5f7ef9b9",
+  "end": "2026-06-19",
+  "errors": [],
+  "generated_at": "2026-06-21T05:46:34.777863+00:00",
+  "output_csv": "/home/justant/Data/Buy-Low-Sell-High/data/raw/233740_daily_2015_present.csv",
+  "rows": 2574,
+  "source": "naver",
+  "start": "2015-12-17",
+  "symbol": "233740",
+  "warnings": [
+    "Adjusted-close basis appears unavailable: adj_close mirrors close for all rows"
+  ]
+}

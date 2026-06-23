@@ -29,6 +29,12 @@ _SYMBOLS: dict[str, SymbolDefinition] = {
         dataset_start_date="2011-01-01",
         sync_mode="market_fallback",
     ),
+    "KORU": SymbolDefinition(
+        symbol="KORU",
+        csv_filename="koru_daily_2013_present.csv",
+        dataset_start_date="2013-04-10",
+        sync_mode="market_fallback",
+    ),
     "QQQ": SymbolDefinition(
         symbol="QQQ",
         csv_filename="qqq_daily_2011_present.csv",

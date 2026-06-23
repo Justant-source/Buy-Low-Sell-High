@@ -11,8 +11,6 @@ const RESEARCH_CODE_PATHS = [
   "pyproject.toml",
 ] as const;
 
-let cachedCodeCommit: string | null = null;
-
 function runGitCommand(args: string[]): string {
   return execFileSync("git", args, {
     cwd: repoRoot,
@@ -22,9 +20,6 @@ function runGitCommand(args: string[]): string {
 }
 
 export function currentCodeCommit(): string {
-  if (cachedCodeCommit) {
-    return cachedCodeCommit;
-  }
   try {
     const head = runGitCommand(["rev-parse", "HEAD"]);
     const dirtyStatus = runGitCommand([
@@ -35,16 +30,13 @@ export function currentCodeCommit(): string {
       ...RESEARCH_CODE_PATHS,
     ]);
     if (!dirtyStatus) {
-      cachedCodeCommit = head;
-      return cachedCodeCommit;
+      return head;
     }
     const diff = runGitCommand(["diff", "--binary", "HEAD", "--", ...RESEARCH_CODE_PATHS]);
     const dirtyHash = createHash("sha256").update(`${dirtyStatus}\n${diff}`).digest("hex").slice(0, 12);
-    cachedCodeCommit = `${head}-dirty-${dirtyHash}`;
-    return cachedCodeCommit;
+    return `${head}-dirty-${dirtyHash}`;
   } catch {
-    cachedCodeCommit = "workspace";
-    return cachedCodeCommit;
+    return "workspace";
   }
 }
 
