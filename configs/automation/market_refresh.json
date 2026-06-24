@@ -1,0 +1,201 @@
+{
+  "markets": {
+    "kr": {
+      "cron_timezone": "Asia/Seoul",
+      "cron_schedule": "40 15 * * 1-5",
+      "sync_targets": [
+        {
+          "symbol": "000660"
+        },
+        {
+          "symbol": "233740"
+        },
+        {
+          "symbol": "462330"
+        },
+        {
+          "symbol": "0193T0",
+          "depends_on_symbols": [
+            "000660"
+          ]
+        }
+      ],
+      "materialization_targets": [
+        {
+          "workspace_id": "0193t0",
+          "profile_id": "0193t0_default_5x30",
+          "dependency_symbols": [
+            "0193T0",
+            "000660"
+          ]
+        },
+        {
+          "workspace_id": "0193t0",
+          "profile_id": "0193t0_default_7x30",
+          "dependency_symbols": [
+            "0193T0",
+            "000660"
+          ]
+        },
+        {
+          "workspace_id": "0193t0",
+          "profile_id": "0193t0_best_avg_5x40",
+          "dependency_symbols": [
+            "0193T0",
+            "000660"
+          ]
+        },
+        {
+          "workspace_id": "233740",
+          "profile_id": "233740_default_5x30",
+          "dependency_symbols": [
+            "233740"
+          ]
+        },
+        {
+          "workspace_id": "233740",
+          "profile_id": "233740_default_7x30",
+          "dependency_symbols": [
+            "233740"
+          ]
+        },
+        {
+          "workspace_id": "233740",
+          "profile_id": "233740_best_avg_5x40",
+          "dependency_symbols": [
+            "233740"
+          ]
+        },
+        {
+          "workspace_id": "462330",
+          "profile_id": "462330_default_5x30",
+          "dependency_symbols": [
+            "462330"
+          ]
+        },
+        {
+          "workspace_id": "462330",
+          "profile_id": "462330_default_7x30",
+          "dependency_symbols": [
+            "462330"
+          ]
+        },
+        {
+          "workspace_id": "462330",
+          "profile_id": "462330_best_avg_5x40",
+          "dependency_symbols": [
+            "462330"
+          ]
+        }
+      ]
+    },
+    "us": {
+      "cron_timezone": "America/New_York",
+      "cron_schedule": "10 16 * * 1-5",
+      "sync_targets": [
+        {
+          "symbol": "QQQ"
+        },
+        {
+          "symbol": "SOXL"
+        },
+        {
+          "symbol": "TQQQ"
+        },
+        {
+          "symbol": "KORU"
+        }
+      ],
+      "materialization_targets": [
+        {
+          "workspace_id": "soxl",
+          "profile_id": "soxl_official_ddeolsao_pal_v1",
+          "dependency_symbols": [
+            "SOXL",
+            "QQQ"
+          ]
+        },
+        {
+          "workspace_id": "soxl",
+          "profile_id": "soxl_default_5x30",
+          "dependency_symbols": [
+            "SOXL",
+            "QQQ"
+          ]
+        },
+        {
+          "workspace_id": "soxl",
+          "profile_id": "soxl_default_7x30",
+          "dependency_symbols": [
+            "SOXL",
+            "QQQ"
+          ]
+        },
+        {
+          "workspace_id": "soxl",
+          "profile_id": "soxl_best_avg_5x40",
+          "dependency_symbols": [
+            "SOXL",
+            "QQQ"
+          ]
+        },
+        {
+          "workspace_id": "tqqq",
+          "profile_id": "tqqq_official_ddeolsao_pal_v1",
+          "dependency_symbols": [
+            "TQQQ"
+          ]
+        },
+        {
+          "workspace_id": "tqqq",
+          "profile_id": "tqqq_default_5x30",
+          "dependency_symbols": [
+            "TQQQ"
+          ]
+        },
+        {
+          "workspace_id": "tqqq",
+          "profile_id": "tqqq_default_7x30",
+          "dependency_symbols": [
+            "TQQQ"
+          ]
+        },
+        {
+          "workspace_id": "tqqq",
+          "profile_id": "tqqq_best_avg_5x40",
+          "dependency_symbols": [
+            "TQQQ"
+          ]
+        },
+        {
+          "workspace_id": "koru",
+          "profile_id": "koru_official_ddeolsao_pal_v1",
+          "dependency_symbols": [
+            "KORU"
+          ]
+        },
+        {
+          "workspace_id": "koru",
+          "profile_id": "koru_default_5x30",
+          "dependency_symbols": [
+            "KORU"
+          ]
+        },
+        {
+          "workspace_id": "koru",
+          "profile_id": "koru_default_7x30",
+          "dependency_symbols": [
+            "KORU"
+          ]
+        },
+        {
+          "workspace_id": "koru",
+          "profile_id": "koru_best_avg_5x40",
+          "dependency_symbols": [
+            "KORU"
+          ]
+        }
+      ]
+    }
+  }
+}

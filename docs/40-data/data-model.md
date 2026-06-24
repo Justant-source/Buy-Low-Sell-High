@@ -13,6 +13,7 @@
   - `233740`: `data/raw/233740_daily_2015_present.csv`
   - `462330`: `data/raw/462330_daily_2023_present.csv`
 - 표준 매니페스트 경로는 대응하는 `data/manifests/{csv_stem}.json`이다.
+- 시장별 cron 자동화 정본은 `configs/automation/market_refresh.json`이다.
 - 현재 공식 SOXL 기준선은 `data/raw/soxl_daily_2011_present.csv`와 `data/manifests/soxl_daily_2011_present.json`이다.
 - 현재 공식 TQQQ 기준선은 `data/raw/tqqq_daily_2011_present.csv`와 `data/manifests/tqqq_daily_2011_present.json`이다.
 - 현재 공식 KORU 기준선은 `data/raw/koru_daily_2013_present.csv`와 `data/manifests/koru_daily_2013_present.json`이다.
@@ -29,6 +30,10 @@
 - `462330` canonical 스냅샷의 실제 첫 row는 `2023-07-04`이며 상장 전 synthetic row를 추가하지 않는다.
 - `KORU` canonical 스냅샷의 기준 시작일은 `2013-04-10`이다.
 - 네트워크 동기화는 Yahoo, Investing, Stooq 또는 Naver를 소스로 사용할 수 있으며, 동시에 백테스트용 버전 관리 CSV 스냅샷을 유지한다.
+- 시장 자동화 진입점은 `python3 -m buy_low_sell_high.cli automation refresh-market --market kr|us`와 `./scripts/refresh_market_daily.sh --market kr|us`다.
+- 자동화는 동기화 전후 manifest의 `data_hash`와 `end`를 비교해 심볼 상태를 `UPDATED`, `UNCHANGED`, `FAILED`로 판정한다.
+- `UNCHANGED`만 나온 실행은 후속 materialization을 건너뛴다. `--force-materialize`가 있으면 변경 감지와 무관하게 시장별 대상 프로필 materialization을 다시 요청한다.
+- 한국 시장에서 `0193T0` sync는 `000660` 최신 스냅샷 뒤에 실행되어 같은 런의 underlying snapshot을 재사용해야 한다.
 - Investing provider 메타데이터가 없는 종목은 Yahoo/Stooq fallback만 사용한다.
 - Yahoo 동기화는 `range=max` 대신 기간 chunk 요청을 사용하고, 성공한 raw JSON chunk를 `data/snapshots/yahoo_chart/` 아래에 캐시한다.
 - Yahoo가 이후 `429 Too Many Requests`를 반환해도 동일 chunk 캐시가 있으면 그 캐시를 재사용할 수 있어야 한다.

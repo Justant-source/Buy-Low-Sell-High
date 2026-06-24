@@ -5,6 +5,7 @@ from datetime import date
 import json
 from pathlib import Path
 
+from .automation.market_refresh import refresh_market
 from .backtest.engine import run_backtest
 from .backtest.parity import check_data_parity, check_event_parity, check_performance_parity, load_reference_fixture
 from .backtest.sweep import run_grid
@@ -307,6 +308,20 @@ def _data_sync(args: argparse.Namespace) -> int:
     return _print_json(result)
 
 
+def _automation_refresh_market(args: argparse.Namespace) -> int:
+    exit_code, payload = refresh_market(
+        args.market,
+        skip_materialize=args.skip_materialize,
+        force_materialize=args.force_materialize,
+        max_sync_workers=args.max_sync_workers,
+        max_materialize_workers=args.max_materialize_workers,
+        sweep_max_workers=args.sweep_max_workers,
+        sweep_chunk_size=args.sweep_chunk_size,
+    )
+    _print_json(payload)
+    return exit_code
+
+
 def _backtest_run(args: argparse.Namespace) -> int:
     config = _load_strategy_config_with_overrides(args)
     bars, data_hash = _load_bars(_resolve_csv_path(args.csv, args.symbol or config.symbol), args.symbol or config.symbol)
@@ -605,6 +620,18 @@ def main() -> int:
     _add_csv_argument(data_status)
     data_status.add_argument("--symbol", default="SOXL")
     data_status.set_defaults(handler=_data_status)
+
+    automation_parser = subparsers.add_parser("automation")
+    automation_subparsers = automation_parser.add_subparsers(dest="automation_command", required=True)
+    automation_refresh_market_parser = automation_subparsers.add_parser("refresh-market")
+    automation_refresh_market_parser.add_argument("--market", choices=["kr", "us"], required=True)
+    automation_refresh_market_parser.add_argument("--skip-materialize", action="store_true")
+    automation_refresh_market_parser.add_argument("--force-materialize", action="store_true")
+    automation_refresh_market_parser.add_argument("--max-sync-workers", type=int, default=4)
+    automation_refresh_market_parser.add_argument("--max-materialize-workers", type=int, default=8)
+    automation_refresh_market_parser.add_argument("--sweep-max-workers", type=int, default=0)
+    automation_refresh_market_parser.add_argument("--sweep-chunk-size", type=int, default=0)
+    automation_refresh_market_parser.set_defaults(handler=_automation_refresh_market)
 
     backtest_parser = subparsers.add_parser("backtest")
     backtest_subparsers = backtest_parser.add_subparsers(dest="backtest_command", required=True)

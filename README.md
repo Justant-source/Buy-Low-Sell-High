@@ -52,6 +52,10 @@ PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli data sync --symbol TQQQ
 PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli data sync --symbol 0193T0
 PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli data sync --symbol 233740
 PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli data sync --symbol 462330
+PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli automation refresh-market --market kr
+PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli automation refresh-market --market us
+./scripts/refresh_market_daily.sh --market kr
+./scripts/refresh_market_daily.sh --market us
 PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile configs/strategies/soxl_default_5x30.yaml --symbol SOXL
 PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile configs/strategies/tqqq_default_5x30.yaml --symbol TQQQ
 PYTHONPATH=engine/src python3 -m buy_low_sell_high.cli backtest run --profile configs/strategies/0193t0_default_5x30.yaml --symbol 0193T0
@@ -95,6 +99,21 @@ In the current Codex snap environment, the Docker CLI can be installed locally, 
 - `http://localhost:3232/backtests/462330`
 
 The default landing page redirects to `/backtests/soxl`.
+
+## Daily Market Refresh
+- Market automation source of truth lives at `configs/automation/market_refresh.json`.
+- `automation refresh-market` syncs daily snapshots first, compares manifest `data_hash` and `end`, and only materializes impacted profiles unless `--force-materialize` is passed.
+- `./scripts/refresh_market_daily.sh` wraps the automation with a per-market `flock` lock and appends logs under `data/runtime/logs/`.
+- The automation builds the dashboard before invoking `dashboard/dist/materialize-market.js`, so cron jobs do not depend on a prebuilt dist tree.
+- Recommended cron entries:
+
+```cron
+CRON_TZ=Asia/Seoul
+40 15 * * 1-5 cd /home/justant/Data/Buy-Low-Sell-High && ./scripts/refresh_market_daily.sh --market kr
+
+CRON_TZ=America/New_York
+10 16 * * 1-5 cd /home/justant/Data/Buy-Low-Sell-High && ./scripts/refresh_market_daily.sh --market us
+```
 
 ## Notes
 - `env/` contains legacy environment artifacts and is not part of the Buy-Low-Sell-High runtime.
