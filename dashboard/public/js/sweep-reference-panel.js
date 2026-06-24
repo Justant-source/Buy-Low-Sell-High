@@ -33,6 +33,12 @@
     I: 2,
     E: 1,
   };
+  const PLATEAU_PRIORITY = {
+    P: 0,
+    M: 1,
+    I: 2,
+    E: 3,
+  };
   const PRESET_LABELS = {
     all: "전체",
     plateau_robust: "PLATEAU + ROBUST",
@@ -40,6 +46,9 @@
     recent_extreme_safe: "Recent MDD ≥ -35%",
   };
   const DEFAULT_EMPTY_MESSAGE = "최신 스윕 산출물이 없습니다. Codex에서 생성한 뒤 다시 읽어오세요.";
+  const RECOMMENDED_FULL_MDD_FLOOR = -80;
+  const RECOMMENDED_RECENT_MDD_FLOOR = -50;
+  const MAX_CANDIDATE_ROWS = 20;
 
   const state = {
     mounted: false,
@@ -54,10 +63,10 @@
     recentMddFloor: -100,
     preset: "all",
     boxAxis: "thread_count",
-    sortBy: "compoundRatioLog10",
-    sortDesc: true,
-    pcSelections: new Map(),
-    tableSelections: new Map(),
+    sortBy: "balancedRank",
+    sortDesc: false,
+    filterSelections: new Map(),
+    highlightedComboKey: "",
   };
 
   function templateHtml() {
@@ -100,6 +109,7 @@
               <input id="sweep-ref-recent-mdd" type="range" min="-100" max="0" value="-100" step="1">
             </div>
           </div>
+          <div class="sweep-ref-filter-grid" id="sweep-ref-primary-filters"></div>
           <div class="sweep-ref-preset-row">
             <button class="btn active" type="button" data-sweep-ref-preset="all" data-base-label="${PRESET_LABELS.all}">${PRESET_LABELS.all}</button>
             <button class="btn" type="button" data-sweep-ref-preset="plateau_robust" data-base-label="${PRESET_LABELS.plateau_robust}">${PRESET_LABELS.plateau_robust}</button>
@@ -138,7 +148,6 @@
             <canvas id="sweep-ref-pc-canvas" width="1200" height="420"></canvas>
             <div class="sweep-ref-tooltip" id="sweep-ref-pc-tooltip"></div>
           </div>
-          <div class="sweep-ref-filter-strip" id="sweep-ref-pc-filters"></div>
           <div class="notice">각 파라미터 아래 필터로 특정 값만 남길 수 있습니다. 선 다발이 두터운 구간이 비교적 안정적인 영역입니다.</div>
         </div>
 
@@ -150,10 +159,16 @@
                 <div class="card-sub">full-period MDD와 mean_CAGR 기준 frontier를 봅니다.</div>
               </div>
             </div>
+            <div class="sweep-ref-legend">
+              <div class="sweep-ref-legend-item"><span class="sweep-ref-legend-swatch plateau"></span>PLATEAU</div>
+              <div class="sweep-ref-legend-item"><span class="sweep-ref-legend-swatch mixed"></span>MIXED / ISLAND / EDGE</div>
+              <div class="sweep-ref-legend-item"><span class="sweep-ref-legend-swatch fail"></span>ROBUST FAIL</div>
+              <div class="sweep-ref-legend-item sweep-ref-legend-selected"><span class="sweep-ref-legend-outline"></span>선택된 후보</div>
+            </div>
             <div class="sweep-ref-canvas-wrap">
               <canvas id="sweep-ref-scatter-canvas" width="600" height="380"></canvas>
             </div>
-            <div class="notice">좌상단이 아니라 우상단에 가까울수록 높은 CAGR과 덜 음수인 MDD 조합입니다.</div>
+            <div class="notice">좌상단이 아니라 우상단에 가까울수록 높은 CAGR과 덜 음수인 MDD 조합입니다. 점을 눌러 후보를 고정할 수 있습니다.</div>
           </div>
           <div class="card">
             <div class="card-head">
@@ -222,35 +237,141 @@
         <div class="card wide-table">
           <div class="card-head">
             <div>
-              <div class="card-title">필터된 combo 표 (compound_ratio 기준 Top 100)</div>
-              <div class="card-sub">기본 정렬은 compound_ratio desc 입니다.</div>
+              <div class="card-title">필터된 combo 표 (기존 탐색용 Top 100)</div>
+              <div class="card-sub">기존 배치를 유지한 탐색용 표입니다. 추천 후보 박스는 이 표 아래에 추가됩니다.</div>
             </div>
           </div>
-          <div class="sweep-ref-filter-strip" id="sweep-ref-table-filters"></div>
-          <div class="tbl-wrap" style="margin-top: 14px">
-            <table class="tbl sweep-ref-table">
+          <div class="tbl-wrap">
+            <table class="tbl sweep-ref-legacy-table">
               <thead>
                 <tr>
-                  <th data-sort-key="comboKey">Combo</th>
-                  <th class="num" data-sort-key="thread_count">Thread</th>
-                  <th class="num" data-sort-key="stop_sessions">Stop</th>
-                  <th class="num" data-sort-key="buy_pct">Buy %</th>
-                  <th class="num" data-sort-key="sell_pct">Sell %</th>
-                  <th class="num" data-sort-key="meanCagr">mean_CAGR</th>
-                  <th class="num" data-sort-key="fullMdd">Full MDD</th>
-                  <th class="num" data-sort-key="recentMdd">Recent MDD</th>
-                  <th class="num" data-sort-key="worstWindowCagr">worst_window</th>
-                  <th data-sort-key="plateauSort">plateau</th>
-                  <th data-sort-key="tierPassSort">tier_pass</th>
-                  <th class="num" data-sort-key="compoundRatioLog10">compound_ratio</th>
+                  <th>Combo</th>
+                  <th class="num">Thread</th>
+                  <th class="num">Stop</th>
+                  <th class="num">Buy %</th>
+                  <th class="num">Sell %</th>
+                  <th class="num">mean_CAGR</th>
+                  <th class="num">Full MDD</th>
+                  <th class="num">Recent MDD</th>
+                  <th class="num">worst_window</th>
+                  <th>plateau</th>
+                  <th>tier_pass</th>
+                  <th class="num">compound_ratio</th>
                 </tr>
               </thead>
-              <tbody id="sweep-ref-table-body">
+              <tbody id="sweep-ref-legacy-table-body">
                 <tr><td colspan="12" class="muted" style="text-align: center">${ui.escapeHtml(DEFAULT_EMPTY_MESSAGE)}</td></tr>
               </tbody>
             </table>
           </div>
-          <div class="sweep-ref-table-count" id="sweep-ref-table-count"></div>
+          <div class="sweep-ref-table-count" id="sweep-ref-legacy-table-count"></div>
+        </div>
+
+        <div class="sweep-ref-new-section">
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <div class="card-title">신규 추천 박스</div>
+                <div class="card-sub">기존 탐색 화면은 그대로 두고, 아래에 최종 선택을 돕는 신규 추천 박스를 추가했습니다.</div>
+              </div>
+            </div>
+            <div class="notice">
+              기본 추천은 <span class="mono">ROBUST 통과 + full MDD ≥ -80% + recent MDD ≥ -50%</span> 범위에서
+              <span class="mono">PLATEAU</span>와 <span class="mono">Pareto</span>를 우선합니다.
+            </div>
+          </div>
+
+          <div class="sweep-ref-summary-grid">
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">Best Balanced</div>
+                  <div class="card-sub">과적합 필터를 통과하면서 수익과 낙폭이 가장 균형적인 후보입니다.</div>
+                </div>
+                <span class="sweep-ref-rank-badge" aria-label="추천 순위 1">1</span>
+              </div>
+              <div id="sweep-ref-summary-balanced"></div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">Best Defense</div>
+                  <div class="card-sub">적격 후보 중 recent MDD가 가장 덜 깊은 방어형 조합입니다.</div>
+                </div>
+                <span class="sweep-ref-rank-badge" aria-label="추천 순위 2">2</span>
+              </div>
+              <div id="sweep-ref-summary-defense"></div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">Best Return</div>
+                  <div class="card-sub">적격 후보 중 mean CAGR이 가장 높은 조합입니다.</div>
+                </div>
+                <span class="sweep-ref-rank-badge" aria-label="추천 순위 3">3</span>
+              </div>
+              <div id="sweep-ref-summary-return"></div>
+            </div>
+          </div>
+
+          <div class="card wide-table">
+            <div class="card-head">
+              <div>
+                <div class="card-title">추천 후보 표 (Top ${MAX_CANDIDATE_ROWS})</div>
+                <div class="card-sub">기본 정렬은 Best Balanced 순서입니다. 추천 이유와 탈락 사유를 바로 확인합니다.</div>
+              </div>
+            </div>
+            <div class="tbl-wrap">
+              <table class="tbl sweep-ref-candidate-table">
+                <thead>
+                  <tr>
+                    <th class="num" data-sort-key="balancedRank">Rank</th>
+                    <th data-sort-key="comboKey">Combo</th>
+                    <th class="num" data-sort-key="meanCagr">mean_CAGR</th>
+                    <th class="num" data-sort-key="fullMdd">Full MDD</th>
+                    <th class="num" data-sort-key="recentMdd">Recent MDD</th>
+                    <th class="num" data-sort-key="worstWindowCagr">worst_window</th>
+                    <th data-sort-key="plateauSort">plateau</th>
+                    <th data-sort-key="tierPassSort">robust</th>
+                    <th data-sort-key="paretoSort">pareto</th>
+                    <th>추천 이유</th>
+                    <th>탈락 사유</th>
+                  </tr>
+                </thead>
+                <tbody id="sweep-ref-table-body">
+                  <tr><td colspan="11" class="muted" style="text-align: center">${ui.escapeHtml(DEFAULT_EMPTY_MESSAGE)}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="sweep-ref-table-count" id="sweep-ref-table-count"></div>
+          </div>
+
+          <div class="card wide-table">
+            <div class="card-head">
+              <div>
+                <div class="card-title">파라미터 증거 매트릭스</div>
+                <div class="card-sub">각 값대가 전체적으로 얼마나 robust하고 plateau 성격이 강한지 요약합니다.</div>
+              </div>
+            </div>
+            <div class="tbl-wrap">
+              <table class="tbl sweep-ref-evidence-table">
+                <thead>
+                  <tr>
+                    <th>파라미터</th>
+                    <th class="num">값</th>
+                    <th class="num">Combo 수</th>
+                    <th class="num">Robust 비율</th>
+                    <th class="num">Plateau 비율</th>
+                    <th class="num">평균 mean_CAGR</th>
+                    <th class="num">평균 recent MDD</th>
+                  </tr>
+                </thead>
+                <tbody id="sweep-ref-evidence-body">
+                  <tr><td colspan="7" class="muted" style="text-align: center">${ui.escapeHtml(DEFAULT_EMPTY_MESSAGE)}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
       <div class="sweep-ref-help-tooltip" id="sweep-ref-help-tooltip"></div>
@@ -329,9 +450,9 @@
           state.sortDesc = !state.sortDesc;
         } else {
           state.sortBy = sortKey;
-          state.sortDesc = true;
+          state.sortDesc = defaultSortDescending(sortKey);
         }
-        renderTable();
+        renderAll();
       });
     });
     document.querySelectorAll(".sweep-ref-help-trigger").forEach((button) => {
@@ -344,8 +465,21 @@
       });
       button.addEventListener("blur", hideHelpTooltip);
     });
+    if (state.root instanceof HTMLElement) {
+      state.root.addEventListener("click", (event) => {
+        const target = event.target instanceof Element ? event.target.closest("[data-highlight-combo]") : null;
+        if (!target) {
+          return;
+        }
+        const comboKey = target.getAttribute("data-highlight-combo") || "";
+        if (!comboKey) {
+          return;
+        }
+        state.highlightedComboKey = comboKey;
+        renderAll();
+      });
+    }
     window.addEventListener("resize", () => {
-      positionPcFilters();
       renderAll();
     });
     const pcCanvas = document.getElementById("sweep-ref-pc-canvas");
@@ -357,6 +491,10 @@
           tooltip.style.opacity = "0";
         }
       });
+    }
+    const scatterCanvas = document.getElementById("sweep-ref-scatter-canvas");
+    if (scatterCanvas instanceof HTMLCanvasElement) {
+      scatterCanvas.addEventListener("click", handleScatterClick);
     }
   }
 
@@ -402,6 +540,10 @@
     if (element) {
       element.innerHTML = html;
     }
+  }
+
+  function defaultSortDescending(sortKey) {
+    return !["balancedRank", "comboKey"].includes(sortKey);
   }
 
   function orderedParameterKeys(source = state.parameterValues) {
@@ -466,7 +608,7 @@
     const compoundRatioLog10 = Number(
       Number.isFinite(row.metrics?.compound_ratio_log10) ? row.metrics.compound_ratio_log10 : Math.log10(Math.max(compoundRatio, 0.0001)),
     );
-    return {
+    const displayRow = {
       raw: row,
       comboKey: String(row.combo_key),
       thread_count: Number(row.params?.thread_count ?? 0),
@@ -486,7 +628,16 @@
       tierPass: Boolean(row.tier_pass),
       tierPassSort: row.tier_pass ? 1 : 0,
       pareto: Boolean(row.flags?.pareto_return_mdd),
+      paretoSort: row.flags?.pareto_return_mdd ? 1 : 0,
+      balancedRank: 0,
+      returnRank: 0,
+      defenseRank: 0,
     };
+    displayRow.eligible = isEligibleCandidate(displayRow);
+    displayRow.plateauPriority = PLATEAU_PRIORITY[displayRow.plateauClass] ?? 99;
+    displayRow.recommendationReasons = buildRecommendationReasons(displayRow);
+    displayRow.rejectionReasons = buildRejectionReasons(displayRow);
+    return displayRow;
   }
 
   function render(artifactRecord) {
@@ -538,33 +689,28 @@
         .map((key) => `<option value="${ui.escapeHtml(key)}"${key === state.boxAxis ? " selected" : ""}>${ui.escapeHtml(PARAM_LABELS[key] || key)}</option>`)
         .join("");
     }
-    buildMultiSelectFilters("sweep-ref-pc-filters", state.pcSelections, true);
-    buildMultiSelectFilters("sweep-ref-table-filters", state.tableSelections, false);
-    positionPcFilters();
+    buildMultiSelectFilters("sweep-ref-primary-filters", state.filterSelections);
   }
 
-  function buildMultiSelectFilters(containerId, targetMap, pcMode) {
+  function buildMultiSelectFilters(containerId, targetMap) {
     const container = document.getElementById(containerId);
     if (!(container instanceof HTMLElement)) {
       return;
     }
     container.innerHTML = "";
+    targetMap.clear();
     orderedParameterEntries().forEach(([key, values]) => {
       const selected = new Set(values);
       targetMap.set(key, selected);
       container.appendChild(createMultiSelect(key, values, selected, () => {
-        if (pcMode) {
-          renderAll();
-        } else {
-          renderTable();
-        }
+        renderAll();
       }));
     });
   }
 
   function createMultiSelect(key, values, selected, onChange) {
     const wrapper = document.createElement("div");
-    wrapper.className = "sweep-ref-multiselect-group";
+    wrapper.className = "sweep-ref-multiselect-group sweep-ref-multiselect-group-inline";
     wrapper.setAttribute("data-param-key", key);
     wrapper.innerHTML = `
       <label>${ui.escapeHtml(PARAM_LABELS[key] || key)}</label>
@@ -679,7 +825,7 @@
     });
   }
 
-  function currentPcRows() {
+  function currentFilteredRows() {
     return state.rows.filter((row) => {
       if (state.plateau !== "all" && row.plateauClass !== state.plateau) {
         return false;
@@ -702,12 +848,8 @@
       if (state.preset === "recent_extreme_safe" && row.recentMdd < -35) {
         return false;
       }
-      return matchesParamSelection(row, state.pcSelections);
+      return matchesParamSelection(row, state.filterSelections);
     });
-  }
-
-  function currentTableRows() {
-    return currentPcRows().filter((row) => matchesParamSelection(row, state.tableSelections));
   }
 
   function matchesParamSelection(row, selectionMap) {
@@ -720,16 +862,21 @@
   }
 
   function renderAll() {
-    const filtered = currentPcRows();
+    const filtered = annotateCandidateRanks(currentFilteredRows());
+    syncHighlightedCombo(filtered);
+    renderCandidateSummaries(filtered);
+    renderEvidenceMatrix(filtered);
     updateStats(filtered);
-    drawParallelCoordinates(filtered);
+    updateTopMessage();
+    renderLegacyTable(filtered);
+    renderTable(filtered);
     drawParetoScatter(filtered);
+    drawParallelCoordinates(filtered);
     drawBox(filtered);
     drawRecentScatter(filtered);
     drawPlateauRatio(filtered);
     drawTierStack(filtered);
     drawScoreVsRecent(filtered);
-    renderTable();
   }
 
   function updateStats(rows) {
@@ -753,6 +900,8 @@
   }
 
   function setEmptyState(message) {
+    renderCandidateSummaries([]);
+    renderEvidenceMatrix([]);
     updateStats([]);
     setText("sweep-ref-top-message", message);
     drawEmptyCanvas("sweep-ref-pc-canvas", message);
@@ -762,8 +911,224 @@
     drawEmptyCanvas("sweep-ref-plateau-canvas", message);
     drawEmptyCanvas("sweep-ref-tier-canvas", message);
     drawEmptyCanvas("sweep-ref-score-canvas", message);
-    setHtml("sweep-ref-table-body", `<tr><td colspan="12" class="muted" style="text-align: center">${ui.escapeHtml(message)}</td></tr>`);
+    setHtml("sweep-ref-legacy-table-body", `<tr><td colspan="12" class="muted" style="text-align: center">${ui.escapeHtml(message)}</td></tr>`);
+    setHtml("sweep-ref-table-body", `<tr><td colspan="11" class="muted" style="text-align: center">${ui.escapeHtml(message)}</td></tr>`);
+    setHtml("sweep-ref-evidence-body", `<tr><td colspan="7" class="muted" style="text-align: center">${ui.escapeHtml(message)}</td></tr>`);
+    setText("sweep-ref-legacy-table-count", "표시: 0 / 필터 통과: 0 / 전체: 0");
     setText("sweep-ref-table-count", "표시: 0 / 필터 통과: 0 / 전체: 0");
+  }
+
+  function isEligibleCandidate(row) {
+    return row.tierPass && row.fullMdd >= RECOMMENDED_FULL_MDD_FLOOR && row.recentMdd >= RECOMMENDED_RECENT_MDD_FLOOR;
+  }
+
+  function buildRecommendationReasons(row) {
+    const reasons = [];
+    if (row.plateauClass === "P") {
+      reasons.push("PLATEAU");
+    }
+    if (row.tierPass) {
+      reasons.push("ROBUST");
+    }
+    if (row.pareto) {
+      reasons.push("PARETO");
+    }
+    if (row.recentMdd >= -35) {
+      reasons.push("RECENT DEFENSE");
+    } else if (row.recentMdd >= -45) {
+      reasons.push("RECENT SAFE");
+    }
+    return reasons;
+  }
+
+  function buildRejectionReasons(row) {
+    const reasons = [];
+    if (!row.tierPass) {
+      reasons.push("ROBUST FAIL");
+    }
+    if (row.fullMdd < RECOMMENDED_FULL_MDD_FLOOR) {
+      reasons.push(`Full MDD < ${RECOMMENDED_FULL_MDD_FLOOR}%`);
+    }
+    if (row.recentMdd < RECOMMENDED_RECENT_MDD_FLOOR) {
+      reasons.push(`Recent MDD < ${RECOMMENDED_RECENT_MDD_FLOOR}%`);
+    }
+    if (row.plateauClass === "I" || row.plateauClass === "E") {
+      reasons.push(PLATEAU_LABELS[row.plateauClass]);
+    }
+    return reasons;
+  }
+
+  function compareEligibleFirst(left, right) {
+    if (left.eligible !== right.eligible) {
+      return Number(right.eligible) - Number(left.eligible);
+    }
+    return 0;
+  }
+
+  function compareBalancedRows(left, right) {
+    const eligible = compareEligibleFirst(left, right);
+    if (eligible !== 0) {
+      return eligible;
+    }
+    if (left.plateauPriority !== right.plateauPriority) {
+      return left.plateauPriority - right.plateauPriority;
+    }
+    if (left.pareto !== right.pareto) {
+      return Number(right.pareto) - Number(left.pareto);
+    }
+    if (right.meanCagr !== left.meanCagr) {
+      return right.meanCagr - left.meanCagr;
+    }
+    if (right.fullMdd !== left.fullMdd) {
+      return right.fullMdd - left.fullMdd;
+    }
+    if (right.recentMdd !== left.recentMdd) {
+      return right.recentMdd - left.recentMdd;
+    }
+    return left.comboKey.localeCompare(right.comboKey);
+  }
+
+  function compareReturnRows(left, right) {
+    const eligible = compareEligibleFirst(left, right);
+    if (eligible !== 0) {
+      return eligible;
+    }
+    if (right.meanCagr !== left.meanCagr) {
+      return right.meanCagr - left.meanCagr;
+    }
+    if (right.fullMdd !== left.fullMdd) {
+      return right.fullMdd - left.fullMdd;
+    }
+    if (right.recentMdd !== left.recentMdd) {
+      return right.recentMdd - left.recentMdd;
+    }
+    return left.comboKey.localeCompare(right.comboKey);
+  }
+
+  function compareDefenseRows(left, right) {
+    const eligible = compareEligibleFirst(left, right);
+    if (eligible !== 0) {
+      return eligible;
+    }
+    if (right.recentMdd !== left.recentMdd) {
+      return right.recentMdd - left.recentMdd;
+    }
+    if (right.fullMdd !== left.fullMdd) {
+      return right.fullMdd - left.fullMdd;
+    }
+    if (right.meanCagr !== left.meanCagr) {
+      return right.meanCagr - left.meanCagr;
+    }
+    return left.comboKey.localeCompare(right.comboKey);
+  }
+
+  function annotateCandidateRanks(rows) {
+    const cloned = rows.map((row) => ({
+      ...row,
+      recommendationReasons: [...row.recommendationReasons],
+      rejectionReasons: [...row.rejectionReasons],
+    }));
+    assignRank(cloned, compareBalancedRows, "balancedRank");
+    assignRank(cloned, compareReturnRows, "returnRank");
+    assignRank(cloned, compareDefenseRows, "defenseRank");
+    return cloned;
+  }
+
+  function assignRank(rows, comparator, rankKey) {
+    rows.slice().sort(comparator).forEach((row, index) => {
+      row[rankKey] = index + 1;
+    });
+  }
+
+  function syncHighlightedCombo(rows) {
+    if (rows.some((row) => row.comboKey === state.highlightedComboKey)) {
+      return;
+    }
+    const bestBalanced = rows.find((row) => row.eligible) || rows[0] || null;
+    state.highlightedComboKey = bestBalanced?.comboKey || "";
+  }
+
+  function bestCandidate(rows, comparator) {
+    const eligibleRows = rows.filter((row) => row.eligible);
+    if (!eligibleRows.length) {
+      return null;
+    }
+    return eligibleRows.slice().sort(comparator)[0] || null;
+  }
+
+  function renderCandidateSummaries(rows) {
+    renderCandidateCard(
+      "sweep-ref-summary-balanced",
+      "Balanced",
+      bestCandidate(rows, compareBalancedRows),
+      "ROBUST, 낙폭 게이트, recent MDD 기준을 모두 만족한 후보가 없습니다.",
+    );
+    renderCandidateCard(
+      "sweep-ref-summary-return",
+      "Return",
+      bestCandidate(rows, compareReturnRows),
+      "현재 필터에서 수익형 적격 후보가 없습니다.",
+    );
+    renderCandidateCard(
+      "sweep-ref-summary-defense",
+      "Defense",
+      bestCandidate(rows, compareDefenseRows),
+      "현재 필터에서 방어형 적격 후보가 없습니다.",
+    );
+  }
+
+  function renderCandidateCard(id, label, row, emptyMessage) {
+    if (!row) {
+      setHtml(
+        id,
+        `<div class="sweep-ref-candidate-empty"><strong>${ui.escapeHtml(label)}</strong><span>${ui.escapeHtml(emptyMessage)}</span></div>`,
+      );
+      return;
+    }
+    const selectedClass = state.highlightedComboKey === row.comboKey ? " selected" : "";
+    setHtml(
+      id,
+      `<button class="sweep-ref-candidate-button${selectedClass}" type="button" data-highlight-combo="${ui.escapeHtml(row.comboKey)}">
+        <div class="sweep-ref-candidate-top">
+          <span class="badge info">${ui.escapeHtml(label)}</span>
+          <span class="badge neutral mono">${ui.escapeHtml(row.comboKey)}</span>
+        </div>
+        <div class="sweep-ref-candidate-metrics">
+          <div><span>mean CAGR</span><strong>${ui.escapeHtml(formatPercentValue(row.meanCagr))}</strong></div>
+          <div><span>full MDD</span><strong>${ui.escapeHtml(formatPercentValue(row.fullMdd))}</strong></div>
+          <div><span>recent MDD</span><strong>${ui.escapeHtml(formatPercentValue(row.recentMdd))}</strong></div>
+        </div>
+        <div class="sweep-ref-candidate-badges">${renderStatusBadges(row)}</div>
+        <div class="sweep-ref-candidate-note">${renderReasonBadges(row.recommendationReasons, "success")}</div>
+        <div class="sweep-ref-candidate-sub">${ui.escapeHtml(formatComboMeta(row))}</div>
+      </button>`,
+    );
+  }
+
+  function renderStatusBadges(row) {
+    const badges = [
+      `<span class="sweep-ref-plateau sweep-ref-plateau-${row.plateauClass}">${ui.escapeHtml(PLATEAU_LABELS[row.plateauClass])}</span>`,
+      row.tierPass ? '<span class="sweep-ref-tier-pass">ROBUST</span>' : '<span class="badge neutral">FAIL</span>',
+    ];
+    if (row.pareto) {
+      badges.push('<span class="badge info">PARETO</span>');
+    }
+    return badges.join("");
+  }
+
+  function renderReasonBadges(reasons, tone = "neutral") {
+    if (!reasons.length) {
+      return '<span class="badge neutral">—</span>';
+    }
+    return reasons.map((reason) => `<span class="badge ${tone}">${ui.escapeHtml(reason)}</span>`).join("");
+  }
+
+  function formatComboMeta(row) {
+    return `T${row.thread_count} / ${row.stop_sessions}S / BUY ${formatSigned(row.buy_pct)} / SELL ${formatSigned(row.sell_pct)}`;
+  }
+
+  function formatPercentValue(value) {
+    return `${Number(value).toFixed(1)}%`;
   }
 
   function drawEmptyCanvas(id, message) {
@@ -1138,18 +1503,48 @@
       });
       ctx.stroke();
     }
+    const scatterPoints = [];
     rows.forEach((row) => {
       const style = pointStyle(row);
       const x = axis(row.meanCagr, xRange.min, xRange.max, pad.left, width, false);
       const y = axis(row.fullMdd, yRange.min, yRange.max, pad.top, height, true);
       ctx.fillStyle = style.color;
-      ctx.strokeStyle = row.pareto ? "rgba(15, 23, 42, 0.55)" : style.stroke;
-      ctx.lineWidth = row.pareto ? 1.3 : 1;
+      const highlighted = row.comboKey === state.highlightedComboKey;
+      ctx.strokeStyle = highlighted ? "rgba(15, 23, 42, 0.92)" : (row.pareto ? "rgba(15, 23, 42, 0.55)" : style.stroke);
+      ctx.lineWidth = highlighted ? 2.4 : (row.pareto ? 1.3 : 1);
       ctx.beginPath();
-      ctx.arc(x, y, style.radius, 0, Math.PI * 2);
+      ctx.arc(x, y, highlighted ? style.radius + 1.8 : style.radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
+      scatterPoints.push({ comboKey: row.comboKey, x, y, radius: highlighted ? style.radius + 1.8 : style.radius + 3 });
     });
+    canvas.__scatterPoints = scatterPoints;
+  }
+
+  function handleScatterClick(event) {
+    const canvas = event.currentTarget;
+    if (!(canvas instanceof HTMLCanvasElement) || !Array.isArray(canvas.__scatterPoints)) {
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const mx = (event.clientX - rect.left) * scaleX;
+    const my = (event.clientY - rect.top) * scaleY;
+    let nearest = null;
+    let nearestDistance = 18;
+    canvas.__scatterPoints.forEach((point) => {
+      const distance = Math.hypot(mx - point.x, my - point.y);
+      if (distance <= Math.max(point.radius, 8) && distance < nearestDistance) {
+        nearest = point;
+        nearestDistance = distance;
+      }
+    });
+    if (!nearest) {
+      return;
+    }
+    state.highlightedComboKey = nearest.comboKey;
+    renderAll();
   }
 
   function drawBox(rows) {
@@ -1475,11 +1870,86 @@
     return ratio >= 10 ? `${Math.round(ratio)}x` : `${ratio.toFixed(1)}x`;
   }
 
-  function renderTable() {
-    const rows = currentTableRows().slice().sort(compareTableRows);
+  function renderEvidenceMatrix(rows) {
+    const matrixRows = buildParameterEvidenceMatrix(rows);
+    setHtml(
+      "sweep-ref-evidence-body",
+      matrixRows.length
+        ? matrixRows.map((row) => `
+            <tr>
+              <td>${ui.escapeHtml(row.parameterLabel)}</td>
+              <td class="num mono">${ui.escapeHtml(row.valueLabel)}</td>
+              <td class="num">${ui.escapeHtml(String(row.count))}</td>
+              <td class="num sweep-ref-tone-${ui.escapeHtml(ratioTone(row.robustRatioPct))}">${ui.escapeHtml(formatPercentValue(row.robustRatioPct))}</td>
+              <td class="num sweep-ref-tone-${ui.escapeHtml(ratioTone(row.plateauRatioPct))}">${ui.escapeHtml(formatPercentValue(row.plateauRatioPct))}</td>
+              <td class="num ${row.meanCagr >= 0 ? "pos" : "neg"}">${ui.escapeHtml(formatPercentValue(row.meanCagr))}</td>
+              <td class="num sweep-ref-tone-${ui.escapeHtml(mddTone(row.recentMdd))}">${ui.escapeHtml(formatPercentValue(row.recentMdd))}</td>
+            </tr>
+          `).join("")
+        : '<tr><td colspan="7" class="muted" style="text-align:center">필터 결과가 없습니다.</td></tr>',
+    );
+  }
+
+  function buildParameterEvidenceMatrix(rows) {
+    const matrix = [];
+    const parameterValues = Object.keys(state.parameterValues || {}).length
+      ? state.parameterValues
+      : deriveParameterValues(rows);
+    orderedParameterEntries(parameterValues).forEach(([key, values]) => {
+      values.forEach((value) => {
+        const subset = rows.filter((row) => row[key] === value);
+        const count = subset.length;
+        const robustRatioPct = count ? (subset.filter((row) => row.tierPass).length / count) * 100 : 0;
+        const plateauRatioPct = count ? (subset.filter((row) => row.plateauClass === "P").length / count) * 100 : 0;
+        matrix.push({
+          parameterKey: key,
+          parameterLabel: PARAM_LABELS[key] || key,
+          value,
+          valueLabel: String(value),
+          count,
+          robustRatioPct,
+          plateauRatioPct,
+          meanCagr: count ? average(subset, "meanCagr") : 0,
+          recentMdd: count ? average(subset, "recentMdd") : 0,
+        });
+      });
+    });
+    return matrix;
+  }
+
+  function deriveParameterValues(rows) {
+    const values = {};
+    PARAM_ORDER.forEach((key) => {
+      values[key] = [...new Set(rows.map((row) => row[key]).filter((value) => Number.isFinite(value)))].sort((left, right) => left - right);
+    });
+    return values;
+  }
+
+  function ratioTone(value) {
+    if (value >= 70) {
+      return "good";
+    }
+    if (value >= 35) {
+      return "mixed";
+    }
+    return "weak";
+  }
+
+  function mddTone(value) {
+    if (value >= -35) {
+      return "good";
+    }
+    if (value >= -50) {
+      return "mixed";
+    }
+    return "weak";
+  }
+
+  function renderLegacyTable(filteredRows) {
+    const rows = filteredRows.slice().sort(compareLegacyTableRows);
     const topRows = rows.slice(0, 100);
     setHtml(
-      "sweep-ref-table-body",
+      "sweep-ref-legacy-table-body",
       topRows.length
         ? topRows.map((row) => `
             <tr>
@@ -1497,7 +1967,49 @@
               <td class="num">${ui.escapeHtml(formatMultiplier(row.compoundRatio))}</td>
             </tr>
           `).join("")
-        : `<tr><td colspan="12" class="muted" style="text-align: center">필터 결과가 없습니다.</td></tr>`,
+        : '<tr><td colspan="12" class="muted" style="text-align: center">필터 결과가 없습니다.</td></tr>',
+    );
+    setText("sweep-ref-legacy-table-count", `표시: ${topRows.length} / 필터 통과: ${rows.length} / 전체: ${state.rows.length}`);
+  }
+
+  function compareLegacyTableRows(left, right) {
+    if (right.compoundRatioLog10 !== left.compoundRatioLog10) {
+      return right.compoundRatioLog10 - left.compoundRatioLog10;
+    }
+    if (right.meanCagr !== left.meanCagr) {
+      return right.meanCagr - left.meanCagr;
+    }
+    if (right.fullMdd !== left.fullMdd) {
+      return right.fullMdd - left.fullMdd;
+    }
+    return left.comboKey.localeCompare(right.comboKey);
+  }
+
+  function renderTable(filteredRows) {
+    const rows = filteredRows.slice().sort(compareTableRows);
+    const topRows = rows.slice(0, MAX_CANDIDATE_ROWS);
+    setHtml(
+      "sweep-ref-table-body",
+      topRows.length
+        ? topRows.map((row) => `
+            <tr class="${state.highlightedComboKey === row.comboKey ? "sweep-ref-row-active" : ""}" data-highlight-combo="${ui.escapeHtml(row.comboKey)}">
+              <td class="num">${ui.escapeHtml(String(row.balancedRank))}</td>
+              <td class="mono">
+                <div>${ui.escapeHtml(row.comboKey)}</div>
+                <div class="table-note">${ui.escapeHtml(formatComboMeta(row))}</div>
+              </td>
+              <td class="num ${row.meanCagr >= 0 ? "pos" : "neg"}">${ui.escapeHtml(row.meanCagr.toFixed(1))}%</td>
+              <td class="num neg">${ui.escapeHtml(row.fullMdd.toFixed(1))}%</td>
+              <td class="num neg">${ui.escapeHtml(row.recentMdd.toFixed(1))}%</td>
+              <td class="num ${row.worstWindowCagr >= 0 ? "pos" : "neg"}">${ui.escapeHtml(row.worstWindowCagr.toFixed(1))}%</td>
+              <td><span class="sweep-ref-plateau sweep-ref-plateau-${row.plateauClass}">${ui.escapeHtml(PLATEAU_LABELS[row.plateauClass])}</span></td>
+              <td>${row.tierPass ? '<span class="sweep-ref-tier-pass">PASS</span>' : '<span class="badge neutral">FAIL</span>'}</td>
+              <td>${row.pareto ? '<span class="badge info">PARETO</span>' : '<span class="badge neutral">—</span>'}</td>
+              <td>${renderReasonBadges(row.recommendationReasons, "success")}</td>
+              <td>${renderReasonBadges(row.rejectionReasons, "warning")}</td>
+            </tr>
+          `).join("")
+        : '<tr><td colspan="11" class="muted" style="text-align: center">필터 결과가 없습니다.</td></tr>',
     );
     setText("sweep-ref-table-count", `표시: ${topRows.length} / 필터 통과: ${rows.length} / 전체: ${state.rows.length}`);
     updateSortIcons();
@@ -1534,6 +2046,16 @@
   function formatSigned(value) {
     return `${value >= 0 ? "+" : ""}${Number(value).toFixed(Number.isInteger(value) ? 0 : 1)}%`;
   }
+
+  window.__sweepReferencePanelTestHooks = {
+    buildParameterEvidenceMatrix,
+    compareBalancedRows,
+    compareDefenseRows,
+    compareReturnRows,
+    isEligibleCandidate,
+    makeDisplayRow,
+    templateHtml,
+  };
 
   window.BLSHSweepReferencePanel = {
     mount,

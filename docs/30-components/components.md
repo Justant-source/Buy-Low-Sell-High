@@ -17,7 +17,8 @@
   - 비-`SOXL` workspace의 전략 탭은 기존 구조를 유지하며 `Regime 설정` 카드를 렌더링하지 않는다.
   - 비-`SOXL` workspace는 `Regime 검증` 탭 자체를 숨긴다.
   - 일반 전략 탭의 `콤보 랭킹`은 726개 4파라미터 조합(`thread_count`, `stop_sessions`, `buy_pct`, `sell_pct`)을 기준으로 렌더링하고, `cagr_pct`, `max_drawdown_pct`, `trade_count`, `full_return_pct`를 핵심 컬럼으로 사용한다.
-  - 모든 workspace의 `파라미터 테스트` 탭은 현재 `core4_v4` 4파라미터 sweep을 공통으로 사용한다. 이 탭은 평행좌표, `mean_CAGR vs MDD` Pareto, 파라미터별 `mean_CAGR` 분포, `Recent CAGR vs Recent MDD`, 파라미터별 `PLATEAU` 비율, `Tier` stacked 분포, `compound_ratio vs recent MDD`, `compound_ratio` 기준 Top 100 표를 함께 렌더링한다.
+  - 모든 workspace의 `파라미터 테스트` 탭은 현재 `core4_v4` 4파라미터 sweep을 공통으로 사용한다. 기존 탐색 화면의 배치는 유지하고, 상단부터 평행좌표, `mean_CAGR vs MDD` Pareto, 파라미터별 `mean_CAGR` 분포, `Recent CAGR vs Recent MDD`, 파라미터별 `PLATEAU` 비율, `Tier` stacked 분포, `compound_ratio vs recent MDD`, 기존 탐색용 표를 그대로 렌더링한다.
+  - 같은 탭 맨 아래에는 신규 추천 박스를 추가한다. 이 구역은 `Best Balanced / Defense / Return` 요약 카드, `Best Balanced` 기준 추천 후보 표, 파라미터 증거 매트릭스로 구성되고, 세 요약 카드의 우측 상단에는 추천 우선순위 숫자 `1, 2, 3`을 표시한다.
   - `파라미터 테스트` 탭의 과적합 진단 용어는 `plateau_class(P/M/I/E)`, `tier_pass`, `compound_ratio(log10)`를 사용하며, 모두 sweep artifact payload에서 직접 전달받는다.
   - `SOXL`에서 `Regime 적용`을 켜면 `콤보 랭킹`은 `Neutral=현재 baseline`을 유지하고, `Attack`과 `Defense`에 대해서만 별도 regime grid를 탐색하는 row 집합으로 전환된다. 현재 regime grid는 `thread_count[5,6,7] × stop_sessions[30,40] × buy_pct[-10,-7,-5,-3,0] × sell_pct[0,3,6,9,10]`를 `Attack`과 `Defense` 각각에 적용한다.
   - regime `COMBO` 셀은 한 줄 요약 대신 `T{thread}` 첫 줄 다음에 `Attack`, `Neutral`, `Defense`를 줄바꿈으로 나눠 보여준다. 필터는 계속 `Attack 손절일`, `Attack 매수%`, `Attack 매도%`, `Defense 손절일`, `Defense 매수%`, `Defense 매도%`를 기준으로 동작한다.

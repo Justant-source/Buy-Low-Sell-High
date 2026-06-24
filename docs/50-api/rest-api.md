@@ -138,4 +138,4 @@
   - row `metrics`는 기존 `full_return_pct`, `cagr_pct`, `max_drawdown_pct`, `trade_count` 외에 `mean_cagr_pct`, `std_cagr_pct`, `worst_window_cagr_pct`, `recent_cagr_pct`, `recent_mdd_pct`, `compound_ratio`, `compound_ratio_log10`를 포함할 수 있다.
   - row는 추가로 `windows`, `recent_window`, `plateau_class`, `plateau_details`, `tier_pass`, `tier_details`를 포함할 수 있다.
   - `meta`는 `evaluation_windows`, `recent_window_span`, `baseline_thresholds`, `plateau_rule`, `tier_rule`, `compound_ratio_definition`을 포함할 수 있다.
-  - 대시보드의 `파라미터 테스트` 탭은 이 row 목록 전체를 기준으로 필터링한 뒤 `compound_ratio` 기준 Top 100 표를 렌더링한다.
+  - 대시보드의 `파라미터 테스트` 탭은 이 row 목록 전체를 기준으로 기존 탐색 차트와 기존 탐색용 표를 계속 렌더링한다. 같은 탭 하단에는 별도 신규 추천 구역을 추가해 `Best Balanced` 우선순위 `Top 20`, 추천 이유/탈락 사유, 파라미터 증거 매트릭스를 함께 보여준다.
