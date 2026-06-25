@@ -5,6 +5,8 @@
 - 모든 연구 실행과 golden fixture는 `config_hash`, `data_hash`, `code_commit`를 함께 남겨야 한다.
 - 저장된 연구 산출물은 `code_commit`이 현재 코드 fingerprint와 다르면 재사용하지 않는다. 랭킹과 상세 그래프가 서로 다른 엔진 결과를 섞어 보여주면 안 된다.
 - 위 규칙은 SQLite/research artifact뿐 아니라 대시보드 프로세스의 in-memory ranking/detail/timeline 캐시에도 동일하게 적용한다. 서버를 재시작하지 않은 상태에서 코드가 바뀌었으면 stale cache를 즉시 폐기해야 한다.
+- 에이전트는 레퍼런스 변경 전 먼저 첫 mismatch, `config_hash`, `data_hash`, `code_commit`를 기록한다. fixture는 의미론 변경 ADR 또는 공식 baseline refresh 없이 수정하지 않는다.
+- docs-only 작업도 제품 경계를 약화하면 안 된다. broker order, automatic trading, Redis, Bybit, Telegram trading command는 백테스트 방법론 범위 밖이다.
 - 기본 스냅샷 경로는 심볼 레지스트리가 결정한다. 대표 경로는 `SOXL/TQQQ=2011`, `KORU=2013-04-10`, `0193T0/000660=2015`, `233740=2015-12-17`, `462330=2023-07-04` 계열이다.
 - 공식 제품 게이트는 현재 SOXL `official_reference_matrix.json`과 `official_explorer_summary.json`에 대한 exact golden 비교다.
 - 공식 기준선 계열은 Yahoo 스냅샷, `price_basis=adjusted_close`, `execution_model=ideal_same_close`, `sizing_mode=fixed_principal`을 사용한다.

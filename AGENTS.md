@@ -3,7 +3,8 @@
 ## Read First
 1. `docs/_index.md`
 2. `docs/70-policy/strategy.md`
-3. `.request/BUY_LOW_SELL_HIGH_CODEX_IMPLEMENTATION_PLAN.md`
+3. `docs/00-planning/workstreams.md`
+4. `.request/BUY_LOW_SELL_HIGH_CODEX_IMPLEMENTATION_PLAN.md`
 
 ## Product Boundary
 - Research and dashboard backtesting only.
@@ -23,6 +24,13 @@
 - PostgreSQL is the only shared runtime store; no Redis.
 - Update docs in the same commit as code.
 
+## Start-of-Task Checklist
+- Run `git status --short` and preserve unrelated user changes.
+- Search the relevant runtime and docs before changing behavior; policy docs are not a substitute for current code.
+- Identify the single Phase/workstream gate the task belongs to before editing.
+- Confirm the change does not cross the product boundary or introduce trading automation.
+- Pick verification commands before implementation and report the exact results.
+
 ## Workflow
 - Work on one plan Phase at a time.
 - Do not implement later-phase features unless required by the current Phase.
@@ -30,3 +38,4 @@
 - Run the Phase Gate commands and report the results.
 - Never skip or weaken failing tests.
 - For dashboard build/test/start, use `./scripts/dashboard_exec.sh` instead of raw `npm` or `node`. This repo must tolerate environments without a working system Node toolchain.
+- Keep `make` aliases working, but document direct commands when a workflow must also run without `make`.

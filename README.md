@@ -17,6 +17,14 @@ Buy-Low-Sell-High is a clean-room backtesting stack for daily-close "ddeolsao-pa
 - The `backtests` workspace includes `Strategy Explorer`, `Sweep Explorer`, official SOXL/TQQQ reference views, and risk comparison.
 - Ongoing UI and methodology reference must continue to use `/home/justant/Data/Bit-Mania`, especially `/home/justant/Data/Bit-Mania/backtest/dashboards/strategy_dashboard.html` and `/home/justant/Data/Bit-Mania/backtest/dashboards/supertrend_sweep_dashboard.html`.
 
+## For AI Agents
+- Start with `AGENTS.md`, then `docs/_index.md`, `docs/70-policy/strategy.md`, and `docs/00-planning/workstreams.md`.
+- Treat this as a research/dashboard backtesting product only. Do not add broker order submission, automatic trading, Redis, Bybit, or Telegram trading commands.
+- Before editing, check `git status --short` and preserve unrelated local changes.
+- Use `./scripts/dashboard_exec.sh build|test|start` for dashboard work instead of raw `npm` or `node`.
+- For docs-only changes, run `python3 scripts/lint_docs.py` and `python3 scripts/verify_no_autotrading.py`.
+- For engine or reference changes, also run the relevant unit/reference gate and record the first mismatch instead of changing fixtures to pass.
+
 ## 8 Workstreams
 1. Foundation and safety guardrails
 2. Market data pipeline and exchange-session calendar

@@ -10,6 +10,16 @@
 - 자동 주문 제출 금지
 - Redis, Bybit, Telegram 매매 명령 금지
 
+## 워크스페이스 계층
+| Workspace | referenceMode | 데이터 기준 | UI 기준 |
+|---|---|---|---|
+| `SOXL` | `mentor_reference` | Yahoo adjusted daily + SOXL legacy mentor 비교 | 공식 기준선과 legacy mentor 카드 모두 노출 |
+| `TQQQ` | `official_reference` | Yahoo adjusted daily | 공식 기준선만 노출 |
+| `KORU` | `official_reference` | Yahoo adjusted daily | 공식 기준선만 노출 |
+| `0193T0` | `backtest_only` | Naver daily + synthetic pre-listing | 공통 연구 UI만 노출 |
+| `233740` | `backtest_only` | Naver daily | 공통 연구 UI만 노출 |
+| `462330` | `backtest_only` | Naver daily | 공통 연구 UI만 노출 |
+
 ## 구현 원칙
 - 보유 기간은 달력일이 아니라 거래소 세션 기준으로 계산한다.
 - 레퍼런스 무결성을 지킨다. 불일치를 숨기기 위해 fixture를 수정하지 않는다.
@@ -24,6 +34,8 @@
 - 모든 백테스트 실행은 `config_hash`, `data_hash`, `code_commit`를 저장해야 한다.
 - 저장된 연구 산출물은 `code_commit`이 현재 코드 fingerprint와 일치할 때만 재사용해야 한다.
 - 전략 탭에서 선택 구간을 바꾸면 `콤보 랭킹`, `Rebased Equity`, `월별`, `롤링`, `Thread Timeline`은 모두 같은 slice 바 집합으로 다시 실행한 결과를 사용해야 한다.
+- `mentor_reference`는 제품 정답이 아니라 legacy comparison 진단이다. 공식 제품 게이트는 SOXL 공식 golden과 공식 연구 기준선 ADR을 따른다.
+- `backtest_only` workspace에는 공식/멘토 reference parity를 새로 강제하지 않는다. 공통 전략 실행, sweep, risk, reproducibility metadata만 요구한다.
 
 ## 현재 전략 참조 문서
 - **전략 SSOT (매매 로직·파라미터·백테스트 준거)**: `docs/70-policy/ddeolsao-pal-ssot.md`

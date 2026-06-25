@@ -10,11 +10,34 @@
 - 전략 탭에서 선택 구간을 바꾸면 `콤보 랭킹`, `Rebased Equity`, `월별`, `롤링`, `Thread Timeline`은 모두 같은 slice 바 집합으로 다시 실행한 결과를 사용한다.
 - 대시보드 startup preset warmup은 best-effort이며 실패를 로그로 격리해야 한다.
 
+## AI Agent Quick Start
+- 먼저 `git status --short`로 기존 수정분을 확인하고, 사용자 변경을 되돌리지 않는다.
+- 작업 전 최소 읽기 세트는 이 파일, `docs/70-policy/strategy.md`, `docs/00-planning/workstreams.md`, 관련 런타임 코드다.
+- 계획 문서의 Phase는 구현 순서의 기준이지만, 현재 코드는 이미 workspace UI, sweep, persistence, risk, regime 기능을 포함한다. 현재 구현을 삭제하거나 초기 Phase 상태로 되돌리지 않는다.
+- 정책 문서와 코드가 충돌하면 먼저 런타임 코드를 확인하고, 정책 변경이 필요하면 같은 작업 안에서 docs를 함께 갱신한다.
+- dashboard 작업은 `./scripts/dashboard_exec.sh build|test|start`를 사용한다. raw `npm`/`node` 명령은 이 저장소의 표준 진입점이 아니다.
+- unit, golden, reference 테스트는 네트워크 없이 실행되어야 한다.
+
 ## 권한 순서
 1. 런타임 코드
 2. `docs/70-policy/*.md`
 3. `docs/10-context` 부터 `docs/60-runtime` 까지
 4. 계획 문서
+
+## 변경 유형별 읽기 경로
+- 전략/엔진: `docs/70-policy/strategy.md`, `docs/70-policy/ddeolsao-pal-ssot.md`, `docs/60-runtime/state-machines.md`, `engine/src/buy_low_sell_high/strategies/`
+- 데이터/심볼: `docs/40-data/data-model.md`, `docs/70-policy/backtest-methodology.md`, `engine/src/buy_low_sell_high/symbols.py`, `configs/automation/market_refresh.json`
+- 대시보드/API: `docs/30-components/components.md`, `docs/50-api/rest-api.md`, `docs/20-containers/containers.md`, `dashboard/src/`
+- 레퍼런스/parity: `docs/90-adr/0003-official-research-baseline.md`, `docs/90-adr/0002-mentor-reference-screen.md`, `docs/70-policy/mentor-vs-implemented-strategy.md`
+- 문서만 수정: 이 파일, 변경 대상 문서, `scripts/lint_docs.py`
+
+## 검증 명령 선택표
+- 문서만 변경: `python3 scripts/lint_docs.py`, `python3 scripts/verify_no_autotrading.py`
+- 엔진/전략 변경: `PYTHONPATH=engine/src python3 -m unittest discover -s engine/tests/unit -p 'test_*.py'`
+- 공식 기준선 변경: `make official-reference-check` 또는 `make reference-check`
+- 대시보드 변경: `./scripts/dashboard_exec.sh build`, `./scripts/dashboard_exec.sh test`
+- 백테스트 UI 스모크: `./scripts/e2e_backtest.sh`, `./scripts/e2e_risk.sh`
+- 종합 게이트: `make clean-room` 또는 `docs/00-planning/workstreams.md`의 직접 명령 묶음
 
 ## 권장 읽기 순서
 1. `docs/70-policy/strategy.md`
