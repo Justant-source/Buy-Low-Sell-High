@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Buy-Low-Sell-High Dashboard Watchdog
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+Unit=buy-low-sell-high-dashboard-watchdog.service
+
+[Install]
+WantedBy=timers.target

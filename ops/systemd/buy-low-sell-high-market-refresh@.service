@@ -1,0 +1,10 @@
+[Unit]
+Description=Buy-Low-Sell-High Market Refresh (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Data/Buy-Low-Sell-High
+ExecStart=%h/Data/Buy-Low-Sell-High/scripts/refresh_market_daily.sh --market %i
+

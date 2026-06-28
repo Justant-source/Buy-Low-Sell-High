@@ -1,0 +1,26 @@
+[Unit]
+Description=Buy-Low-Sell-High Dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Data/Buy-Low-Sell-High
+Environment=SQLITE_PATH=%h/Data/Buy-Low-Sell-High/data/runtime/buy-low-sell-high.sqlite
+Environment=DASHBOARD_HOST=0.0.0.0
+Environment=DASHBOARD_PORT=3232
+Environment=DASHBOARD_ACTIVE_WORKSPACES=soxl,0193t0
+Environment=DASHBOARD_STARTUP_PRESET_WARMUP_ENABLED=false
+Environment=DASHBOARD_STARTUP_SWEEP_WARMUP_ENABLED=false
+Environment=DASHBOARD_BACKGROUND_WARMUP_DELAY_MS=30000
+Environment=DASHBOARD_BACKGROUND_WARMUP_MAX_CONCURRENCY=1
+Environment=BUY_LOW_SELL_HIGH_STRATEGY_RANKING_MAX_WORKERS=4
+ExecStart=%h/Data/Buy-Low-Sell-High/scripts/dashboard_exec.sh start
+ExecStopPost=/bin/bash -lc '%h/Data/Buy-Low-Sell-High/scripts/cleanup_dashboard_children.sh'
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+KillMode=control-group
+
+[Install]
+WantedBy=default.target

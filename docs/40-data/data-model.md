@@ -8,6 +8,7 @@
   - `TQQQ`: `data/raw/tqqq_daily_2011_present.csv`
   - `KORU`: `data/raw/koru_daily_2013_present.csv`
   - `QQQ`: `data/raw/qqq_daily_2011_present.csv`
+  - `BTCUSDT`: `data/raw/btcusdt_daily_2017_present.csv`
   - `000660`: `data/raw/000660_daily_2015_present.csv`
   - `0193T0`: `data/raw/0193t0_daily_2015_present.csv`
   - `233740`: `data/raw/233740_daily_2015_present.csv`
@@ -21,6 +22,7 @@
 - SOXL 공식 기준선은 checked-in golden fixture와 결합된 제품 gate다.
 - TQQQ와 KORU 공식 기준선은 runtime canonical profile이며, golden fixture/parity 기준은 계속 SOXL 전용 `official_reference_matrix.json`과 `official_explorer_summary.json`에 둔다.
 - `SOXL`, `TQQQ`, `KORU`는 Yahoo chart를 우선 소스로 사용하며 실패 시 Investing, Stooq fallback을 사용한다.
+- `BTCUSDT`는 Binance Spot UTC `1d` kline을 소스로 사용한다.
 - `000660`, `0193T0`, `233740`, `462330`는 네이버 일별시세를 소스로 사용한다.
 - `0193T0`는 2026-05-27 상장 이전 구간을 synthetic row로 채운다.
   - synthetic close 앵커는 실제 `0193T0` 2026-05-27 종가다.
@@ -29,8 +31,10 @@
 - `233740` canonical 스냅샷의 실제 첫 row는 `2015-12-17`이다.
 - `462330` canonical 스냅샷의 실제 첫 row는 `2023-07-04`이며 상장 전 synthetic row를 추가하지 않는다.
 - `KORU` canonical 스냅샷의 기준 시작일은 `2013-04-10`이다.
+- `BTCUSDT` canonical 스냅샷의 기준 시작일은 `2017-08-17`이다.
+- `BTCUSDT` `session_date`는 바이낸스 기본 UTC 일봉 경계를 사용하며, 주말 행도 정상 세션으로 취급한다.
 - 네트워크 동기화는 Yahoo, Investing, Stooq 또는 Naver를 소스로 사용할 수 있으며, 동시에 백테스트용 버전 관리 CSV 스냅샷을 유지한다.
-- 시장 자동화 진입점은 `python3 -m buy_low_sell_high.cli automation refresh-market --market kr|us`와 `./scripts/refresh_market_daily.sh --market kr|us`다.
+- 시장 자동화 진입점은 `python3 -m buy_low_sell_high.cli automation refresh-market --market kr|us|crypto`와 `./scripts/refresh_market_daily.sh --market kr|us|crypto`다. 운영 환경에서는 `buy-low-sell-high-market-refresh-kr.timer`, `buy-low-sell-high-market-refresh-us.timer`가 이를 매일 호출한다.
 - 자동화는 동기화 전후 manifest의 `data_hash`와 `end`를 비교해 심볼 상태를 `UPDATED`, `UNCHANGED`, `FAILED`로 판정한다.
 - `UNCHANGED`만 나온 실행은 후속 materialization을 건너뛴다. `--force-materialize`가 있으면 변경 감지와 무관하게 시장별 대상 프로필 materialization을 다시 요청한다.
 - 한국 시장에서 `0193T0` sync는 `000660` 최신 스냅샷 뒤에 실행되어 같은 런의 underlying snapshot을 재사용해야 한다.
@@ -41,9 +45,10 @@
 - synthetic row가 포함된 스냅샷은 적재 요약과 manifest 경고에 synthetic 기간이 드러나야 한다.
 - snapshot manifest에는 `symbol`, `source`, `generated_at`, `rows`, `start`, `end`, `data_hash`, `output_csv`, `warnings`, `errors`를 저장한다.
 - `db/migrations/0001_initial.sql`에 PostgreSQL 마이그레이션 스켈레톤이 존재한다.
-- 백테스트 trade의 `shares`는 항상 양의 정수다. 진입 예산이 1주 미만이면 해당 진입은 `ENTRY_SKIPPED`로 기록한다.
+- 백테스트 trade의 `shares`는 기본적으로 양의 정수지만, `allow_fractional_shares=true`인 프로필은 양의 Decimal 수량을 사용한다.
+- 현재 `BTCUSDT` canonical 프로필은 fractional quantity를 허용한다. 같은 프로필을 정수 수량으로 해석하면 대부분의 진입이 `ENTRY_SKIPPED`가 된다.
 - 기본 백테스트 비용 모델은 거래마다 `commission_bps=25`와 심볼별 `transaction_tax_bps`를 적용한다.
-  - 현재 `SOXL`, `TQQQ`, `KORU`, `0193T0`, `233740`, `462330` 기본 기타거래세는 `0bps`다.
+  - 현재 `SOXL`, `TQQQ`, `KORU`, `BTCUSDT`, `0193T0`, `233740`, `462330` 기본 기타거래세는 `0bps`다.
   - 현재 `000660` 기본 기타거래세는 `15bps`다.
 - open thread equity는 미투자 현금과 mark-to-market 포지션 가치를 함께 보존해야 한다.
 - 모든 백테스트 실행과 연구 산출물은 `config_hash`, `data_hash`, `code_commit`를 함께 보관해야 한다.
@@ -56,11 +61,11 @@
   - 공통 메타데이터: `artifact_key`, `artifact_kind`, `profile_id`, `symbol`, `csv_path`, `execution_model`, `price_basis`, `data_hash`, `code_commit`, `created_at`
   - 선택 메타데이터: `catalog_id`, `catalog_hash`, `sweep_id`, `sweep_hash`, `payload_hash`
   - 본문: `payload JSONB`
-- `Strategy Detail`과 `Thread Timeline`은 현재 저장형 연구 artifact가 아니라, slice-aware 메모리 캐시만 사용한다.
+- `Strategy Detail`과 `Thread Timeline`은 slice-aware 서버 메모리 캐시와 PostgreSQL/SQLite 연구 artifact를 함께 사용한다.
   - 두 payload 모두 거래별 `entry_fee`, `exit_fee`, `total_fees`와 비용 메타데이터(`commission_bps`, `transaction_tax_bps`, `slippage_bps`)를 포함한다.
   - `SOXL` regime payload는 추가로 `applied_regime`, `entry_regime`, `regime_data_hash`, `regime_config_hash`를 포함하며, slice-aware 캐시 키도 regime 해시를 구분해야 한다.
 - `backtest_research_sweep_rows`는 현재 `core4_v4` sweep 결과를 row 단위로 펼쳐 저장한다.
-  - UI sweep 파라미터는 `thread_count`, `stop_sessions`, `buy_pct`, `sell_pct` 4개이며 총 726조합이다.
+  - UI sweep 파라미터는 `thread_count`, `stop_sessions[30,35,40]`, `buy_pct`, `sell_pct` 4개이며 `buy_pct[-5..+3]`, `sell_pct[0..+5]` 기준 총 486조합이다.
   - DB 호환 컬럼은 기존 스키마를 유지한다.
   - 산출 엔진은 공통 `cartesian` CPU runner를 사용하며, artifact `meta`에는 `strategy_family`, `sweep_spec_version`, `worker_count`, `chunk_count`, `chunk_size`를 함께 저장한다.
   - `take_profit_pct` 컬럼에는 UI의 `sell_pct` 값이 저장된다.
@@ -74,7 +79,7 @@
 - 대시보드가 `DATABASE_URL`을 받으면 PostgreSQL을 공유 연구 저장소로 사용한다.
 - 대시보드가 `SQLITE_PATH`를 받으면 동일한 연구 산출물을 로컬 SQLite 파일에 저장한다.
 - `DATABASE_URL`과 `SQLITE_PATH`가 모두 없을 때만 in-memory fallback을 사용할 수 있으며, 공유 저장소로 간주하지 않는다.
-- 대시보드는 startup 시 strategy-ranking preset artifact를 미리 채울 수 있지만, 이 warmup 실패는 저장소 무결성 오류가 아니라 best-effort 캐시 실패로 취급한다.
+- 대시보드는 startup 시 모든 workspace의 default sweep artifact와 strategy-ranking preset artifact를 미리 채울 수 있지만, 이 warmup 실패는 저장소 무결성 오류가 아니라 best-effort 캐시 실패로 취급한다.
 - 공식 제품 golden fixture는 `engine/tests/fixtures/official_reference_matrix.json`과 `engine/tests/fixtures/official_explorer_summary.json`에 위치한다.
 - 고정된 멘토 레퍼런스 화면 fixture는 `engine/tests/fixtures/mentor_reference_matrix.yaml`에 위치하며 `legacy comparison` 전용이다.
 - 멘토 매트릭스는 두 가지 결과 계열을 구분한다.

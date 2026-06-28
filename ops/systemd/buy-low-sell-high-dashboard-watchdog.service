@@ -1,0 +1,12 @@
+[Unit]
+Description=Buy-Low-Sell-High Dashboard Watchdog
+After=buy-low-sell-high-dashboard.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Data/Buy-Low-Sell-High
+Environment=DASHBOARD_WATCHDOG_HEALTH_URL=http://127.0.0.1:3232/api/health
+Environment=DASHBOARD_WATCHDOG_PAGE_URL=http://127.0.0.1:3232/backtests/soxl
+Environment=DASHBOARD_WATCHDOG_EXPECTED_ACTIVE=soxl,0193t0
+Environment=DASHBOARD_WATCHDOG_MAX_RSS_BYTES=3500000000
+ExecStart=/bin/bash -lc '%h/Data/Buy-Low-Sell-High/scripts/dashboard_watchdog.sh || { systemctl --user restart buy-low-sell-high-dashboard.service; exit 1; }'

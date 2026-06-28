@@ -1,12 +1,14 @@
 {
-  "data_hash": "9c6ca09d2c091a40280f715ca81051d993e0b7803faafc2bb1d92642f74f77d9",
-  "end": "2026-06-18",
+  "data_hash": "0f7ae82deec4852a8745fc3586815e88290bf4d6d7716b58314faa2a0d5c5d73",
+  "end": "2026-06-26",
   "errors": [],
-  "generated_at": "2026-06-20T03:17:41.272489+00:00",
+  "generated_at": "2026-06-28T02:52:27.058235+00:00",
   "output_csv": "/home/justant/Data/Buy-Low-Sell-High/data/raw/soxl_daily_2011_present.csv",
-  "rows": 3888,
+  "rows": 3893,
   "source": "yahoo_chart",
   "start": "2011-01-03",
   "symbol": "SOXL",
-  "warnings": []
+  "warnings": [
+    "Requested start date 2011-01-01 is not a trading session; first row is 2011-01-03"
+  ]
 }

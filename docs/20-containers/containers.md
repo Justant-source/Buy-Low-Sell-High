@@ -9,11 +9,13 @@
   - `Strategy Explorer`, `Strategy Ranking`, `Sweep Explorer`는 이 저장소를 사용해 재현성 메타데이터가 포함된 연구 산출물을 재사용한다.
   - 저장된 연구 산출물은 `code_commit`이 현재 코드 fingerprint와 일치할 때만 재사용한다.
   - `strategy-ranking` 캐시 미스는 Python daemon subprocess를 통해 처리되며, daemon 내부는 최대 `8-worker` 프로세스풀과 `1시간` idle timeout을 사용한다.
-  - `strategy-detail`과 `thread-timeline`은 slice-aware CLI 재실행 결과를 서버 메모리 캐시로만 재사용하며, 현재 PostgreSQL/SQLite 연구 산출물로 저장하지 않는다.
+  - `strategy-detail`과 `thread-timeline`은 slice-aware CLI 재실행 결과를 서버 메모리 캐시와 PostgreSQL/SQLite 연구 산출물로 재사용한다.
   - startup preset warmup은 best-effort이며, warmup 실패는 로그로 남기되 컨테이너 liveness 실패로 승격하지 않는다.
   - 로컬 실행 진입점은 `./scripts/dashboard_exec.sh build`, `./scripts/dashboard_exec.sh test`, `./scripts/dashboard_exec.sh start`다.
+  - `./scripts/dashboard_exec.sh start`는 `dashboard/src`, `dashboard/public`이 `dist/`보다 새로우면 자동으로 다시 build한 뒤 서버를 올린다. 오래된 bundle로 user service가 재기동되는 상태를 허용하지 않는다.
   - `./scripts/dashboard_exec.sh build`는 `dashboard/public`을 `dashboard/dist/public`으로 함께 복사하고, `dist/server.js`는 이 번들된 정적 자산만 서빙한다. 따라서 로컬 빌드 후 서버를 재시작하기 전에는 새 프런트와 옛 백엔드가 섞여 노출되지 않는다.
-- 운영용 시장 최신화 배치는 `python3 -m buy_low_sell_high.cli automation refresh-market --market kr|us`와 `dashboard/dist/materialize-market.js`를 조합해 사용한다. cron에서는 `./scripts/refresh_market_daily.sh --market kr|us`가 이 둘을 묶어 호출한다.
+  - user systemd 배포는 `buy-low-sell-high-dashboard.service`와 `buy-low-sell-high-dashboard-watchdog.timer`를 함께 사용한다. watchdog은 `/api/health`, `/backtests/soxl`, active workspace 집합, RSS 상한을 검사하고 실패 시 lingering `strategy-ranking-daemon` child를 정리한 뒤 서비스를 재시작한다.
+- 운영용 시장 최신화 배치는 `python3 -m buy_low_sell_high.cli automation refresh-market --market kr|us|crypto`와 `dashboard/dist/materialize-market.js`를 조합해 사용한다. 설치 스크립트는 user systemd timer로 `./scripts/refresh_market_daily.sh --market kr|us|crypto`를 예약한다.
 
 Redis는 의도적으로 제외한다.
 

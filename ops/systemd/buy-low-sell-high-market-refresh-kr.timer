@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Buy-Low-Sell-High KR Market Refresh
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 15:40:00
+Timezone=Asia/Seoul
+Persistent=true
+RandomizedDelaySec=2m
+Unit=buy-low-sell-high-market-refresh@kr.service
+
+[Install]
+WantedBy=timers.target
+

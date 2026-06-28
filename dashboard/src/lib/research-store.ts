@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 
@@ -12,6 +12,7 @@ import type {
   ResearchArtifactKind,
   ResearchArtifactRecord,
 } from "./types.js";
+import { workspaceWarmupEnabled } from "./workspaces.js";
 
 type AnyArtifactPayload = ParameterSweepPayload | Record<string, unknown>;
 type SqliteBindValue = string | number | Uint8Array | null;
@@ -36,6 +37,7 @@ export interface ResearchStore {
 
 const require = createRequire(import.meta.url);
 const SQLITE_WASM_PATH = require.resolve("sql.js/dist/sql-wasm.wasm");
+let SQLITE_MAX_LOAD_BYTES = 2 * 1024 * 1024 * 1024 - 1;
 
 function parseArtifactPayload(payload: unknown): AnyArtifactPayload {
   if (typeof payload === "string") {
@@ -67,8 +69,41 @@ function parseArtifactRow<TPayload>(row: Record<string, unknown>): ResearchArtif
   };
 }
 
+function shouldPersistSqliteArtifact(artifact: ResearchArtifactRecord<unknown>): boolean {
+  if (artifact.kind === "PARAMETER_SWEEP" || artifact.kind === "REGIME_WALK_FORWARD") {
+    return true;
+  }
+  if (artifact.kind === "STRATEGY_RANKING") {
+    return workspaceWarmupEnabled(artifact.profileId.split("_")[0] ?? "");
+  }
+  return false;
+}
+
 function maskDatabaseUrl(databaseUrl: string): string {
   return databaseUrl.replace(/:\/\/([^:/]+):([^@]+)@/, "://$1:***@");
+}
+
+function oversizeSqliteBackupPath(databasePath: string): string {
+  const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
+  return `${databasePath}.oversize-${timestamp}`;
+}
+
+async function prepareSqliteSeedFile(databasePath: string): Promise<Uint8Array | undefined> {
+  try {
+    const fileStat = await stat(databasePath);
+    if (fileStat.size > SQLITE_MAX_LOAD_BYTES) {
+      const backupPath = oversizeSqliteBackupPath(databasePath);
+      await rename(databasePath, backupPath);
+      console.warn(`SQLite research store exceeded ${SQLITE_MAX_LOAD_BYTES} bytes and was rotated to ${backupPath}`);
+      return undefined;
+    }
+    return new Uint8Array(await readFile(databasePath));
+  } catch (error) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") {
+      throw error;
+    }
+    return undefined;
+  }
 }
 
 export function describeResearchStoreTarget(): string {
@@ -370,6 +405,8 @@ class PostgresResearchStore implements ResearchStore {
 class SqliteResearchStore implements ResearchStore {
   private readonly readyPromise: Promise<void>;
   private writeQueue: Promise<void> = Promise.resolve();
+  private persistPending: Promise<void> | null = null;
+  private persistDirty = false;
 
   private constructor(
     private readonly databasePath: string,
@@ -384,14 +421,7 @@ class SqliteResearchStore implements ResearchStore {
     const SQL = await initSqlJs({
       locateFile: () => SQLITE_WASM_PATH,
     });
-    let bytes: Uint8Array | undefined;
-    try {
-      bytes = new Uint8Array(await readFile(sqlitePath));
-    } catch (error) {
-      if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") {
-        throw error;
-      }
-    }
+    const bytes = await prepareSqliteSeedFile(sqlitePath);
     const database = bytes ? new SQL.Database(bytes) : new SQL.Database();
     return new SqliteResearchStore(sqlitePath, database);
   }
@@ -453,7 +483,6 @@ class SqliteResearchStore implements ResearchStore {
       CREATE INDEX IF NOT EXISTS backtest_research_artifacts_kind_created_idx
       ON backtest_research_artifacts (artifact_kind, created_at DESC)
     `);
-    await this.persist();
   }
 
   private selectOne(sql: string, params: SqliteBindValue[] = []): Record<string, unknown> | null {
@@ -471,9 +500,36 @@ class SqliteResearchStore implements ResearchStore {
 
   private async persist(): Promise<void> {
     const bytes = Buffer.from(this.database.export());
-    const tempPath = `${this.databasePath}.tmp`;
+    const tempPath = `${this.databasePath}.${process.pid}.${randomUUID()}.tmp`;
     await writeFile(tempPath, bytes);
     await rename(tempPath, this.databasePath);
+  }
+
+  private schedulePersist(): void {
+    this.persistDirty = true;
+    if (this.persistPending) {
+      return;
+    }
+    this.persistPending = new Promise<void>((resolve) => {
+      setTimeout(resolve, 250);
+    }).then(() =>
+      this.enqueueWrite(async () => {
+        if (!this.persistDirty) {
+          return;
+        }
+        this.persistDirty = false;
+        await this.persist();
+      }))
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`SQLite artifact persist failed: ${message}`);
+      })
+      .finally(() => {
+        this.persistPending = null;
+        if (this.persistDirty) {
+          this.schedulePersist();
+        }
+      });
   }
 
   private enqueueWrite<T>(operation: () => Promise<T>): Promise<T> {
@@ -645,7 +701,9 @@ class SqliteResearchStore implements ResearchStore {
           }
         }
         this.database.run("COMMIT");
-        await this.persist();
+        if (shouldPersistSqliteArtifact(stored)) {
+          this.schedulePersist();
+        }
         return stored;
       } catch (error) {
         this.database.run("ROLLBACK");
@@ -673,3 +731,14 @@ export async function getResearchStore(): Promise<ResearchStore> {
   }
   return singletonPromise;
 }
+
+export const __testing = {
+  prepareSqliteSeedFile,
+  oversizeSqliteBackupPath,
+  get SQLITE_MAX_LOAD_BYTES() {
+    return SQLITE_MAX_LOAD_BYTES;
+  },
+  set SQLITE_MAX_LOAD_BYTES(value: number) {
+    SQLITE_MAX_LOAD_BYTES = value;
+  },
+};

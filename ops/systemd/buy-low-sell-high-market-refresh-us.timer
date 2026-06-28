@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Buy-Low-Sell-High US Market Refresh
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 16:10:00
+Timezone=America/New_York
+Persistent=true
+RandomizedDelaySec=2m
+Unit=buy-low-sell-high-market-refresh@us.service
+
+[Install]
+WantedBy=timers.target
+
